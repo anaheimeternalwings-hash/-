@@ -1,0 +1,14 @@
+{
+  "name": "zensen-commander",
+  "version": "1.0.0",
+  "private": true,
+  "description": "iPhoneのブラウザで遊べる一人用の軍事基地育成ゲーム(index.html 1ファイル)",
+  "scripts": {
+    "test": "node tests/balance.test.js && node tests/ui.test.js",
+    "test:balance": "node tests/balance.test.js",
+    "test:ui": "node tests/ui.test.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
