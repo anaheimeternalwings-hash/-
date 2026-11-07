@@ -262,6 +262,40 @@ function midState(over) {
     await page.waitForSelector('#modalWrap:not(.hidden) .result');
   }, midState({ cleared: 24, sel: 25, auto: true })));
 
+  await test('広い戦場: なぞって見回し、2本指で拡大・縮小、「戦況を追う」で戻る。勝てば敵陣を占領', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
+    const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    const c0 = (await page.evaluate(() => window.__game.battle.debug())).cam;
+    await page.mouse.move(box.x + box.w / 2, box.y + box.h * 0.8);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + box.w / 2 + i * 15, box.y + box.h * 0.8 - i * 25);
+    await page.mouse.up();
+    const c1 = (await page.evaluate(() => window.__game.battle.debug())).cam;
+    assert(c1.user && (Math.abs(c1.x - c0.x) > 3 || Math.abs(c1.y - c0.y) > 3), '見回せない ' + JSON.stringify([c0, c1]));
+    assert(await page.isVisible('#camReset'), '「戦況を追う」ボタンが出ない');
+    // 2本指で広げる → 拡大
+    const z0 = c1.z;
+    await page.evaluate(b => {
+      const c = document.getElementById('bcv'), cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      const ev = (type, id, x, y) => c.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: id === 11, pointerType: 'touch' }));
+      ev('pointerdown', 11, cx - 40, cy); ev('pointerdown', 12, cx + 40, cy);
+      for (let i = 1; i <= 5; i++) { ev('pointermove', 11, cx - 40 - i * 12, cy); ev('pointermove', 12, cx + 40 + i * 12, cy); }
+      ev('pointerup', 11, cx - 100, cy); ev('pointerup', 12, cx + 100, cy);
+    }, box);
+    const c2 = (await page.evaluate(() => window.__game.battle.debug())).cam;
+    assert(c2.z > z0 * 1.3, '拡大できない ' + z0 + '→' + c2.z);
+    await page.click('#camReset');
+    assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).cam.user, false);
+    // スキップ後の勝利演出で、前線が敵陣まで押し上がって建物を占領する
+    await page.click('[data-act="skip"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.captured >= 3; }, null, { timeout: 8000 });
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
+    assert((await page.textContent('.result h2')).includes('勝利'));
+  }, midState({ cleared: 2, sel: 3 })));
+
   await test('出撃画面の「稼ぎにおすすめ」: 勝率80%以上のステージを選んで編成する', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="farm-find"]');

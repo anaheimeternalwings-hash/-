@@ -223,6 +223,7 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .speed{display:flex;background:#0d110b;border:1px solid #344029;border-radius:12px;overflow:hidden}
 .speed button{width:46px;min-height:44px;font-weight:900;color:var(--dim)}
 #bcv{touch-action:none}
+.camreset{position:absolute;right:8px;top:70px;z-index:2;min-height:36px;padding:0 12px;border-radius:18px;background:rgba(12,16,10,.85);border:1px solid var(--gold);color:var(--gold);font-size:12px;font-weight:800}
 #btnSkip{white-space:nowrap;padding:0 12px}
 @media (max-width:380px){
   .speed button{width:40px}
@@ -296,7 +297,7 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
 
 <div id="battle" class="hidden">
   <div class="bsafe"></div>
-  <div class="bcanvas" id="bwrap"><canvas id="bbg"></canvas><canvas id="bcv"></canvas></div>
+  <div class="bcanvas" id="bwrap"><canvas id="bbg"></canvas><canvas id="bcv"></canvas><button class="camreset hidden" id="camReset" data-act="cam-reset">⌖ 戦況を追う</button></div>
   <div class="skillbar hidden" id="skillBar"></div>
   <div class="bctl">
     <div class="speed" id="speedSel">
@@ -1708,6 +1709,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     mode: function (el) { st.auto = el.dataset.m === 'auto'; save(); renderSortie(); },
     'auto-toggle': function () { var v = Battle.toggleAuto(); if (v !== null) { st.auto = v; save(); } },
     skill: function (el) { Battle.castSkill(+el.dataset.u); },
+    'cam-reset': function () { Battle.camReset(); },
     'farm-find': function (el) {
       el.textContent = '探しています…';
       el.disabled = true;
@@ -1777,11 +1779,12 @@ if (typeof module !== 'undefined') module.exports = TF;
   }
 
   // ====== 戦闘演出 ======
-  // 斜め上から見下ろした戦場で、兵士の群れ(部隊)が前線をはさんで撃ち合う。
-  // 勝敗とダメージは TF.simulate の記録をそのまま再生するだけなので、予想勝率と同じ計算に従う。
+  // 広い戦場を斜め上から見下ろし、兵士の群れ(部隊)が前線をはさんで撃ち合う。
+  // 指でなぞると見回し、2本指で拡大・縮小できる。
+  // 勝敗とダメージは TF.createBattle が決め、ここはそれを再生・操作するだけ。
   var Battle = (function () {
     var wrap, cv, cx, W = 0, H = 0, DPR = 1;
-    var B = null, raf = 0, lastTs = 0, bgCanvas = null, bgReady = false, SPR = null;
+    var B = null, raf = 0, lastTs = 0, bgCanvas = null, bgKey = '', SPR = null;
     var TROOP = { inf: 120, at: 80, tank: 50, art: 40 };   // ラベルに出す兵数
     var FIGMAX = { inf: 36, at: 24, tank: 5, art: 4 };     // 描く兵士・車両の数
     var FIGSP = { inf: 2.0, at: 2.4, tank: 6.6, art: 7.2 };
@@ -1793,9 +1796,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       { main: '#e5473c', dark: '#9c2820', light: '#ffa496', rgb: '240,80,70', icon: '#8c1f18' }
     ];
     var BIOME = {
-      snow: { near: '#e3eaef', far: '#cfd9e1', patch: 'rgba(160,178,196,.20)', furrow: 'rgba(120,140,160,.22)', road: '#a88a6c', roadE: '#86694f', tree: '#2c5a4a', tree2: '#3b7360', cap: '#f7fbff', rock: '#98a4ae', haze: '226,234,240', wall: '#c9c2b4' },
-      grass: { near: '#7fa65b', far: '#668c49', patch: 'rgba(40,70,20,.16)', furrow: 'rgba(30,55,15,.20)', road: '#b48e62', roadE: '#8c6a45', tree: '#2d6630', tree2: '#3f8840', cap: null, rock: '#8d9182', haze: '200,220,190', wall: '#d6ccb4' },
-      desert: { near: '#e2c991', far: '#cdb077', patch: 'rgba(150,100,40,.15)', furrow: 'rgba(130,85,35,.18)', road: '#a77a4f', roadE: '#84603c', tree: '#6d7b3a', tree2: '#8a9a48', cap: null, rock: '#a88f6c', haze: '240,225,190', wall: '#d9c7a2' }
+      snow: { near: '#e3eaef', far: '#cfd9e1', patch: 'rgba(160,178,196,.22)', furrow: 'rgba(120,140,160,.25)', road: '#a88a6c', roadE: '#86694f', tree: '#2c5a4a', tree2: '#3b7360', cap: '#f7fbff', rock: '#98a4ae', haze: '226,234,240', wall: '#c9c2b4', pond: '#cfe4ef', shore: '#ffffff', roofs: ['#7a5a48', '#5f6873', '#6f4f6a'] },
+      grass: { near: '#7fa65b', far: '#668c49', patch: 'rgba(40,70,20,.16)', furrow: 'rgba(30,55,15,.22)', road: '#b48e62', roadE: '#8c6a45', tree: '#2d6630', tree2: '#3f8840', cap: null, rock: '#8d9182', haze: '200,220,190', wall: '#d6ccb4', pond: '#5b8db0', shore: '#9cb87a', roofs: ['#8a4f36', '#5d6670', '#7a6a3a'] },
+      desert: { near: '#e2c991', far: '#cdb077', patch: 'rgba(150,100,40,.15)', furrow: 'rgba(130,85,35,.2)', road: '#a77a4f', roadE: '#84603c', tree: '#6d7b3a', tree2: '#8a9a48', cap: null, rock: '#a88f6c', haze: '240,225,190', wall: '#d9c7a2', pond: '#5f9fae', shore: '#c9b67a', roofs: ['#b07a4a', '#9a8a6a', '#c49a5a'] }
     };
     function biomeOf(place) {
       if (/雪|霧|北部/.test(place)) return 'snow';
@@ -1803,25 +1806,39 @@ if (typeof module !== 'undefined') module.exports = TF;
       return 'grass';
     }
 
-    // ---- 斜め見下ろしカメラ ----
-    var CAM = { th: 1.0, h: 190, back: 4 };
-    var NEAR = 18, FAR = 152; // 画面の下端・上端に映る奥行き
-    var P = { f: 1, cy: 0, cx: 0, z0: 1 };
-    function camZ(wy) { return CAM.h * Math.sin(CAM.th) + (wy + CAM.back) * Math.cos(CAM.th); }
-    function camY(wy) { return -CAM.h * Math.cos(CAM.th) + (wy + CAM.back) * Math.sin(CAM.th); }
+    // ---- 戦場の広さ ----
+    var CXW = 100, F0 = 150;                              // 戦場の中心(横)と、最初の前線(奥行き)
+    var MAP = { x0: -90, x1: 290, y0: -50, y1: 350 };     // 地面の広さ
+    var COLS = [60, 100, 140];                            // 部隊の列
+    var ZOOM0 = 0.9;                                      // ふだんの拡大率(戦場を広めに見せる)
+
+    // ---- カメラ(遠近つき・見回し・拡大縮小) ----
+    var CAM = { x: CXW, y: F0 + 14, z: 1, th: 0.93, D: 280 };
+    var SN = 0, CS = 0, KREF = 1, FP = 1, CY = 0;
     function setupProj() {
-      var top = 66, bot = H + 6;
-      var s0 = -camY(NEAR) / camZ(NEAR), s1 = -camY(FAR) / camZ(FAR);
-      P.f = (bot - top) / (s0 - s1);
-      // 横幅が狭い画面でも3列が収まるよう、横方向の倍率を画面幅に合わせる
-      P.fx = Math.min(P.f, W * camZ(80) / 92);
-      P.cy = bot - P.f * s0;
-      P.cx = W / 2;
-      P.z0 = camZ(NEAR);
+      SN = Math.sin(CAM.th); CS = Math.cos(CAM.th);
+      KREF = W / 112;           // 拡大率1のとき、画面中央で横112マスが見える
+      FP = CAM.D * KREF * CAM.z;
+      CY = H * 0.54;
     }
     function proj(wx, wy) {
-      var z = camZ(wy);
-      return { x: P.cx + P.fx * (wx - 50) / z, y: P.cy - P.f * camY(wy) / z, s: P.z0 / z, k: P.fx / z };
+      var dy = wy - CAM.y, zc = CAM.D + dy * CS;
+      if (zc < 30) zc = 30;
+      var k = FP / zc;
+      return { x: W / 2 + (wx - CAM.x) * k, y: CY - dy * SN * k, k: k, s: k / KREF };
+    }
+    // 画面上の点 → 地面上の点
+    function unproj(sx, sy) {
+      var a = (CY - sy) / FP, den = SN - a * CS;
+      if (den < 0.04) den = 0.04;
+      var dy = a * CAM.D / den, zc = CAM.D + dy * CS;
+      return { x: CAM.x + (sx - W / 2) * zc / FP, y: CAM.y + dy, zc: zc };
+    }
+    function clampCam() {
+      CAM.z = Math.max(0.55, Math.min(1.8, CAM.z));
+      setupProj();
+      CAM.x = Math.max(0, Math.min(200, CAM.x));
+      CAM.y = Math.max(40, Math.min(300, CAM.y));
     }
 
     function resize() {
@@ -1834,8 +1851,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         c.style.width = W + 'px'; c.style.height = H + 'px';
       });
       setupProj();
-      bgReady = false; SPR = null;
-      if (B) B.marks.forEach(function (m) { var p = proj(m.wx, m.wy); m.x = p.x; m.y = p.y; m.s = p.s; m.k = p.k; });
+      bgKey = ''; SPR = null;
     }
 
     // ---- 小さな絵(兵士・戦車・砲)を先に描いておく ----
@@ -1912,122 +1928,240 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
     }
 
-    // ---- 地面(カメラは固定なので一度だけ描く) ----
-    // 地面は下の層(#bbg)に一度だけ描き、毎フレームは上の層だけ描き直す
-    function makeBg() {
-      bgReady = true;
-      var g = bgCanvas.getContext('2d');
-      g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    // ---- 戦場の地図を作る(地面は真上から見た絵、木や家は立てて描く) ----
+    var TEXPPU = 4.5;
+    function makeMap() {
       var bio = BIOME[B.biome], rnd = TF.rngFrom(1000 + B.info.s * 31);
-      var gr = g.createLinearGradient(0, 0, 0, H);
-      gr.addColorStop(0, bio.far); gr.addColorStop(1, bio.near);
-      g.fillStyle = gr; g.fillRect(0, 0, W, H);
-      function local(x, y, rot, a, b) { var c = Math.cos(rot), s = Math.sin(rot); return proj(x + a * c - b * s, y + a * s + b * c); }
-      var i, j;
-      for (i = 0; i < 30; i++) {
-        var fx = -40 + rnd() * 180, fy = -5 + rnd() * 180, fw = 14 + rnd() * 24, fd = 9 + rnd() * 16, rot = (rnd() - 0.5) * 0.7;
-        var pts = [[-fw / 2, -fd / 2], [fw / 2, -fd / 2], [fw / 2, fd / 2], [-fw / 2, fd / 2]].map(function (q) { return local(fx, fy, rot, q[0], q[1]); });
-        g.beginPath(); pts.forEach(function (p, k) { if (k) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y); }); g.closePath();
-        g.fillStyle = bio.patch; g.fill();
-        if (rnd() < 0.65) {
-          g.strokeStyle = bio.furrow; g.lineWidth = 0.8;
-          g.beginPath();
-          for (j = -fd / 2 + 1.4; j < fd / 2 - 0.5; j += 1.5) {
-            var a = local(fx, fy, rot, -fw / 2 + 1, j), b = local(fx, fy, rot, fw / 2 - 1, j);
-            g.moveTo(a.x, a.y); g.lineTo(b.x, b.y);
-          }
+      var tw = Math.round((MAP.x1 - MAP.x0) * TEXPPU), th = Math.round((MAP.y1 - MAP.y0) * TEXPPU);
+      var c = document.createElement('canvas');
+      c.width = tw; c.height = th;
+      var g = c.getContext('2d');
+      // 世界座標で描けるよう変換(奥=上)
+      g.setTransform(TEXPPU, 0, 0, -TEXPPU, -MAP.x0 * TEXPPU, MAP.y1 * TEXPPU);
+      g.fillStyle = bio.near; g.fillRect(MAP.x0, MAP.y0, MAP.x1 - MAP.x0, MAP.y1 - MAP.y0);
+      var i, j, x, y;
+      for (i = 0; i < 70; i++) {
+        g.fillStyle = 'rgba(' + (rnd() < 0.5 ? '0,0,0' : '255,250,230') + ',' + (0.03 + rnd() * 0.04) + ')';
+        g.beginPath(); g.ellipse(MAP.x0 + rnd() * (MAP.x1 - MAP.x0), MAP.y0 + rnd() * (MAP.y1 - MAP.y0), 8 + rnd() * 30, 5 + rnd() * 18, rnd() * 3, 0, Math.PI * 2); g.fill();
+      }
+      // 畑・区画
+      for (i = 0; i < 64; i++) {
+        var fx = MAP.x0 + rnd() * (MAP.x1 - MAP.x0), fy = MAP.y0 + rnd() * (MAP.y1 - MAP.y0), fw = 14 + rnd() * 26, fd = 9 + rnd() * 18, rot = (rnd() - 0.5) * 0.7;
+        g.save(); g.translate(fx, fy); g.rotate(rot);
+        g.fillStyle = bio.patch; g.fillRect(-fw / 2, -fd / 2, fw, fd);
+        if (rnd() < 0.7) {
+          g.strokeStyle = bio.furrow; g.lineWidth = 0.32; g.beginPath();
+          for (j = -fd / 2 + 1.3; j < fd / 2 - 0.4; j += 1.4) { g.moveTo(-fw / 2 + 0.8, j); g.lineTo(fw / 2 - 0.8, j); }
           g.stroke();
         }
+        g.restore();
       }
+      // 池
+      var ponds = [[rnd() < 0.5 ? 18 : 182, 60 + rnd() * 50], [rnd() < 0.5 ? 25 : 175, 210 + rnd() * 50]];
+      ponds.forEach(function (p) {
+        g.fillStyle = bio.shore; g.beginPath(); g.ellipse(p[0], p[1], 13, 8, 0.3, 0, Math.PI * 2); g.fill();
+        g.fillStyle = bio.pond; g.beginPath(); g.ellipse(p[0], p[1], 11, 6.4, 0.3, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.ellipse(p[0] - 3, p[1] + 1.5, 4, 1.4, 0.3, 0, Math.PI * 2); g.fill();
+      });
+      // 道(本道と横道、村へのわき道)
+      var ph = rnd() * 6;
+      function mainX(yy) { return CXW + Math.sin(yy * 0.017 + ph) * 24; }
+      var yR1 = 88 + rnd() * 10, yR2 = 206 + rnd() * 12;
+      function crossY(xx, base, k) { return base + Math.sin(xx * 0.03 + ph * k) * 9; }
       function road(pts, wid) {
-        var pp = pts.map(function (p) { return proj(p[0], p[1]); });
         g.lineCap = 'round'; g.lineJoin = 'round';
         [[bio.roadE, wid * 1.3], [bio.road, wid]].forEach(function (stl) {
-          g.strokeStyle = stl[0];
-          for (var k = 1; k < pp.length; k++) {
-            g.lineWidth = stl[1] * (pp[k].k + pp[k - 1].k) / 2;
-            g.beginPath(); g.moveTo(pp[k - 1].x, pp[k - 1].y); g.lineTo(pp[k].x, pp[k].y); g.stroke();
-          }
+          g.strokeStyle = stl[0]; g.lineWidth = stl[1];
+          g.beginPath(); pts.forEach(function (p, k) { if (k) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
         });
       }
-      var ph = rnd() * 6, y, x, r1 = [], r2 = [], r3 = [];
-      for (y = -12; y <= 185; y += 3) r1.push([50 + Math.sin(y * 0.032 + ph) * 18, y]);
-      var yb = 52 + rnd() * 18, yc = 112 + rnd() * 18;
-      for (x = -60; x <= 160; x += 3) { r2.push([x, yb + Math.sin(x * 0.05 + ph) * 8]); r3.push([x, yc + Math.sin(x * 0.04 + ph * 2) * 10]); }
-      road(r2, 3.2); road(r3, 3.2); road(r1, 3.8);
-      var items = [];
-      function onRoad(x, y) {
-        return Math.abs(x - (50 + Math.sin(y * 0.032 + ph) * 18)) < 4 || Math.abs(y - (yb + Math.sin(x * 0.05 + ph) * 8)) < 4 || Math.abs(y - (yc + Math.sin(x * 0.04 + ph * 2) * 10)) < 4;
-      }
-      // 林(戦場の両脇と奥・手前に多め、中央にも少し)
+      var r1 = [], r2 = [], r3 = [];
+      for (y = MAP.y0; y <= MAP.y1; y += 3) r1.push([mainX(y), y]);
+      for (x = MAP.x0; x <= MAP.x1; x += 3) { r2.push([x, crossY(x, yR1, 1)]); r3.push([x, crossY(x, yR2, 2)]); }
+      road(r2, 3.2); road(r3, 3.2); road(r1, 4.2);
+      // 両軍の陣地(踏み固められた広場)
+      [[CXW, 32], [CXW, 268]].forEach(function (p) {
+        g.fillStyle = shade(bio.road, 0.25); g.globalAlpha = 0.55;
+        g.beginPath(); g.ellipse(p[0], p[1], 62, 22, 0, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+      });
+      // 砲撃の跡
       for (i = 0; i < 16; i++) {
+        var kx = 40 + rnd() * 120, ky = 115 + rnd() * 75, kr = 1.5 + rnd() * 2.5;
+        g.fillStyle = 'rgba(40,30,20,.35)'; g.beginPath(); g.ellipse(kx, ky, kr, kr * 0.8, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = 'rgba(255,240,210,.18)'; g.lineWidth = 0.5; g.beginPath(); g.ellipse(kx, ky, kr + 0.6, kr * 0.8 + 0.5, 0, 0, Math.PI * 2); g.stroke();
+      }
+      function onRoad(xx, yy, m) {
+        m = m || 4.5;
+        return Math.abs(xx - mainX(yy)) < m || Math.abs(yy - crossY(xx, yR1, 1)) < m || Math.abs(yy - crossY(xx, yR2, 2)) < m;
+      }
+      // 立てて描くもの: 木・岩・家
+      var props = [];
+      function occupied(xx, yy) {
+        if (Math.abs(xx - CXW) < 72 && yy > 12 && yy < 50) return true;    // 自軍陣地
+        if (Math.abs(xx - CXW) < 72 && yy > 248 && yy < 292) return true;  // 敵陣地
+        return false;
+      }
+      // 林: 両脇に多く、奥と手前にも
+      for (i = 0; i < 30; i++) {
         var side = rnd();
-        var ccx = side < 0.35 ? -12 + rnd() * 22 : side < 0.7 ? 90 + rnd() * 22 : -10 + rnd() * 120;
-        var ccy = side < 0.7 ? 10 + rnd() * 150 : (rnd() < 0.5 ? 140 + rnd() * 20 : 10 + rnd() * 14);
-        var nT = 4 + Math.floor(rnd() * 7);
+        var ccx = side < 0.4 ? -40 + rnd() * 62 : side < 0.8 ? 178 + rnd() * 62 : MAP.x0 + rnd() * (MAP.x1 - MAP.x0);
+        var ccy = side < 0.8 ? MAP.y0 + 10 + rnd() * (MAP.y1 - MAP.y0 - 20) : (rnd() < 0.5 ? 290 + rnd() * 50 : -30 + rnd() * 40);
+        var nT = 5 + Math.floor(rnd() * 9);
         for (j = 0; j < nT; j++) {
-          var tx = ccx + (rnd() - 0.5) * 16, ty = ccy + (rnd() - 0.5) * 12;
-          if (onRoad(tx, ty)) continue;
-          items.push([tx, ty, 0.75 + rnd() * 0.55, rnd() < (B.biome === 'desert' ? 0.65 : 0.08) ? 'rock' : 'tree']);
+          var tx = ccx + (rnd() - 0.5) * 22, ty = ccy + (rnd() - 0.5) * 16;
+          if (onRoad(tx, ty) || occupied(tx, ty)) continue;
+          props.push({ k: rnd() < (B.biome === 'desert' ? 0.6 : 0.07) ? 'rock' : 'tree', x: tx, y: ty, s: 0.75 + rnd() * 0.6 });
         }
       }
-      for (i = 0; i < 10; i++) {
-        var sx = 8 + rnd() * 84, sy = 30 + rnd() * 100;
-        if (!onRoad(sx, sy)) items.push([sx, sy, 0.7 + rnd() * 0.4, rnd() < 0.5 ? 'rock' : 'tree']);
+      for (i = 0; i < 14; i++) {
+        var sx = 35 + rnd() * 130, sy = 60 + rnd() * 180;
+        if (!onRoad(sx, sy) && !occupied(sx, sy)) props.push({ k: rnd() < 0.5 ? 'rock' : 'tree', x: sx, y: sy, s: 0.7 + rnd() * 0.4 });
       }
-      items.sort(function (p, q) { return q[1] - p[1]; });
-      items.forEach(function (it) {
-        var p = proj(it[0], it[1]), sz = it[2] * p.k;
-        g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(p.x + sz * 0.6, p.y, sz * 2.6, sz * 0.9, 0, 0, Math.PI * 2); g.fill();
-        if (it[3] === 'rock') {
-          g.fillStyle = bio.rock; g.beginPath(); g.ellipse(p.x, p.y - sz * 0.6, sz * 2.2, sz * 1.3, 0, 0, Math.PI * 2); g.fill();
-          g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.ellipse(p.x - sz * 0.6, p.y - sz * 1.1, sz * 0.9, sz * 0.5, 0, 0, Math.PI * 2); g.fill();
-          return;
-        }
-        g.fillStyle = '#4b3a2a'; g.fillRect(p.x - sz * 0.25, p.y - sz * 1.2, sz * 0.5, sz * 1.2);
-        for (var L = 0; L < 3; L++) {
-          var by = p.y - sz * (1.0 + L * 1.7), hw = sz * (2.2 - L * 0.55), hh = sz * 2.6;
-          g.fillStyle = L % 2 ? bio.tree2 : bio.tree;
-          g.beginPath(); g.moveTo(p.x - hw, by); g.lineTo(p.x + hw, by); g.lineTo(p.x, by - hh); g.closePath(); g.fill();
-          if (bio.cap) { g.fillStyle = bio.cap; g.beginPath(); g.moveTo(p.x - hw * 0.45, by - hh * 0.55); g.lineTo(p.x + hw * 0.45, by - hh * 0.55); g.lineTo(p.x, by - hh); g.closePath(); g.fill(); }
+      // 村(戦場の脇に家が数軒)
+      [[8, 150], [192, 158], [34, 238], [168, 74]].forEach(function (v, vi) {
+        var n = 3 + Math.floor(rnd() * 3);
+        g.fillStyle = shade(bio.road, 0.2); g.globalAlpha = 0.45;
+        g.beginPath(); g.ellipse(v[0], v[1], 16, 12, 0, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+        for (j = 0; j < n; j++) {
+          props.push({ k: 'house', x: v[0] + (rnd() - 0.5) * 22, y: v[1] + (rnd() - 0.5) * 16, w: 6 + rnd() * 3, d: 5 + rnd() * 2, h: 3.5 + rnd() * 1.5, roof: bio.roofs[Math.floor(rnd() * 3)], gable: B.biome !== 'desert' });
         }
       });
-      var hz = g.createLinearGradient(0, 0, 0, H * 0.4);
-      hz.addColorStop(0, 'rgba(' + bio.haze + ',.55)'); hz.addColorStop(1, 'rgba(' + bio.haze + ',0)');
-      g.fillStyle = hz; g.fillRect(0, 0, W, H * 0.4);
+      B.tex = { c: c, w: tw, h: th };
+      B.props = props;
+    }
+
+    // ---- 地面を写す(視点が動いたときだけ描き直す) ----
+    function drawGround() {
+      B.bgDraws = (B.bgDraws || 0) + 1;
+      var g = bgCanvas.getContext('2d');
+      g.setTransform(DPR, 0, 0, DPR, 0, 0);
+      var bio = BIOME[B.biome], T = B.tex;
+      g.fillStyle = bio.far; g.fillRect(0, 0, W, H);
+      g.imageSmoothingEnabled = true;
+      var band = 3;
+      for (var sy = 0; sy < H; sy += band) {
+        var top = unproj(W / 2, sy), bot = unproj(W / 2, sy + band), mid = unproj(W / 2, sy + band / 2);
+        var half = (W / 2) * mid.zc / FP;
+        var x0 = (mid.x - half - MAP.x0) * TEXPPU, x1 = (mid.x + half - MAP.x0) * TEXPPU;
+        var y0 = (MAP.y1 - top.y) * TEXPPU, y1 = (MAP.y1 - bot.y) * TEXPPU;
+        if (y1 <= y0) continue;
+        var cx0 = Math.max(0, x0), cx1 = Math.min(T.w, x1), cy0 = Math.max(0, y0), cy1 = Math.min(T.h, y1);
+        if (cx1 <= cx0 || cy1 <= cy0) continue;
+        var dx0 = (cx0 - x0) / (x1 - x0) * W, dx1 = (cx1 - x0) / (x1 - x0) * W;
+        var dy0 = sy + (cy0 - y0) / (y1 - y0) * band, dy1 = sy + (cy1 - y0) / (y1 - y0) * band;
+        g.drawImage(T.c, cx0, cy0, cx1 - cx0, cy1 - cy0, dx0, dy0, dx1 - dx0, dy1 - dy0 + 0.6);
+      }
+      // 木・岩・家・建物を奥から順に
+      var items = B.props.concat(B.blds);
+      items.sort(function (a, b) { return b.y - a.y; });
+      items.forEach(function (it) {
+        var p = proj(it.x, it.y);
+        if (p.y < -30 || p.y > H + 80 || p.x < -80 || p.x > W + 80) return;
+        if (it.k === 'tree' || it.k === 'rock') drawProp(g, it, p, bio);
+        else drawBuilding(g, it);
+      });
+      var hz = g.createLinearGradient(0, 0, 0, H * 0.3);
+      hz.addColorStop(0, 'rgba(' + bio.haze + ',.6)'); hz.addColorStop(1, 'rgba(' + bio.haze + ',0)');
+      g.fillStyle = hz; g.fillRect(0, 0, W, H * 0.3);
       var vg = g.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.8);
-      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.28)');
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.25)');
       g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    }
+    function drawProp(g, it, p, bio) {
+      var sz = it.s * p.k;
+      g.fillStyle = 'rgba(0,0,0,.18)'; g.beginPath(); g.ellipse(p.x + sz * 0.6, p.y, sz * 2.6, sz * 0.9, 0, 0, Math.PI * 2); g.fill();
+      if (it.k === 'rock') {
+        g.fillStyle = bio.rock; g.beginPath(); g.ellipse(p.x, p.y - sz * 0.6, sz * 2.2, sz * 1.3, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.ellipse(p.x - sz * 0.6, p.y - sz * 1.1, sz * 0.9, sz * 0.5, 0, 0, Math.PI * 2); g.fill();
+        return;
+      }
+      g.fillStyle = '#4b3a2a'; g.fillRect(p.x - sz * 0.25, p.y - sz * 1.2, sz * 0.5, sz * 1.2);
+      for (var L = 0; L < 3; L++) {
+        var by = p.y - sz * (1.0 + L * 1.7), hw = sz * (2.2 - L * 0.55), hh = sz * 2.6;
+        g.fillStyle = L % 2 ? bio.tree2 : bio.tree;
+        g.beginPath(); g.moveTo(p.x - hw, by); g.lineTo(p.x + hw, by); g.lineTo(p.x, by - hh); g.closePath(); g.fill();
+        if (bio.cap) { g.fillStyle = bio.cap; g.beginPath(); g.moveTo(p.x - hw * 0.45, by - hh * 0.55); g.lineTo(p.x + hw * 0.45, by - hh * 0.55); g.lineTo(p.x, by - hh); g.closePath(); g.fill(); }
+      }
+    }
+    function poly(g, pts, fill) { g.beginPath(); pts.forEach(function (p, i) { if (i) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y); }); g.closePath(); g.fillStyle = fill; g.fill(); }
+    // 箱形の建物。owner があれば軍の色の屋根、なければ民家
+    function drawBuilding(g, b) {
+      var bio = BIOME[B.biome];
+      var roofMain = b.owner === undefined ? b.roof : TEAM[b.owner].main, roofDark = b.owner === undefined ? shade(b.roof, -0.3) : TEAM[b.owner].dark;
+      var gp = [proj(b.x - b.w / 2, b.y - b.d / 2), proj(b.x + b.w / 2, b.y - b.d / 2), proj(b.x + b.w / 2, b.y + b.d / 2), proj(b.x - b.w / 2, b.y + b.d / 2)];
+      function up(p, h, k) { return { x: p.x, y: p.y - h * (k || p.k) }; }
+      var t = gp.map(function (p) { return up(p, b.h); });
+      g.fillStyle = 'rgba(0,0,0,.2)';
+      g.beginPath(); g.ellipse((gp[0].x + gp[1].x) / 2 + 4, (gp[0].y + gp[2].y) / 2 + 2, Math.abs(gp[1].x - gp[0].x) * 0.65, Math.abs(gp[0].y - gp[2].y) * 0.8 + 2, 0, 0, Math.PI * 2); g.fill();
+      var wall = b.hq ? shade(bio.wall, -0.1) : bio.wall;
+      var camx = CAM.x;
+      if (b.x < camx) poly(g, [gp[1], gp[2], t[2], t[1]], shade(wall, -0.25)); else poly(g, [gp[0], gp[3], t[3], t[0]], shade(wall, -0.25));
+      poly(g, [gp[0], gp[1], t[1], t[0]], wall);
+      g.fillStyle = shade(wall, -0.5);
+      var dx = (gp[1].x - gp[0].x), dy = (gp[1].y - gp[0].y), nW = Math.max(1, Math.round(b.w / 4));
+      for (var i = 1; i <= nW; i++) { var wxp = gp[0].x + dx * i / (nW + 1), wyp = gp[0].y + dy * i / (nW + 1); g.fillRect(wxp - 0.8 * gp[0].k, wyp - b.h * gp[0].k * 0.7, 1.6 * gp[0].k, b.h * gp[0].k * 0.28); }
+      if (b.gable !== false && b.roofType !== 'flat') {
+        var rh = b.h * 0.6;
+        var r0 = up({ x: (t[0].x + t[3].x) / 2, y: (t[0].y + t[3].y) / 2, k: (gp[0].k + gp[3].k) / 2 }, rh);
+        var r1 = up({ x: (t[1].x + t[2].x) / 2, y: (t[1].y + t[2].y) / 2, k: (gp[1].k + gp[2].k) / 2 }, rh);
+        poly(g, [r0, r1, t[2], t[3]], roofDark);
+        poly(g, [t[0], t[1], r1, r0], roofMain);
+        if (bio.cap) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = Math.max(1, 0.5 * gp[0].k); g.beginPath(); g.moveTo(r0.x, r0.y); g.lineTo(r1.x, r1.y); g.stroke(); }
+      } else {
+        poly(g, t, roofMain);
+        poly(g, [t[0], t[1], { x: t[1].x, y: t[1].y + 2 }, { x: t[0].x, y: t[0].y + 2 }], roofDark);
+      }
+      if (b.hq) {
+        var fp = { x: (t[0].x + t[1].x + t[2].x + t[3].x) / 4, y: (t[0].y + t[1].y + t[2].y + t[3].y) / 4 };
+        var ph = 9 * gp[0].k;
+        g.strokeStyle = '#ddd'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(fp.x, fp.y); g.lineTo(fp.x, fp.y - ph); g.stroke();
+        g.fillStyle = roofMain; g.beginPath(); g.moveTo(fp.x, fp.y - ph); g.lineTo(fp.x + 3.2 * gp[0].k, fp.y - ph + 1); g.lineTo(fp.x, fp.y - ph + 2); g.closePath(); g.fill();
+      }
     }
 
     // ---- 開始 ----
     function play(prep, seed, speed, auto, cb) {
       wrap = $('bwrap'); cv = $('bcv'); cx = cv.getContext('2d'); bgCanvas = $('bbg');
       $('battle').classList.remove('hidden');
-      bgReady = false;
       bindInput();
       var eng = TF.createBattle(prep.p, prep.e, seed, { record: true, auto: auto });
       B = {
-        eng: eng, auto: auto, sel: null, drag: null, hint: null,
+        eng: eng, auto: auto, sel: null, drag: null, pan: null, pinch: null, ptrs: {}, hint: null, userCam: false,
         units: [], ev: eng.ev, ei: 0, clock: 0, res: null, info: prep.info, speed: speed, cb: cb,
         biome: biomeOf(prep.info.place), seed: prep.info.s * 131,
-        projs: [], imps: [], parts: [], texts: [], marks: [], pillars: [], beams: [], sights: [], domes: [],
+        projs: [], imps: [], parts: [], texts: [], marks: [], pillars: [], beams: [], sights: [],
         banner: null, shake: 0, buff: [{ atk: -1, arm: -1 }, { atk: -1, arm: -1 }],
-        phase: 'intro', introT: 0, ending: 0, endT: 0, front: 80, colOff: [0, 0, 0], wave: 0, blds: []
+        phase: 'intro', introT: 0, ending: 0, endT: 0, front: F0, colOff: [0, 0, 0], wave: 0, camTY: F0 + 14
       };
       prep.p.forEach(function (q, i) { B.units.push(mkSquad(q, 0, i, B.units.length)); });
       prep.e.forEach(function (q, i) { B.units.push(mkSquad(q, 1, i, B.units.length)); });
       B.blds = [
-        { x: 50, y: 151, w: 16, d: 9, h: 7, owner: 1, home: 1, roof: 'flat', hq: true },
-        { x: 18, y: 143, w: 12, d: 8, h: 5, owner: 1, home: 1, roof: 'gable' },
-        { x: 82, y: 141, w: 11, d: 8, h: 4.5, owner: 1, home: 1, roof: 'gable' }
+        { k: 'bld', x: 100, y: 279, w: 18, d: 10, h: 8, owner: 1, home: 1, hq: true, roofType: 'flat' },
+        { k: 'bld', x: 66, y: 263, w: 13, d: 8, h: 5, owner: 1, home: 1 },
+        { k: 'bld', x: 134, y: 265, w: 13, d: 8, h: 5, owner: 1, home: 1 },
+        { k: 'bld', x: 100, y: 252, w: 9, d: 6, h: 3, owner: 1, home: 1, roofType: 'flat' },
+        { k: 'bld', x: 46, y: 278, w: 8, d: 6, h: 4, owner: 1, home: 1 },
+        { k: 'bld', x: 154, y: 276, w: 8, d: 6, h: 4, owner: 1, home: 1 },
+        { k: 'bld', x: 100, y: 24, w: 18, d: 10, h: 8, owner: 0, home: 0, hq: true, roofType: 'flat' },
+        { k: 'bld', x: 64, y: 38, w: 13, d: 8, h: 5, owner: 0, home: 0 },
+        { k: 'bld', x: 136, y: 36, w: 13, d: 8, h: 5, owner: 0, home: 0 },
+        { k: 'bld', x: 44, y: 22, w: 8, d: 6, h: 4, owner: 0, home: 0 },
+        { k: 'bld', x: 156, y: 24, w: 8, d: 6, h: 4, owner: 0, home: 0 }
       ];
+      // 戦場の拠点(旗)。前線のどちら側にあるかで色が変わる
+      B.posts = [[24, 118], [176, 121], [100, 94], [28, 184], [172, 181], [100, 210]].map(function (p) {
+        return { x: p[0], y: p[1], owner: p[1] < F0 ? 0 : 1, flipT: -9 };
+      });
+      CAM.x = CXW; CAM.y = 158; CAM.z = 0.58; // 最初は戦場全体を引きで見せ、前線へ寄っていく
       setSpeed(speed);
       buildSkillBar();
       setAutoUI();
       resize();
+      makeMap();
       layout();
+      $('camReset').classList.add('hidden');
       if (!auto) showHint('部隊から敵へドラッグで集中攻撃!スキルは下のボタンで発動', 5);
+      else if (!(st.flags && st.flags.camHint)) { showHint('なぞると戦場を見回せます(2本指で拡大・縮小)', 4); st.flags = st.flags || {}; st.flags.camHint = 1; }
       lastTs = 0;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(frame);
@@ -2054,7 +2188,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       return {
         id: id, side: side, slot: slot, type: t, maxHp: q.maxHp, hp: q.maxHp, hero: q.hero, boss: boss,
         troop: TROOP[t] * (boss ? 2 : 1), figs: figs, farOy: farOy, big: boss && (t === 'tank' || t === 'art') ? 1.35 : 1,
-        wx: 50, wy: 0, col: 50, row: 0, jx: 0, jy: 0, moving: false, hitT: -9, lastCast: null, dead: false
+        wx: CXW, wy: 0, col: CXW, row: 0, jx: 0, jy: 0, moving: false, hitT: -9, dead: false
       };
     }
     function layout() {
@@ -2065,12 +2199,11 @@ if (typeof module !== 'undefined') module.exports = TF;
           var row = i < front ? 0 : 1, k = row === 0 ? front : back, j = row === 0 ? i : i - front;
           var r = TF.rngFrom(B.seed + u.id * 97);
           u.row = row;
-          u.col = 50 + (j - (k - 1) / 2) * 29;
-          u.jx = (r() - 0.5) * 5; u.jy = (r() - 0.5) * 3;
+          u.col = CXW + (j - (k - 1) / 2) * 40;
+          u.jx = (r() - 0.5) * 6; u.jy = (r() - 0.5) * 3;
           u.wx = u.col + u.jx;
-          u.wy = side === 0 ? 30 - row * 8 : 134 + row * 8;
-          var p = proj(u.wx, u.wy);
-          B.pillars.push({ x: p.x, y: p.y, k: p.k, side: side, t: 0.15 * (i + side * 0.5) });
+          u.wy = side === 0 ? F0 - 50 - row * 10 : F0 + 50 + row * 10;
+          B.pillars.push({ wx: u.wx, wy: u.wy, side: side, t: 0.15 * (i + side * 0.5), big: 1 });
         });
       });
     }
@@ -2093,7 +2226,10 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
       else if (ev.hits) ev.hits.forEach(function (h) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); });
     }
-    function startEnding() { B.res = B.eng.result(); B.ending = 1; B.endT = 0; B.drag = null; B.sel = null; }
+    function startEnding() {
+      B.res = B.eng.result(); B.ending = 1; B.endT = 0; B.drag = null; B.sel = null; B.pan = null; B.pinch = null;
+      B.userCam = false; $('camReset').classList.add('hidden');
+    }
     function fxNow() { return B.introT + B.clock + B.endT; }
     function frame(ts) {
       if (!B) return;
@@ -2102,7 +2238,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       update(dt);
       if (!B) return;
       draw();
-      if (B.ending && B.endT > 2.5) { finish(); return; }
+      if (B.ending && B.endT > (B.res.win ? 3.2 : 2.6)) { finish(); return; }
       raf = requestAnimationFrame(frame);
     }
     function finish() {
@@ -2120,36 +2256,59 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     function frontAt(x) {
       var o = B.colOff, v;
-      if (x <= 21) v = o[0];
-      else if (x >= 79) v = o[2];
-      else { var a = x < 50 ? o[0] : o[1], b = x < 50 ? o[1] : o[2], t = ((x < 50 ? x - 21 : x - 50) / 29); v = a + (b - a) * (1 - Math.cos(t * Math.PI)) / 2; }
-      return B.front + v + Math.sin(x * 0.11 + B.wave) * 1.8 + Math.sin(x * 0.043 + 1.3) * 3;
+      if (x <= COLS[0]) v = o[0];
+      else if (x >= COLS[2]) v = o[2];
+      else { var lft = x < COLS[1], a = lft ? o[0] : o[1], b = lft ? o[1] : o[2], t = (x - (lft ? COLS[0] : COLS[1])) / 40; v = a + (b - a) * (1 - Math.cos(t * Math.PI)) / 2; }
+      return B.front + v + Math.sin(x * 0.09 + B.wave) * 2 + Math.sin(x * 0.031 + 1.3) * 4;
     }
-    function updateFront(gdt) {
-      var a = sideFrac(0), e = sideFrac(1), tgt;
-      if (B.ending) tgt = B.res.win ? 158 : 30;
-      else tgt = 80 + 34 * (a - e) + (B.buff[0].atk > B.clock ? 4 : 0) - (B.buff[1].atk > B.clock ? 4 : 0);
-      B.front += (tgt - B.front) * Math.min(1, gdt * (B.ending ? 0.9 : 1.4));
-      B.wave += gdt * 0.5;
-      [21, 50, 79].forEach(function (xc, c) {
+    function updateFront(gdt, rdt) {
+      var a = sideFrac(0), e = sideFrac(1), cdt = B.ending ? rdt : gdt;
+      if (B.ending) {
+        var tgt = B.res.win ? 300 : 75;
+        var d = tgt - B.front, step = Math.max(Math.abs(d) * Math.min(1, rdt * 1.3), Math.min(Math.abs(d), 45 * rdt));
+        B.front += d > 0 ? step : -step;
+      } else {
+        var t2 = F0 + 50 * (a - e) + (B.buff[0].atk > B.clock ? 5 : 0) - (B.buff[1].atk > B.clock ? 5 : 0);
+        B.front += (t2 - B.front) * Math.min(1, gdt * 1.4);
+      }
+      B.wave += cdt * 0.5;
+      COLS.forEach(function (xc, c) {
         var ah = 0, am = 0, eh = 0, em = 0;
         B.units.forEach(function (u) {
-          if (Math.abs(u.col - xc) < 15) { if (u.side === 0) { ah += u.hp; am += u.maxHp; } else { eh += u.hp; em += u.maxHp; } }
+          if (Math.abs(u.col - xc) < 20) { if (u.side === 0) { ah += u.hp; am += u.maxHp; } else { eh += u.hp; em += u.maxHp; } }
         });
-        var t = B.ending ? 0 : 10 * ((am ? ah / am : a) - (em ? eh / em : e));
-        B.colOff[c] += (t - B.colOff[c]) * Math.min(1, gdt * 1.2);
+        var t = B.ending ? 0 : 14 * ((am ? ah / am : a) - (em ? eh / em : e));
+        B.colOff[c] += (t - B.colOff[c]) * Math.min(1, cdt * 1.2);
       });
-      // 前線が敵(味方)の建物を越えたら占領
-      B.blds.forEach(function (b) {
-        var cap = b.home === 1 ? frontAt(b.x) > b.y - 3 : frontAt(b.x) < b.y + 3;
-        var nowOwner = cap ? 1 - b.home : b.home;
-        if (nowOwner !== b.owner && B.ending) {
-          b.owner = nowOwner;
-          var p = proj(b.x, b.y);
-          B.pillars.push({ x: p.x, y: p.y, k: p.k * 1.6, side: nowOwner, t: fxNow() });
-          text(p.x, p.y - b.h * p.k - 14, '占領!', '#bfffc8', 16);
+      // 拠点の旗: 前線をはさんでどちら側かで色が変わる
+      B.posts.forEach(function (p) {
+        var o = frontAt(p.x) > p.y ? 0 : 1;
+        if (o !== p.owner) {
+          p.owner = o; p.flipT = fxNow();
+          if (B.phase !== 'intro') text(p.x, p.y, o === 0 ? '拠点確保!' : '拠点を奪われた', o === 0 ? '#bfffc8' : '#ffb3a8', 13, 34);
         }
       });
+      // 勝ったら前線が敵陣を越えるたびに占領
+      if (B.ending && B.res.win) B.blds.forEach(function (b) {
+        if (b.owner === 1 && frontAt(b.x) > b.y - 4) {
+          b.owner = 0; bgKey = '';
+          B.pillars.push({ wx: b.x, wy: b.y, side: 0, t: fxNow(), big: 1.6 });
+          text(b.x, b.y, '占領!', '#bfffc8', 16, b.h * 4 + 14);
+        }
+      });
+    }
+    // ---- カメラの追従 ----
+    function updateCam(rdt) {
+      if (B.userCam) return;
+      if (B.ending) B.camTY = B.front + 4;
+      else if (Math.abs(B.front + 14 - B.camTY) > 14) B.camTY = B.front + 14; // 前線が大きく動いたときだけ追う
+      var k = Math.min(1, rdt * (B.ending ? 2.4 : B.phase === 'intro' ? 1.5 : 1.6));
+      var ty = Math.max(40, Math.min(300, B.camTY));
+      // 目に見えないほど近づいたら止める(地面の描き直しを減らす)
+      CAM.x = Math.abs(CXW - CAM.x) < 0.08 ? CXW : CAM.x + (CXW - CAM.x) * k;
+      CAM.y = Math.abs(ty - CAM.y) < 0.08 ? ty : CAM.y + (ty - CAM.y) * k;
+      CAM.z = Math.abs(ZOOM0 - CAM.z) < 0.0015 ? ZOOM0 : CAM.z + (ZOOM0 - CAM.z) * k;
+      setupProj();
     }
 
     // ---- 更新 ----
@@ -2157,7 +2316,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var sp = B.speed, gdt = dtReal * sp, fxdt = dtReal * Math.sqrt(sp);
       if (B.phase === 'intro') {
         B.introT += gdt;
-        if (B.introT > 1.7) B.phase = 'fight';
+        if (B.introT > 1.9) B.phase = 'fight';
       } else if (!B.ending) {
         B.clock += gdt;
         B.eng.step(B.clock);
@@ -2169,35 +2328,36 @@ if (typeof module !== 'undefined') module.exports = TF;
       } else {
         B.endT += dtReal;
       }
-      updateFront(B.ending ? dtReal * 1.6 : gdt);
+      updateFront(B.ending ? 0 : gdt, dtReal);
+      updateCam(dtReal);
       B.units.forEach(function (u) {
         if (u.dead) return;
-        var tx = u.col + u.jx, gap = (u.row === 0 ? 8.5 : 21) + (B.ending ? 6 : 0);
+        var tx = u.col + u.jx, gap = (u.row === 0 ? 10 : 26) + (B.ending ? 8 : 0);
         var ty = (B.phase === 'intro' && B.introT < 0.45) ? u.wy : frontAt(tx) + (u.side === 0 ? -gap : gap) + u.jy;
         var dx = tx - u.wx, dy = ty - u.wy, d = Math.hypot(dx, dy);
-        var vmax = (B.ending ? 30 * 1.6 * dtReal : 34 * gdt) * (u.type === 'tank' ? 1.15 : 1);
+        var vmax = (B.ending ? 55 * dtReal : 38 * gdt) * (u.type === 'tank' ? 1.15 : 1);
         if (d > 0.01) { var m = Math.min(1, vmax / d); u.wx += dx * m; u.wy += dy * m; }
         u.moving = d > 0.8;
       });
       B.projs = B.projs.filter(function (p) { return B.clock < p.t1 + 0.02; });
       B.beams = B.beams.filter(function (b) { b.life -= fxdt; return b.life > 0; });
       B.sights = B.sights.filter(function (m) { return B.clock < m.until; });
-      B.pillars = B.pillars.filter(function (p) { return fxNow() - p.t < 1.2; });
+      B.pillars = B.pillars.filter(function (p) { return fxNow() - p.t < 1.3; });
       B.parts = B.parts.filter(function (p) {
-        p.life -= fxdt; p.x += p.vx * fxdt; p.y += p.vy * fxdt; p.vy += (p.g || 0) * fxdt; p.vx *= 1 - 2 * fxdt;
+        p.life -= fxdt; p.ox += p.vx * fxdt; p.oy += p.vy * fxdt; p.vy += (p.g || 0) * fxdt; p.vx *= 1 - 2 * fxdt;
         return p.life > 0;
       });
-      if (B.parts.length > 320) B.parts.splice(0, B.parts.length - 320);
-      if (B.marks.length > 300) B.marks.splice(0, B.marks.length - 300);
-      B.texts = B.texts.filter(function (t) { t.life -= dtReal; t.y -= 30 * dtReal; return t.life > 0; });
+      if (B.parts.length > 340) B.parts.splice(0, B.parts.length - 340);
+      if (B.marks.length > 320) B.marks.splice(0, B.marks.length - 320);
+      B.texts = B.texts.filter(function (t) { t.life -= dtReal; t.rise += 30 * dtReal; return t.life > 0; });
       B.shake = Math.max(0, B.shake - dtReal * 30);
       if (B.banner) { B.banner.t += dtReal; if (B.banner.t > 1.2) B.banner = null; }
       if (B.hint) { B.hint.t += dtReal; if (B.hint.t > B.hint.dur) B.hint = null; }
       updateSkillBar();
       B.projs.forEach(function (p) {
         if (p.kind === 'at' && Math.random() < 0.7) {
-          var q = projPos(p, B.clock);
-          if (q) B.parts.push({ x: q.x, y: q.y, vx: (Math.random() - 0.5) * 8, vy: -6, life: 0.5, max: 0.5, r: 2.5 * q.s + Math.random() * 2, c: 'smoke' });
+          var wk = (B.clock - p.t0) / (p.t1 - p.t0);
+          if (wk >= 0 && wk <= 1) part(p.x0 + (p.x1 - p.x0) * wk, p.y0 + (p.y1 - p.y0) * wk, { oy: -(1.6 + Math.sin(Math.PI * wk) * 4) * proj(p.x0, p.y0).k, vx: (Math.random() - 0.5) * 8, vy: -6, life: 0.5, r: 0.7 + Math.random() * 0.5, c: 'smoke' });
         }
       });
     }
@@ -2211,7 +2371,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var s = B.units[ev.s];
       if (ev.k === 'atk') {
         var d = B.units[ev.d], fl = FLIGHT[s.type];
-        var n = s.type === 'inf' ? 3 : s.type === 'at' ? 1 : 1;
+        var n = s.type === 'inf' ? 3 : 1;
         for (var i = 0; i < n; i++) {
           var a = figWorld(s), b = figWorld(d);
           a.f.fire = B.clock + i * 0.05;
@@ -2219,11 +2379,9 @@ if (typeof module !== 'undefined') module.exports = TF;
           B.projs.push({ kind: s.type, x0: a.x, y0: a.y, x1: b.x, y1: b.y, t0: B.clock + i * 0.05, t1: B.clock + i * 0.05 + fl, side: s.side });
           if (i === n - 1) B.imps.push({ at: B.clock + i * 0.05 + fl, d: ev.d, dmg: ev.dmg, crit: ev.crit, kill: ev.kill, miss: ev.miss, kind: s.type, wx: b.x, wy: b.y });
         }
-        // 歩兵は撃ち合いらしく、ほかの兵も数人マズルフラッシュ
         if (s.type === 'inf' || s.type === 'at') for (i = 0; i < 4; i++) { var ff = figWorld(s).f; ff.fire = B.clock + Math.random() * 0.15; }
       } else if (ev.k === 'skill') {
         var hd = TF.HERO[s.hero], sk = TF.SKILL[ev.sk];
-        s.lastCast = B.clock;
         B.banner = { t: 0, name: hd.name, skill: sk.name, side: s.side, sub: ev.sk === 'charge' ? '味方全体 攻撃力+50%' : ev.sk === 'armor' ? '味方全体 被ダメージ半減' : ev.sk === 'snipe' ? '必中の一撃' : '敵全体へ砲撃' };
         if (ev.sk === 'charge') B.buff[s.side].atk = B.clock + ev.dur;
         else if (ev.sk === 'armor') B.buff[s.side].arm = B.clock + ev.dur;
@@ -2238,7 +2396,7 @@ if (typeof module !== 'undefined') module.exports = TF;
             var d3 = B.units[h.d];
             for (var k = 0; k < 3; k++) {
               var t0 = B.clock + i * 0.06 + k * 0.08, tw = figWorld(d3);
-              B.projs.push({ kind: 'art', x0: tw.x + (Math.random() - 0.5) * 30, y0: s.side === 0 ? -10 : 175, x1: tw.x, y1: tw.y, t0: t0, t1: t0 + 0.75, side: s.side, big: true });
+              B.projs.push({ kind: 'art', x0: tw.x + (Math.random() - 0.5) * 30, y0: s.side === 0 ? s.wy - 60 : s.wy + 60, x1: tw.x, y1: tw.y, t0: t0, t1: t0 + 0.75, side: s.side, big: true });
               if (k === 2) B.imps.push({ at: t0 + 0.75, d: h.d, dmg: h.dmg, kill: h.kill, kind: 'art', wx: tw.x, wy: tw.y, big: true, crit: 1 });
               else B.imps.push({ at: t0 + 0.75, d: h.d, dmg: 0, kind: 'art', wx: tw.x, wy: tw.y, big: true, fx: true });
             }
@@ -2246,21 +2404,27 @@ if (typeof module !== 'undefined') module.exports = TF;
         }
       }
     }
-    function boom(x, y, s, size) {
-      var n = Math.round(5 + size * 6);
-      for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, v = (20 + Math.random() * 70 * size) * s;
-        B.parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.5 - 20 * s, life: 0.3 + Math.random() * 0.25, max: 0.55, r: (3 + Math.random() * 5) * size * s, c: 'fire' });
-      }
-      for (i = 0; i < n * 0.7; i++) B.parts.push({ x: x + (Math.random() - 0.5) * 12 * s, y: y, vx: (Math.random() - 0.5) * 20, vy: -14 - Math.random() * 24, life: 0.9 + Math.random() * 0.6, max: 1.5, r: (4 + Math.random() * 6) * size * s, c: 'smoke' });
-      for (i = 0; i < n * 0.5; i++) { var a2 = -Math.PI * Math.random(); B.parts.push({ x: x, y: y, vx: Math.cos(a2) * 70 * s, vy: Math.sin(a2) * 110 * s, g: 300 * s, life: 0.5, max: 0.5, r: 1.3 * s + 0.5, c: 'debris' }); }
-      B.parts.push({ x: x, y: y, vx: 0, vy: 0, life: 0.3, max: 0.3, r: 20 * size * s, c: 'ring' });
+    // 粒子は地面上の点に結びつけ、画面上のずれ(ox,oy)で動かす。拡大率が変わっても追従する
+    function part(wx, wy, o) {
+      var k0 = proj(wx, wy).k;
+      B.parts.push({ wx: wx, wy: wy, ox: o.ox || 0, oy: o.oy || 0, vx: (o.vx || 0) * k0 / KREF, vy: (o.vy || 0) * k0 / KREF, g: (o.g || 0) * k0 / KREF, life: o.life, max: o.max || o.life, r: o.r * k0, c: o.c, k0: k0 });
     }
-    function puff(x, y, s) { for (var i = 0; i < 3; i++) B.parts.push({ x: x + (Math.random() - 0.5) * 6 * s, y: y, vx: (Math.random() - 0.5) * 16, vy: -10 - Math.random() * 10, life: 0.4, max: 0.4, r: 2.5 * s + 1, c: 'dust' }); }
-    function text(x, y, s, color, size) {
+    function boom(wx, wy, size) {
+      var n = Math.round(5 + size * 6), i;
+      for (i = 0; i < n; i++) {
+        var a = Math.random() * Math.PI * 2, v = 20 + Math.random() * 70 * size;
+        part(wx, wy, { vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.5 - 20, life: 0.3 + Math.random() * 0.25, max: 0.55, r: (0.9 + Math.random() * 1.4) * size, c: 'fire' });
+      }
+      for (i = 0; i < n * 0.7; i++) part(wx + (Math.random() - 0.5) * 3, wy, { vx: (Math.random() - 0.5) * 20, vy: -14 - Math.random() * 24, life: 0.9 + Math.random() * 0.6, max: 1.5, r: (1.2 + Math.random() * 1.7) * size, c: 'smoke' });
+      for (i = 0; i < n * 0.5; i++) { var a2 = -Math.PI * Math.random(); part(wx, wy, { vx: Math.cos(a2) * 70, vy: Math.sin(a2) * 110, g: 300, life: 0.5, r: 0.35, c: 'debris' }); }
+      part(wx, wy, { life: 0.3, r: 5.5 * size, c: 'ring' });
+    }
+    function puff(wx, wy) { for (var i = 0; i < 3; i++) part(wx + (Math.random() - 0.5) * 2, wy, { vx: (Math.random() - 0.5) * 16, vy: -10 - Math.random() * 10, life: 0.4, r: 0.8, c: 'dust' }); }
+    // 文字も地面上の点に結びつけて、上へ浮かせる
+    function text(wx, wy, s, color, size, lift) {
       var n = 0;
-      B.texts.forEach(function (t) { if (Math.abs(t.x0 - x) < 30 && Math.abs(t.y0 - y) < 40 && t.max - t.life < 0.4) n++; });
-      B.texts.push({ x: x + (Math.random() - 0.5) * 10, y: y - Math.min(n, 3) * 16, x0: x, y0: y, s: s, c: color, size: size || 15, life: 1.0, max: 1.0 });
+      B.texts.forEach(function (t) { if (Math.abs(t.wx - wx) < 8 && Math.abs(t.wy - wy) < 8 && t.max - t.life < 0.4) n++; });
+      B.texts.push({ wx: wx, wy: wy, lift: (lift || 26) + Math.min(n, 3) * 16, rise: 0, jx: (Math.random() - 0.5) * 10, s: s, c: color, size: size || 15, life: 1.0, max: 1.0 });
     }
     // 兵力(HP)に合わせて、倒れた兵士・壊れた車両を地面に残す
     function syncFigs(u, quiet) {
@@ -2269,33 +2433,32 @@ if (typeof module !== 'undefined') module.exports = TF;
       while (alive.length > want) {
         var f = alive.splice(Math.floor(Math.random() * alive.length), 1)[0];
         f.alive = false;
-        var wx = u.wx + f.ox * u.big, wy = u.wy + f.oy * u.big, p = proj(wx, wy);
+        var wx = u.wx + f.ox * u.big, wy = u.wy + f.oy * u.big;
         var heavy = u.type === 'tank' || u.type === 'art';
-        B.marks.push({ wx: wx, wy: wy, x: p.x, y: p.y, s: p.s, k: p.k, side: u.side, kind: heavy ? 'wreck' : 'fallen', big: u.big, t: B.clock, flip: Math.random() < 0.5 });
-        if (!quiet && heavy) boom(p.x, p.y - 2 * p.k, p.s, 1.1);
+        B.marks.push({ wx: wx, wy: wy, side: u.side, kind: heavy ? 'wreck' : 'fallen', big: u.big, t: B.clock, flip: Math.random() < 0.5 });
+        if (!quiet && heavy) boom(wx, wy, 1.1);
       }
     }
     function applyImpact(im) {
       var d = B.units[im.d];
-      var p = proj(im.wx === undefined ? d.wx : im.wx, im.wy === undefined ? d.wy : im.wy);
-      if (im.miss) { if (!im.quiet) puff(p.x, p.y, p.s); return; }
-      if (im.fx) { if (!im.quiet) boom(p.x, p.y, p.s, 1.0); return; }
+      var wx = im.wx === undefined ? d.wx : im.wx, wy = im.wy === undefined ? d.wy : im.wy;
+      if (im.miss) { if (!im.quiet) puff(wx, wy); return; }
+      if (im.fx) { if (!im.quiet) boom(wx, wy, 1.0); return; }
       d.hp = Math.max(0, d.hp - im.dmg);
       if (im.kill) d.hp = 0;
       syncFigs(d, im.quiet);
       if (im.quiet) { if (d.hp <= 0) d.dead = true; return; }
       d.hitT = B.clock;
-      if (im.from) B.beams.push({ a: proj(im.from.wx, im.from.wy), b: p, life: 0.3, max: 0.3 });
+      if (im.from) B.beams.push({ x0: im.from.wx, y0: im.from.wy, x1: d.wx, y1: d.wy, life: 0.3, max: 0.3 });
       var size = im.kind === 'art' ? (im.big ? 1.25 : 1.1) : im.kind === 'snipe' ? 1.4 : im.kind === 'tank' ? 0.9 : im.kind === 'at' ? 0.9 : 0;
-      if (size) boom(p.x, p.y, p.s, size); else puff(p.x, p.y, p.s);
-      if (im.crit || im.kind === 'snipe') text(p.x, p.y - 26 * p.s, (im.kind === 'snipe' ? '' : '会心 ') + '-' + fmt(im.dmg), '#ffe066', 15);
+      if (size) boom(wx, wy, size); else puff(wx, wy);
+      if (im.crit || im.kind === 'snipe') text(wx, wy, (im.kind === 'snipe' ? '' : '会心 ') + '-' + fmt(im.dmg), '#ffe066', 15);
       if (im.kind === 'art' || im.kind === 'snipe') B.shake = Math.max(B.shake, im.kind === 'snipe' ? 8 : 3.5);
       if (d.hp <= 0 && !d.dead) {
         d.dead = true;
-        var c = proj(d.wx, d.wy);
-        boom(c.x, c.y, c.s, 1.7);
+        boom(d.wx, d.wy, 1.7);
         B.shake = 10;
-        text(c.x, c.y - 30 * c.s, d.side === 1 ? '撃破!' : '全滅…', d.side === 1 ? '#ffd166' : '#ff8b78', 18);
+        text(d.wx, d.wy, d.side === 1 ? '撃破!' : '全滅…', d.side === 1 ? '#ffd166' : '#ff8b78', 18, 32);
       }
     }
     function projPos(p, c) {
@@ -2309,82 +2472,61 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
 
     // ---- 描画 ----
-    function poly(pts, fill) { cx.beginPath(); pts.forEach(function (p, i) { if (i) cx.lineTo(p.x, p.y); else cx.moveTo(p.x, p.y); }); cx.closePath(); cx.fillStyle = fill; cx.fill(); }
-    function drawBuilding(b) {
-      var bio = BIOME[B.biome], T = TEAM[b.owner];
-      var g = [proj(b.x - b.w / 2, b.y - b.d / 2), proj(b.x + b.w / 2, b.y - b.d / 2), proj(b.x + b.w / 2, b.y + b.d / 2), proj(b.x - b.w / 2, b.y + b.d / 2)];
-      function up(p, h) { return { x: p.x, y: p.y - h * p.k }; }
-      var t = g.map(function (p) { return up(p, b.h); });
-      cx.fillStyle = 'rgba(0,0,0,.2)';
-      cx.beginPath(); cx.ellipse((g[0].x + g[1].x) / 2 + 4, (g[0].y + g[2].y) / 2 + 2, Math.abs(g[1].x - g[0].x) * 0.65, Math.abs(g[0].y - g[2].y) * 0.8, 0, 0, Math.PI * 2); cx.fill();
-      var wall = b.hq ? shade(bio.wall, -0.1) : bio.wall;
-      if (b.x < 50) poly([g[1], g[2], t[2], t[1]], shade(wall, -0.25)); else poly([g[0], g[3], t[3], t[0]], shade(wall, -0.25));
-      poly([g[0], g[1], t[1], t[0]], wall);
-      cx.fillStyle = shade(wall, -0.5);
-      var dx = (g[1].x - g[0].x), dy = (g[1].y - g[0].y);
-      for (var i = 1; i < 4; i++) { var wxp = g[0].x + dx * i / 4, wyp = g[0].y + dy * i / 4; cx.fillRect(wxp - 2.5 * g[0].s, wyp - b.h * g[0].k * 0.7, 5 * g[0].s, b.h * g[0].k * 0.28); }
-      if (b.roof === 'gable') {
-        var rh = b.h * 0.6;
-        var r0 = up({ x: (t[0].x + t[3].x) / 2, y: (t[0].y + t[3].y) / 2, k: (g[0].k + g[3].k) / 2 }, rh);
-        var r1 = up({ x: (t[1].x + t[2].x) / 2, y: (t[1].y + t[2].y) / 2, k: (g[1].k + g[2].k) / 2 }, rh);
-        poly([r0, r1, t[2], t[3]], T.dark);
-        poly([t[0], t[1], r1, r0], T.main);
-        cx.strokeStyle = T.light; cx.lineWidth = 1.2; cx.beginPath(); cx.moveTo(r0.x, r0.y); cx.lineTo(r1.x, r1.y); cx.stroke();
-      } else {
-        poly(t, T.main);
-        poly([t[0], t[1], { x: t[1].x, y: t[1].y + 2 }, { x: t[0].x, y: t[0].y + 2 }], T.dark);
-      }
-      if (b.hq) {
-        var fp = up({ x: (t[0].x + t[1].x + t[2].x + t[3].x) / 4, y: (t[0].y + t[1].y + t[2].y + t[3].y) / 4, k: g[0].k }, 0);
-        var ph = 9 * g[0].k;
-        cx.strokeStyle = '#ddd'; cx.lineWidth = 1.2; cx.beginPath(); cx.moveTo(fp.x, fp.y); cx.lineTo(fp.x, fp.y - ph); cx.stroke();
-        var wv = Math.sin(B.wave * 6) * 1.5;
-        cx.fillStyle = T.main; cx.beginPath(); cx.moveTo(fp.x, fp.y - ph); cx.lineTo(fp.x + 11 * g[0].s, fp.y - ph + 3 + wv); cx.lineTo(fp.x, fp.y - ph + 6); cx.closePath(); cx.fill();
-      }
-    }
     function drawFront() {
-      var top = [], i, x;
-      for (x = -60; x <= 160; x += 3) top.push(proj(x, frontAt(x)));
-      // 陣地の色分け
-      [[0, -7], [1, 7]].forEach(function (a) {
+      var top = [], x, step = 4;
+      for (x = MAP.x0; x <= MAP.x1; x += step) top.push(proj(x, frontAt(x)));
+      [[0, -8], [1, 8]].forEach(function (a) {
         cx.beginPath(); top.forEach(function (p, j) { if (j) cx.lineTo(p.x, p.y); else cx.moveTo(p.x, p.y); });
-        for (var xx = 160; xx >= -60; xx -= 6) { var q = proj(xx, frontAt(xx) + a[1]); cx.lineTo(q.x, q.y); }
+        for (var xx = MAP.x1; xx >= MAP.x0; xx -= step * 2) { var q = proj(xx, frontAt(xx) + a[1]); cx.lineTo(q.x, q.y); }
         cx.closePath();
         cx.fillStyle = 'rgba(' + TEAM[a[0]].rgb + ',.10)'; cx.fill();
       });
-      // 赤い線(敵側)と緑の線(自軍側)
       [[1, 1.0], [0, -1.0]].forEach(function (a) {
-        var pts = [];
-        for (x = -60; x <= 160; x += 3) pts.push(proj(x, frontAt(x) + a[1]));
         cx.lineJoin = 'round';
-        cx.beginPath(); pts.forEach(function (p, j) { if (j) cx.lineTo(p.x, p.y); else cx.moveTo(p.x, p.y); });
+        cx.beginPath();
+        for (var xx = MAP.x0, j = 0; xx <= MAP.x1; xx += step, j++) { var p = proj(xx, frontAt(xx) + a[1]); if (j) cx.lineTo(p.x, p.y); else cx.moveTo(p.x, p.y); }
         cx.strokeStyle = 'rgba(' + TEAM[a[0]].rgb + ',.28)'; cx.lineWidth = 9; cx.stroke();
         cx.strokeStyle = a[0] === 0 ? '#5cff7c' : '#ff5a4e'; cx.lineWidth = 2.6; cx.stroke();
+      });
+    }
+    function drawPosts() {
+      var now = fxNow();
+      B.posts.forEach(function (p) {
+        var q = proj(p.x, p.y);
+        if (q.y < -20 || q.y > H + 40 || q.x < -30 || q.x > W + 30) return;
+        var T = TEAM[p.owner], flash = Math.max(0, 1 - (now - p.flipT) / 0.6);
+        cx.strokeStyle = 'rgba(' + T.rgb + ',' + (0.55 + 0.45 * flash) + ')'; cx.lineWidth = 2 + 2 * flash;
+        cx.beginPath(); cx.ellipse(q.x, q.y, 5 * q.k, 2.2 * q.k, 0, 0, Math.PI * 2); cx.stroke();
+        cx.fillStyle = 'rgba(' + T.rgb + ',.18)'; cx.fill();
+        var ph = 9 * q.k;
+        cx.strokeStyle = '#e6e6dc'; cx.lineWidth = Math.max(1, 0.35 * q.k);
+        cx.beginPath(); cx.moveTo(q.x, q.y); cx.lineTo(q.x, q.y - ph); cx.stroke();
+        var wv = Math.sin(B.wave * 6 + p.x) * 0.5 * q.k;
+        cx.fillStyle = T.main; cx.beginPath(); cx.moveTo(q.x, q.y - ph); cx.lineTo(q.x + 4 * q.k, q.y - ph + 1.2 * q.k + wv); cx.lineTo(q.x, q.y - ph + 2.6 * q.k); cx.closePath(); cx.fill();
       });
     }
     function drawSquad(u) {
       var spr = SPR[u.side][u.type], ally = u.side === 0;
       var c = proj(u.wx, u.wy);
+      if (c.y < -60 || c.y > H + 60 || c.x < -90 || c.x > W + 90) return;
       var bw = 11 * c.k * u.big * (u.type === 'inf' ? 1 : 0.9);
       if (!u.dead && B.buff[u.side].atk > B.clock) {
         cx.fillStyle = 'rgba(255,130,50,' + (0.22 + 0.1 * Math.sin(B.clock * 12)) + ')';
         cx.beginPath(); cx.ellipse(c.x, c.y, bw * 1.15, bw * 0.45, 0, 0, Math.PI * 2); cx.fill();
       }
-      var hit = B.clock - u.hitT < 0.12;
       for (var i = 0; i < u.figs.length; i++) {
         var f = u.figs[i];
         if (!f.alive) continue;
         var p = proj(u.wx + f.ox * u.big, u.wy + f.oy * u.big);
-        var bob = u.moving ? Math.abs(Math.sin(B.clock * 9 + B.introT * 9 + f.ph)) * 0.5 * p.k : 0;
+        var bob = u.moving ? Math.abs(Math.sin(B.clock * 9 + B.introT * 9 + B.endT * 9 + f.ph)) * 0.5 * p.k : 0;
         var w = spr.w * p.k * u.big, h = spr.h * p.k * u.big;
         cx.drawImage(spr.c, p.x - w / 2, p.y - h - bob, w, h);
         if (f.fire > 0 && B.clock - f.fire < 0.08 && B.clock >= f.fire) {
-          var gy = ally ? -1 : 1;
           cx.fillStyle = '#fff3a8';
-          cx.beginPath(); cx.arc(p.x + (u.type === 'tank' || u.type === 'art' ? 0 : 0.6 * p.k), p.y - h * 0.85 + gy * 0.4 * p.k, Math.max(1.5, 0.7 * p.k), 0, Math.PI * 2); cx.fill();
+          cx.beginPath(); cx.arc(p.x + (u.type === 'tank' || u.type === 'art' ? 0 : 0.6 * p.k), p.y - h * 0.85 + (ally ? -1 : 1) * 0.4 * p.k, Math.max(1.5, 0.7 * p.k), 0, Math.PI * 2); cx.fill();
         }
       }
-      if (hit) {
+      if (B.clock - u.hitT < 0.12) {
         cx.fillStyle = 'rgba(255,255,255,.25)';
         cx.beginPath(); cx.ellipse(c.x, c.y - 4 * c.k, bw, bw * 0.5, 0, 0, Math.PI * 2); cx.fill();
       }
@@ -2401,7 +2543,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     function drawLabel(u) {
       if (u.dead) return;
       var p = proj(u.wx, u.wy + u.farOy * u.big);
-      var sz = 0.8 + 0.25 * p.s;
+      if (p.y < -40 || p.y > H + 60 || p.x < -60 || p.x > W + 60) return;
+      var sz = Math.max(0.7, Math.min(1.15, 0.6 + 0.4 * p.s));
       var y = p.y - FIGH[u.type] * p.k * u.big - 3;
       var r = 9.5 * sz;
       var shake = B.clock - u.hitT < 0.15 ? (Math.random() - 0.5) * 3 : 0;
@@ -2458,40 +2601,45 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     function drawParts() {
       B.parts.forEach(function (p) {
+        var q = proj(p.wx, p.wy), sc = q.k / p.k0, x = q.x + p.ox * sc, y = q.y + p.oy * sc, r = p.r * sc;
+        if (x < -40 || x > W + 40 || y < -40 || y > H + 40) return;
         var a = Math.max(0, p.life / p.max);
-        if (p.c === 'fire') { cx.fillStyle = 'rgba(255,' + Math.round(120 + 120 * a) + ',' + Math.round(40 * a) + ',' + (a * 0.9) + ')'; cx.beginPath(); cx.arc(p.x, p.y, p.r * (0.6 + 0.6 * (1 - a)), 0, Math.PI * 2); cx.fill(); }
-        else if (p.c === 'smoke' || p.c === 'dust') { cx.fillStyle = (p.c === 'dust' ? 'rgba(200,185,150,' : 'rgba(70,70,64,') + (a * 0.5) + ')'; cx.beginPath(); cx.arc(p.x, p.y, p.r * (1 + (1 - a)), 0, Math.PI * 2); cx.fill(); }
-        else if (p.c === 'debris') { cx.fillStyle = 'rgba(60,50,40,' + a + ')'; cx.fillRect(p.x, p.y, p.r * 1.6, p.r * 1.6); }
-        else if (p.c === 'ring') { cx.strokeStyle = 'rgba(255,230,160,' + a + ')'; cx.lineWidth = 2.5; cx.beginPath(); cx.ellipse(p.x, p.y, p.r * (1.3 - a), p.r * (1.3 - a) * 0.5, 0, 0, Math.PI * 2); cx.stroke(); }
+        if (p.c === 'fire') { cx.fillStyle = 'rgba(255,' + Math.round(120 + 120 * a) + ',' + Math.round(40 * a) + ',' + (a * 0.9) + ')'; cx.beginPath(); cx.arc(x, y, r * (0.6 + 0.6 * (1 - a)), 0, Math.PI * 2); cx.fill(); }
+        else if (p.c === 'smoke' || p.c === 'dust') { cx.fillStyle = (p.c === 'dust' ? 'rgba(200,185,150,' : 'rgba(70,70,64,') + (a * 0.5) + ')'; cx.beginPath(); cx.arc(x, y, r * (1 + (1 - a)), 0, Math.PI * 2); cx.fill(); }
+        else if (p.c === 'debris') { cx.fillStyle = 'rgba(60,50,40,' + a + ')'; cx.fillRect(x, y, r * 1.6 + 0.8, r * 1.6 + 0.8); }
+        else if (p.c === 'ring') { cx.strokeStyle = 'rgba(255,230,160,' + a + ')'; cx.lineWidth = 2.5; cx.beginPath(); cx.ellipse(x, y, r * (1.3 - a), r * (1.3 - a) * 0.5, 0, 0, Math.PI * 2); cx.stroke(); }
       });
     }
     function drawPillars() {
       var now = fxNow();
-      B.pillars.forEach(function (p) {
-        var t = now - p.t;
+      B.pillars.forEach(function (pl) {
+        var t = now - pl.t;
         if (t < 0) return;
+        var p = proj(pl.wx, pl.wy), k = p.k * pl.big;
         var a = t < 0.15 ? t / 0.15 : Math.max(0, 1 - (t - 0.15) / 1.0);
-        var w = 9 * p.k, h = 55 * p.k * (0.6 + 0.4 * Math.min(1, t / 0.3));
+        var w = 9 * k, h = 55 * k * (0.6 + 0.4 * Math.min(1, t / 0.3));
         var gr = cx.createLinearGradient(0, p.y - h, 0, p.y);
-        gr.addColorStop(0, 'rgba(' + TEAM[p.side].rgb + ',0)'); gr.addColorStop(1, 'rgba(' + TEAM[p.side].rgb + ',' + (0.45 * a) + ')');
+        gr.addColorStop(0, 'rgba(' + TEAM[pl.side].rgb + ',0)'); gr.addColorStop(1, 'rgba(' + TEAM[pl.side].rgb + ',' + (0.45 * a) + ')');
         cx.fillStyle = gr; cx.fillRect(p.x - w / 2, p.y - h, w, h);
         var gc = cx.createLinearGradient(0, p.y - h, 0, p.y);
         gc.addColorStop(0, 'rgba(255,255,255,0)'); gc.addColorStop(1, 'rgba(255,255,255,' + (0.6 * a) + ')');
         cx.fillStyle = gc; cx.fillRect(p.x - w * 0.12, p.y - h * 0.9, w * 0.24, h * 0.9);
-        cx.strokeStyle = 'rgba(' + TEAM[p.side].rgb + ',' + a + ')'; cx.lineWidth = 2;
+        cx.strokeStyle = 'rgba(' + TEAM[pl.side].rgb + ',' + a + ')'; cx.lineWidth = 2;
         cx.beginPath(); cx.ellipse(p.x, p.y, w * 0.7 * (1 + t), w * 0.28 * (1 + t), 0, 0, Math.PI * 2); cx.stroke();
       });
     }
     function drawMarks() {
       B.marks.forEach(function (m) {
+        var p = proj(m.wx, m.wy);
+        if (p.y < -20 || p.y > H + 20 || p.x < -20 || p.x > W + 20) return;
         var spr = SPR[m.side][m.kind];
         var age = B.clock - m.t;
         cx.globalAlpha = m.kind === 'wreck' ? 1 : Math.max(0.25, 1 - age / 8);
-        var w = spr.w * m.k * m.big, h = spr.h * m.k * m.big;
-        if (m.flip) { cx.save(); cx.translate(m.x, 0); cx.scale(-1, 1); cx.drawImage(spr.c, -w / 2, m.y - h, w, h); cx.restore(); }
-        else cx.drawImage(spr.c, m.x - w / 2, m.y - h, w, h);
+        var w = spr.w * p.k * m.big, h = spr.h * p.k * m.big;
+        if (m.flip) { cx.save(); cx.translate(p.x, 0); cx.scale(-1, 1); cx.drawImage(spr.c, -w / 2, p.y - h, w, h); cx.restore(); }
+        else cx.drawImage(spr.c, p.x - w / 2, p.y - h, w, h);
         cx.globalAlpha = 1;
-        if (m.kind === 'wreck' && Math.random() < 0.06) B.parts.push({ x: m.x + (Math.random() - 0.5) * 6 * m.s, y: m.y - 8 * m.s, vx: 2, vy: -14, life: 1.1, max: 1.1, r: 2.5 * m.s + 1, c: 'smoke' });
+        if (m.kind === 'wreck' && Math.random() < 0.06) part(m.wx, m.wy, { oy: -2 * p.k, vx: 2, vy: -14, life: 1.1, r: 0.8, c: 'smoke' });
       });
     }
     function totalMen(side) {
@@ -2505,7 +2653,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.fillText('ステージ' + B.info.s + ' ' + B.info.place + (B.info.boss ? '(ボス戦)' : ''), 12, 7);
       var tl = Math.max(0, TF.K.maxT - B.clock);
       cx.textAlign = 'right'; cx.fillStyle = tl < 10 ? '#ff8b78' : '#eef0e4';
-      cx.fillText(B.phase === 'intro' ? '展開中…' : '残り ' + Math.ceil(tl) + '秒', W - 12, 7);
+      var mine = B.posts.filter(function (p) { return p.owner === 0; }).length;
+      cx.fillText('拠点' + mine + '/' + B.posts.length + '  ' + (B.phase === 'intro' ? '展開中…' : '残り ' + Math.ceil(tl) + '秒'), W - 12, 7);
       var bw = (W - 36) / 2;
       [[0, 12, '自軍', '#4fd46a'], [1, 24 + bw, '敵軍', '#ff6a5c']].forEach(function (a) {
         var f = sideFrac(a[0]);
@@ -2539,37 +2688,37 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.restore();
     }
     function drawEnding() {
-      var t = B.endT - 0.35;
+      var t = B.endT - 0.45;
       if (t < 0) return;
       var k = Math.min(1, t / 0.35);
-      cx.fillStyle = 'rgba(0,0,0,' + (0.3 * k) + ')'; cx.fillRect(0, 0, W, H);
+      cx.fillStyle = 'rgba(0,0,0,' + (0.22 * k) + ')'; cx.fillRect(0, 0, W, H);
       var win = B.res.win;
       var s = 0.6 + 0.4 * (1 - Math.pow(1 - k, 3));
-      cx.save(); cx.translate(W / 2, H * 0.42); cx.scale(s, s); cx.globalAlpha = k;
+      cx.save(); cx.translate(W / 2, H * 0.6); cx.scale(s, s); cx.globalAlpha = k;
       cx.textAlign = 'center'; cx.textBaseline = 'middle';
-      cx.font = '900 62px -apple-system,"Hiragino Sans",sans-serif';
+      cx.font = '900 58px -apple-system,"Hiragino Sans",sans-serif';
       cx.lineWidth = 8; cx.strokeStyle = win ? '#2a4a10' : '#222';
       var label = win ? '勝利!' : B.res.timeout ? '時間切れ' : '敗北…';
       cx.strokeText(label, 0, 0);
       cx.fillStyle = win ? '#f1c453' : '#c9b0a6'; cx.fillText(label, 0, 0);
       cx.font = '800 14px -apple-system,"Hiragino Sans",sans-serif'; cx.lineWidth = 4;
       var sub = win ? '敵陣を占領!' : '兵は無事に撤退しました';
-      cx.strokeText(sub, 0, 46); cx.fillStyle = '#fff'; cx.fillText(sub, 0, 46);
+      cx.strokeText(sub, 0, 44); cx.fillStyle = '#fff'; cx.fillText(sub, 0, 44);
       cx.restore();
     }
     function draw() {
-      cx.setTransform(DPR, 0, 0, DPR, 0, 0);
-      if (!bgReady) makeBg();
       if (!SPR) makeSprites();
+      var key = CAM.x.toFixed(1) + ',' + CAM.y.toFixed(1) + ',' + CAM.z.toFixed(3) + ',' + W + ',' + H;
+      if (key !== bgKey) { drawGround(); bgKey = key; }
+      cx.setTransform(DPR, 0, 0, DPR, 0, 0);
       cx.clearRect(0, 0, W, H);
       cx.save();
       if (B.shake > 0) cx.translate((Math.random() - 0.5) * B.shake, (Math.random() - 0.5) * B.shake);
       drawFront();
+      drawPosts();
       drawMarks();
-      B.blds.forEach(function (b) { if (b.y > 80) drawBuilding(b); });
       var order = B.units.slice().sort(function (a, b) { return b.wy - a.wy; });
       order.forEach(drawSquad);
-      B.blds.forEach(function (b) { if (b.y <= 80) drawBuilding(b); });
       drawPillars();
       B.sights.forEach(function (m) {
         var p = proj(m.u.wx, m.u.wy), k = (B.clock - m.t0) / 0.45, r = (34 - 16 * k) * (0.6 + 0.4 * p.s);
@@ -2579,20 +2728,21 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
       B.projs.forEach(drawProj);
       B.beams.forEach(function (bm) {
-        var a = bm.life / bm.max;
+        var a = bm.life / bm.max, pa = proj(bm.x0, bm.y0), pb = proj(bm.x1, bm.y1);
         cx.strokeStyle = 'rgba(255,240,180,' + a + ')'; cx.lineWidth = 6 * a + 1;
-        cx.beginPath(); cx.moveTo(bm.a.x, bm.a.y - 6); cx.lineTo(bm.b.x, bm.b.y - 6); cx.stroke();
+        cx.beginPath(); cx.moveTo(pa.x, pa.y - 6); cx.lineTo(pb.x, pb.y - 6); cx.stroke();
         cx.strokeStyle = 'rgba(255,80,60,' + a + ')'; cx.lineWidth = 2;
-        cx.beginPath(); cx.moveTo(bm.a.x, bm.a.y - 6); cx.lineTo(bm.b.x, bm.b.y - 6); cx.stroke();
+        cx.beginPath(); cx.moveTo(pa.x, pa.y - 6); cx.lineTo(pb.x, pb.y - 6); cx.stroke();
       });
       drawOrders();
       drawParts();
-      order.slice().forEach(drawLabel);
+      order.forEach(drawLabel);
       B.texts.forEach(function (t) {
+        var p = proj(t.wx, t.wy), x = p.x + t.jx, y = p.y - t.lift - t.rise;
         var a = Math.min(1, t.life / t.max * 1.6);
         cx.globalAlpha = a; cx.font = '900 ' + t.size + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-        cx.lineWidth = 4; cx.strokeStyle = 'rgba(0,0,0,.75)'; cx.strokeText(t.s, t.x, t.y);
-        cx.fillStyle = t.c; cx.fillText(t.s, t.x, t.y);
+        cx.lineWidth = 4; cx.strokeStyle = 'rgba(0,0,0,.75)'; cx.strokeText(t.s, x, y);
+        cx.fillStyle = t.c; cx.fillText(t.s, x, y);
         cx.globalAlpha = 1;
       });
       cx.restore();
@@ -2601,7 +2751,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       drawHint();
       if (B.ending) drawEnding();
     }
-    // ---- 手動操作 ----
+
+    // ---- 手動操作・スキル ----
     function skillProg(id) {
       var eu = B.eng.U[id];
       if (!eu.sk) return 0;
@@ -2662,6 +2813,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.phase !== 'fight') { showHint('まだ展開中です'); return; }
       if (!B.eng.cast(id, B.clock)) showHint(B.eng.U[id].alive ? 'スキルの充填中です' : 'この部隊は戦闘不能です');
     }
+    function camReset() { if (B) { B.userCam = false; $('camReset').classList.add('hidden'); } }
+    function userCamOn() { if (!B.userCam) { B.userCam = true; $('camReset').classList.remove('hidden'); } }
     function localPt(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
     function pickSquad(pt, side) {
       var best = null, bd = 1e9;
@@ -2669,7 +2822,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (u.side !== side || u.dead) return;
         var c = proj(u.wx, u.wy), lp = proj(u.wx, u.wy + u.farOy * u.big);
         var ly = lp.y - FIGH[u.type] * lp.k * u.big - 12;
-        var R = Math.max(32, 9 * c.k * u.big);
+        var R = Math.max(30, 10 * c.k * u.big);
         var d = Math.min(Math.hypot(pt.x - c.x, (pt.y - (c.y - 6)) * 1.3), Math.hypot(pt.x - lp.x, pt.y - ly));
         if (d < R && d < bd) { bd = d; best = u; }
       });
@@ -2677,42 +2830,89 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     function issueOrder(u, target) {
       if (B.eng.order(u.id, target.id)) {
-        var p = proj(u.wx, u.wy), q = proj(target.wx, target.wy);
-        text(p.x, p.y - 30 * p.s, '攻撃指示!', '#9cffb0', 14);
-        B.parts.push({ x: q.x, y: q.y, vx: 0, vy: 0, life: 0.4, max: 0.4, r: 24 * q.s + 8, c: 'ring' });
+        text(u.wx, u.wy, '攻撃指示!', '#9cffb0', 14, 30);
+        part(target.wx, target.wy, { life: 0.4, r: 7, c: 'ring' });
       }
+    }
+    function pinchInfo() {
+      var ids = Object.keys(B.ptrs);
+      var a = B.ptrs[ids[0]], b = B.ptrs[ids[1]];
+      return { d: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
     }
     function onDown(e) {
-      if (!B || B.ending) return;
-      var pt = localPt(e), u = pickSquad(pt, 0);
-      if (B.auto) { if (u || pickSquad(pt, 1)) showHint('AUTOをOFFにすると、攻撃目標を指示できます'); return; }
-      if (u) {
-        B.drag = { u: u, x0: pt.x, y0: pt.y, x: pt.x, y: pt.y, moved: false, hover: null };
-        try { cv.setPointerCapture(e.pointerId); } catch (er) { }
-        e.preventDefault();
+      if (!B) return;
+      var pt = localPt(e);
+      B.ptrs[e.pointerId] = pt;
+      try { cv.setPointerCapture(e.pointerId); } catch (er) { }
+      e.preventDefault();
+      if (Object.keys(B.ptrs).length >= 2) {
+        // 2本指: 拡大・縮小(指示やスクロールは取り消し)
+        B.drag = null; B.pan = null;
+        var pi = pinchInfo();
+        B.pinch = { d0: pi.d, z0: CAM.z, world: unproj(pi.x, pi.y) };
         return;
       }
-      var en = pickSquad(pt, 1);
-      if (en && B.sel && !B.sel.dead) { issueOrder(B.sel, en); B.sel = null; }
-      else if (en) showHint('先に自軍の部隊をタップ(またはドラッグ)してください');
-      else B.sel = null;
+      if (B.ending) return;
+      var u = !B.auto ? pickSquad(pt, 0) : null;
+      if (u) { B.drag = { u: u, x0: pt.x, y0: pt.y, x: pt.x, y: pt.y, moved: false, hover: null }; return; }
+      B.pan = { world: unproj(pt.x, pt.y), x0: pt.x, y0: pt.y, moved: false };
     }
     function onMove(e) {
-      if (!B || !B.drag) return;
-      var pt = localPt(e), d = B.drag;
-      d.x = pt.x; d.y = pt.y;
-      if (Math.hypot(pt.x - d.x0, pt.y - d.y0) > 12) d.moved = true;
-      d.hover = d.moved ? pickSquad(pt, 1) : null;
+      if (!B || !B.ptrs[e.pointerId]) return;
+      var pt = localPt(e);
+      B.ptrs[e.pointerId] = pt;
       e.preventDefault();
+      if (B.pinch && Object.keys(B.ptrs).length >= 2) {
+        var pi = pinchInfo();
+        CAM.z = B.pinch.z0 * pi.d / B.pinch.d0;
+        clampCam();
+        var now = unproj(pi.x, pi.y);
+        CAM.x += B.pinch.world.x - now.x; CAM.y += B.pinch.world.y - now.y;
+        clampCam();
+        userCamOn();
+        return;
+      }
+      if (B.drag) {
+        var d = B.drag;
+        d.x = pt.x; d.y = pt.y;
+        if (Math.hypot(pt.x - d.x0, pt.y - d.y0) > 12) d.moved = true;
+        d.hover = d.moved ? pickSquad(pt, 1) : null;
+        return;
+      }
+      if (B.pan) {
+        if (!B.pan.moved && Math.hypot(pt.x - B.pan.x0, pt.y - B.pan.y0) < 8) return;
+        B.pan.moved = true;
+        var w = unproj(pt.x, pt.y);
+        CAM.x += B.pan.world.x - w.x; CAM.y += B.pan.world.y - w.y;
+        clampCam();
+        userCamOn();
+      }
     }
-    function onUp() {
-      if (!B || !B.drag) return;
-      var d = B.drag;
-      B.drag = null;
-      if (d.u.dead) return;
-      if (!d.moved) { B.sel = B.sel === d.u ? null : d.u; if (B.sel) showHint('攻撃する敵部隊をタップ', 1.8); return; }
-      if (d.hover) issueOrder(d.u, d.hover);
-      else if (B.eng.order(d.u.id, null)) { var p = proj(d.u.wx, d.u.wy); text(p.x, p.y - 30 * p.s, '自由に攻撃', '#e6e6d6', 13); }
+    function onUp(e) {
+      if (!B) return;
+      var pt = B.ptrs[e.pointerId] || localPt(e);
+      delete B.ptrs[e.pointerId];
+      if (B.pinch) { if (Object.keys(B.ptrs).length < 2) B.pinch = null; B.pan = null; return; }
+      if (B.drag) {
+        var d = B.drag;
+        B.drag = null;
+        if (d.u.dead) return;
+        if (!d.moved) { B.sel = B.sel === d.u ? null : d.u; if (B.sel) showHint('攻撃する敵部隊をタップ', 1.8); return; }
+        if (d.hover) issueOrder(d.u, d.hover);
+        else if (B.eng.order(d.u.id, null)) text(d.u.wx, d.u.wy, '自由に攻撃', '#e6e6d6', 13, 30);
+        return;
+      }
+      if (B.pan) {
+        var moved = B.pan.moved;
+        B.pan = null;
+        if (moved || B.ending) return;
+        // その場でタップ
+        var en = pickSquad(pt, 1);
+        if (B.auto) { if (en || pickSquad(pt, 0)) showHint('AUTOをOFFにすると、攻撃目標を指示できます'); return; }
+        if (en && B.sel && !B.sel.dead) { issueOrder(B.sel, en); B.sel = null; }
+        else if (en) showHint('先に自軍の部隊をタップ(またはドラッグ)してください');
+        else B.sel = null;
+      }
     }
     function bindInput() {
       var c = $('bcv');
@@ -2721,10 +2921,21 @@ if (typeof module !== 'undefined') module.exports = TF;
       c.addEventListener('pointerdown', function (e) { if (B) { cv = c; onDown(e); } });
       c.addEventListener('pointermove', onMove);
       c.addEventListener('pointerup', onUp);
-      c.addEventListener('pointercancel', function () { if (B) B.drag = null; });
+      c.addEventListener('pointercancel', function (e) { if (B) { delete B.ptrs[e.pointerId]; B.drag = null; B.pan = null; B.pinch = null; } });
+      c.addEventListener('wheel', function (e) {
+        if (!B) return;
+        e.preventDefault();
+        var pt = localPt(e), before = unproj(pt.x, pt.y);
+        CAM.z *= e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        clampCam();
+        var after = unproj(pt.x, pt.y);
+        CAM.x += before.x - after.x; CAM.y += before.y - after.y;
+        clampCam();
+        userCamOn();
+      }, { passive: false });
     }
     function arrow(x0, y0, x1, y1, color, width, dash) {
-      var ang = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0);
+      var L = Math.hypot(x1 - x0, y1 - y0);
       if (L < 4) return;
       var mx = (x0 + x1) / 2, my = (y0 + y1) / 2 - Math.min(40, L * 0.18);
       cx.save();
@@ -2750,7 +2961,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
       if (B.sel && !B.sel.dead) {
         var p = proj(B.sel.wx, B.sel.wy), w = 11 * p.k * B.sel.big;
-        cx.strokeStyle = 'rgba(255,255,255,' + (0.6 + 0.35 * Math.sin(B.clock * 8 + B.introT * 8)) + ')'; cx.lineWidth = 2.5;
+        cx.strokeStyle = 'rgba(255,255,255,' + (0.6 + 0.35 * Math.sin(fxNow() * 8)) + ')'; cx.lineWidth = 2.5;
         cx.beginPath(); cx.ellipse(p.x, p.y, w * 1.15, w * 0.45, 0, 0, Math.PI * 2); cx.stroke();
       }
       if (B.drag && B.drag.moved) {
@@ -2768,15 +2979,21 @@ if (typeof module !== 'undefined') module.exports = TF;
       var a = Math.min(1, h.t / 0.2, (h.dur - h.t) / 0.3);
       cx.save(); cx.globalAlpha = Math.max(0, a);
       cx.font = '800 13px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-      var w = Math.min(W - 24, cx.measureText(h.msg).width + 28), y = 82;
+      var w = Math.min(W - 24, cx.measureText(h.msg).width + 28), y = 84;
       cx.fillStyle = 'rgba(10,14,9,.85)'; rr(W / 2 - w / 2, y - 16, w, 32, 10); cx.fill();
       cx.strokeStyle = 'rgba(241,196,83,.6)'; cx.lineWidth = 1; cx.stroke();
       cx.fillStyle = '#fff'; cx.fillText(h.msg, W / 2, y + 0.5, w - 16);
       cx.restore();
     }
     window.addEventListener('resize', function () { if (B) resize(); });
-    return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, active: function () { return !!B; },
-      debug: function () { return B ? { auto: B.auto, phase: B.phase, clock: B.clock, units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, order: eu.order, alive: eu.alive, skNext: eu.sk ? eu.skNext : null }; }), skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length } : null; } };
+    return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, active: function () { return !!B; },
+      debug: function () {
+        if (!B) return null;
+        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
+          captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
+          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, order: eu.order, alive: eu.alive, skNext: eu.sk ? eu.skNext : null }; }),
+          skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
+      } };
   })();
 
   // ====== アプリのアイコン(ホーム画面用PNGを生成) ======
