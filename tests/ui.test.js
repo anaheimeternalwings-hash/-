@@ -296,6 +296,22 @@ function midState(over) {
     assert((await page.textContent('.result h2')).includes('勝利'));
   }, midState({ cleared: 2, sel: 3 })));
 
+  await test('自軍は川の手前から橋を渡って前線へ。戦闘中は狙いの線が出て、敵の前に土のうの壁がある', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForSelector('#battle:not(.hidden)');
+    const d0 = await page.evaluate(() => window.__game.battle.debug());
+    assert(d0.minAllyY < d0.bridgeY, '開始時に川の手前にいない ' + d0.minAllyY);
+    assert(d0.wallsTotal > 20 && d0.walls === d0.wallsTotal);
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight' && d.clock > 1.5; }, null, { timeout: 15000 });
+    const d1 = await page.evaluate(() => window.__game.battle.debug());
+    assert(d1.minAllyY > d1.bridgeY, '川を渡っていない ' + d1.minAllyY);
+    assert(d1.aims > 0, '狙いの線が出ない');
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
+  }, midState({ cleared: 14, sel: 15 })));
+
   await test('出撃画面の「稼ぎにおすすめ」: 勝率80%以上のステージを選んで編成する', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="farm-find"]');

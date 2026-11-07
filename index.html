@@ -1785,9 +1785,9 @@ if (typeof module !== 'undefined') module.exports = TF;
   var Battle = (function () {
     var wrap, cv, cx, W = 0, H = 0, DPR = 1;
     var B = null, raf = 0, lastTs = 0, bgCanvas = null, bgKey = '', SPR = null;
-    var TROOP = { inf: 120, at: 80, tank: 50, art: 40 };   // ラベルに出す兵数
-    var FIGMAX = { inf: 36, at: 24, tank: 5, art: 4 };     // 描く兵士・車両の数
-    var FIGSP = { inf: 2.0, at: 2.4, tank: 6.6, art: 7.2 };
+    var TROOP = { inf: 1500, at: 1200, tank: 800, art: 600 };   // ラベルに出す兵数(ステージが進むと増える)
+    var FIGMAX = { inf: 54, at: 36, tank: 6, art: 5 };          // 描く兵士・車両の数
+    var FIGSP = { inf: 1.85, at: 2.2, tank: 6.4, art: 7.0 };
     var FIGH = { inf: 2.8, at: 2.8, tank: 4.4, art: 4.2 };
     var FIGW = { inf: 1.8, at: 2.6, tank: 5.8, art: 6.2 };
     var FLIGHT = { inf: 0.18, at: 0.5, tank: 0.26, art: 0.78 };
@@ -1796,7 +1796,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       { main: '#e5473c', dark: '#9c2820', light: '#ffa496', rgb: '240,80,70', icon: '#8c1f18' }
     ];
     var BIOME = {
-      snow: { near: '#e3eaef', far: '#cfd9e1', patch: 'rgba(160,178,196,.22)', furrow: 'rgba(120,140,160,.25)', road: '#a88a6c', roadE: '#86694f', tree: '#2c5a4a', tree2: '#3b7360', cap: '#f7fbff', rock: '#98a4ae', haze: '226,234,240', wall: '#c9c2b4', pond: '#cfe4ef', shore: '#ffffff', roofs: ['#7a5a48', '#5f6873', '#6f4f6a'] },
+      snow: { near: '#e3eaef', far: '#cfd9e1', patch: 'rgba(160,178,196,.22)', furrow: 'rgba(120,140,160,.25)', road: '#a88a6c', roadE: '#86694f', tree: '#2c5a4a', tree2: '#3b7360', cap: '#f7fbff', rock: '#98a4ae', haze: '226,234,240', wall: '#c9c2b4', pond: '#86aec6', shore: '#eef3f6', roofs: ['#7a5a48', '#5f6873', '#6f4f6a'] },
       grass: { near: '#7fa65b', far: '#668c49', patch: 'rgba(40,70,20,.16)', furrow: 'rgba(30,55,15,.22)', road: '#b48e62', roadE: '#8c6a45', tree: '#2d6630', tree2: '#3f8840', cap: null, rock: '#8d9182', haze: '200,220,190', wall: '#d6ccb4', pond: '#5b8db0', shore: '#9cb87a', roofs: ['#8a4f36', '#5d6670', '#7a6a3a'] },
       desert: { near: '#e2c991', far: '#cdb077', patch: 'rgba(150,100,40,.15)', furrow: 'rgba(130,85,35,.2)', road: '#a77a4f', roadE: '#84603c', tree: '#6d7b3a', tree2: '#8a9a48', cap: null, rock: '#a88f6c', haze: '240,225,190', wall: '#d9c7a2', pond: '#5f9fae', shore: '#c9b67a', roofs: ['#b07a4a', '#9a8a6a', '#c49a5a'] }
     };
@@ -1811,6 +1811,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     var MAP = { x0: -90, x1: 290, y0: -50, y1: 350 };     // 地面の広さ
     var COLS = [60, 100, 140];                            // 部隊の列
     var ZOOM0 = 0.9;                                      // ふだんの拡大率(戦場を広めに見せる)
+    var RY = 70, BRIDGES = [64, 136];                     // 自軍の陣地の手前を流れる川と、2本の橋
+    function riverY(x) { return RY + Math.sin(x * 0.05 + 1.1) * 2.5; }
 
     // ---- カメラ(遠近つき・見回し・拡大縮小) ----
     var CAM = { x: CXW, y: F0 + 14, z: 1, th: 0.93, D: 280 };
@@ -1957,16 +1959,19 @@ if (typeof module !== 'undefined') module.exports = TF;
         g.restore();
       }
       // 池
-      var ponds = [[rnd() < 0.5 ? 18 : 182, 60 + rnd() * 50], [rnd() < 0.5 ? 25 : 175, 210 + rnd() * 50]];
+      var ponds = [[rnd() < 0.5 ? 18 : 182, 225 + rnd() * 30], [rnd() < 0.5 ? 12 : 188, 120 + rnd() * 30]];
       ponds.forEach(function (p) {
         g.fillStyle = bio.shore; g.beginPath(); g.ellipse(p[0], p[1], 13, 8, 0.3, 0, Math.PI * 2); g.fill();
         g.fillStyle = bio.pond; g.beginPath(); g.ellipse(p[0], p[1], 11, 6.4, 0.3, 0, Math.PI * 2); g.fill();
         g.fillStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.ellipse(p[0] - 3, p[1] + 1.5, 4, 1.4, 0.3, 0, Math.PI * 2); g.fill();
       });
-      // 道(本道と横道、村へのわき道)
+      // 道: 敵陣から戦場の中央までの本道と、そこから2本の橋へ分かれる道、横道
       var ph = rnd() * 6;
-      function mainX(yy) { return CXW + Math.sin(yy * 0.017 + ph) * 24; }
-      var yR1 = 88 + rnd() * 10, yR2 = 206 + rnd() * 12;
+      function mainX(yy) {
+        if (yy >= 108) return CXW + Math.sin((yy - 108) * 0.02 + ph) * 18 * Math.min(1, (yy - 108) / 40);
+        return null;
+      }
+      var yR1 = 120 + rnd() * 8, yR2 = 206 + rnd() * 12;
       function crossY(xx, base, k) { return base + Math.sin(xx * 0.03 + ph * k) * 9; }
       function road(pts, wid) {
         g.lineCap = 'round'; g.lineJoin = 'round';
@@ -1976,9 +1981,35 @@ if (typeof module !== 'undefined') module.exports = TF;
         });
       }
       var r1 = [], r2 = [], r3 = [];
-      for (y = MAP.y0; y <= MAP.y1; y += 3) r1.push([mainX(y), y]);
+      for (y = 108; y <= MAP.y1; y += 3) r1.push([mainX(y), y]);
       for (x = MAP.x0; x <= MAP.x1; x += 3) { r2.push([x, crossY(x, yR1, 1)]); r3.push([x, crossY(x, yR2, 2)]); }
+      var branches = BRIDGES.map(function (bx) {
+        var d = bx < CXW ? -1 : 1, pts = [];
+        // 本道の分かれ目 → 橋 → 自軍の陣地
+        for (var t = 0; t <= 1.0001; t += 0.05) { var e = t * t * (3 - 2 * t); pts.push([CXW + (bx - CXW) * e, 108 - (108 - (RY + 14)) * t]); }
+        for (y = RY + 11; y >= 40; y -= 3) pts.push([bx, y]);
+        for (t = 0; t <= 1.0001; t += 0.1) pts.push([bx + (CXW + d * 18 - bx) * t, 40 - 12 * t]);
+        return pts;
+      });
       road(r2, 3.2); road(r3, 3.2); road(r1, 4.2);
+      branches.forEach(function (b) { road(b, 3.8); });
+      // 川(自軍の陣地の手前)と橋
+      var rv = [];
+      for (x = MAP.x0; x <= MAP.x1; x += 2) rv.push([x, riverY(x)]);
+      [[bio.shore, 17], [shade(bio.pond, -0.18), 13], [bio.pond, 11]].forEach(function (stl) {
+        g.strokeStyle = stl[0]; g.lineWidth = stl[1]; g.lineCap = 'butt';
+        g.beginPath(); rv.forEach(function (p, k) { if (k) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
+      });
+      g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 0.6;
+      for (i = 0; i < 26; i++) { var wx0 = MAP.x0 + rnd() * (MAP.x1 - MAP.x0), wy0 = riverY(wx0) + (rnd() - 0.5) * 7; g.beginPath(); g.moveTo(wx0, wy0); g.lineTo(wx0 + 3 + rnd() * 4, wy0); g.stroke(); }
+      BRIDGES.forEach(function (bx) {
+        var y0 = riverY(bx);
+        g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(bx - 5.4, y0 - 10, 11.4, 19);
+        g.fillStyle = '#8a6a48'; g.fillRect(bx - 5, y0 - 10, 10, 20);
+        g.strokeStyle = '#6a4f34'; g.lineWidth = 0.35;
+        g.beginPath(); for (var yy = y0 - 9.5; yy < y0 + 10; yy += 1.1) { g.moveTo(bx - 5, yy); g.lineTo(bx + 5, yy); } g.stroke();
+        g.fillStyle = '#5a422c'; g.fillRect(bx - 5.6, y0 - 10, 0.9, 20); g.fillRect(bx + 4.7, y0 - 10, 0.9, 20);
+      });
       // 両軍の陣地(踏み固められた広場)
       [[CXW, 32], [CXW, 268]].forEach(function (p) {
         g.fillStyle = shade(bio.road, 0.25); g.globalAlpha = 0.55;
@@ -1992,7 +2023,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       function onRoad(xx, yy, m) {
         m = m || 4.5;
-        return Math.abs(xx - mainX(yy)) < m || Math.abs(yy - crossY(xx, yR1, 1)) < m || Math.abs(yy - crossY(xx, yR2, 2)) < m;
+        var mx = mainX(yy);
+        if (mx !== null && Math.abs(xx - mx) < m) return true;
+        if (Math.abs(yy - riverY(xx)) < 11) return true; // 川
+        if (yy < 112 && yy > 25 && BRIDGES.some(function (bx) { return Math.abs(xx - bx) < m + 3; })) return true;
+        return Math.abs(yy - crossY(xx, yR1, 1)) < m || Math.abs(yy - crossY(xx, yR2, 2)) < m;
       }
       // 立てて描くもの: 木・岩・家
       var props = [];
@@ -2018,7 +2053,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (!onRoad(sx, sy) && !occupied(sx, sy)) props.push({ k: rnd() < 0.5 ? 'rock' : 'tree', x: sx, y: sy, s: 0.7 + rnd() * 0.4 });
       }
       // 村(戦場の脇に家が数軒)
-      [[8, 150], [192, 158], [34, 238], [168, 74]].forEach(function (v, vi) {
+      [[8, 150], [192, 158], [34, 238], [182, 100]].forEach(function (v, vi) {
         var n = 3 + Math.floor(rnd() * 3);
         g.fillStyle = shade(bio.road, 0.2); g.globalAlpha = 0.45;
         g.beginPath(); g.ellipse(v[0], v[1], 16, 12, 0, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
@@ -2087,6 +2122,20 @@ if (typeof module !== 'undefined') module.exports = TF;
     // 箱形の建物。owner があれば軍の色の屋根、なければ民家
     function drawBuilding(g, b) {
       var bio = BIOME[B.biome];
+      if (b.ruin) {
+        // がれき
+        var c0 = proj(b.x, b.y), kk = c0.k;
+        g.fillStyle = 'rgba(30,24,18,.45)'; g.beginPath(); g.ellipse(c0.x, c0.y, (b.w * 0.7 + 1) * kk, (b.d * 0.45 + 0.6) * kk, 0, 0, Math.PI * 2); g.fill();
+        var rr0 = TF.rngFrom(Math.round(b.x * 13 + b.y * 7));
+        for (var ri = 0; ri < 7; ri++) {
+          var rx = c0.x + (rr0() - 0.5) * b.w * kk, ry = c0.y + (rr0() - 0.5) * b.d * 0.5 * kk, rs = (0.8 + rr0() * 1.4) * kk;
+          g.fillStyle = ri % 3 ? shade(bio.wall, -0.35) : (b.owner === undefined ? b.roof : TEAM[b.owner].dark);
+          g.beginPath(); g.moveTo(rx - rs, ry); g.lineTo(rx - rs * 0.3, ry - rs * 1.1); g.lineTo(rx + rs, ry - rs * 0.4); g.lineTo(rx + rs * 0.6, ry + rs * 0.2); g.closePath(); g.fill();
+        }
+        g.strokeStyle = '#3a2c20'; g.lineWidth = Math.max(1, 0.35 * kk);
+        g.beginPath(); g.moveTo(c0.x - b.w * 0.3 * kk, c0.y - 0.5 * kk); g.lineTo(c0.x + b.w * 0.2 * kk, c0.y - 2.2 * kk); g.stroke();
+        return;
+      }
       var roofMain = b.owner === undefined ? b.roof : TEAM[b.owner].main, roofDark = b.owner === undefined ? shade(b.roof, -0.3) : TEAM[b.owner].dark;
       var gp = [proj(b.x - b.w / 2, b.y - b.d / 2), proj(b.x + b.w / 2, b.y - b.d / 2), proj(b.x + b.w / 2, b.y + b.d / 2), proj(b.x - b.w / 2, b.y + b.d / 2)];
       function up(p, h, k) { return { x: p.x, y: p.y - h * (k || p.k) }; }
@@ -2148,11 +2197,24 @@ if (typeof module !== 'undefined') module.exports = TF;
         { k: 'bld', x: 44, y: 22, w: 8, d: 6, h: 4, owner: 0, home: 0 },
         { k: 'bld', x: 156, y: 24, w: 8, d: 6, h: 4, owner: 0, home: 0 }
       ];
+      // 敵の防衛線: 前線の少し奥に土のうの壁。前線が押し上がると崩れる
+      B.walls = [];
+      COLS.forEach(function (x0, ci) {
+        for (var i = -7; i <= 7; i++) {
+          var dx = i * 2.3;
+          B.walls.push({ x: x0 + dx, y: F0 + 5 - 3.5 * (1 - (dx / 17) * (dx / 17)) + (ci === 1 ? 1.5 : 0), ok: true });
+        }
+      });
+      B.walls.sort(function (a, b) { return b.y - a.y; });
+      // 敵の部隊の後ろの家と見張り塔(近くで爆発が続くと壊れる)
+      [[52, 186, 7, 6, 4], [148, 189, 7, 6, 4], [80, 194, 8, 6, 4.5], [122, 192, 7, 6, 4], [100, 222, 4, 4, 11, 'tower'], [38, 204, 7, 5, 4], [162, 207, 8, 6, 4.5]].forEach(function (h) {
+        B.blds.push({ k: 'bld', x: h[0], y: h[1], w: h[2], d: h[3], h: h[4], owner: 1, home: 1, fragile: true, hp: 2.0, roofType: h[5] === 'tower' ? 'flat' : undefined, tower: h[5] === 'tower' });
+      });
       // 戦場の拠点(旗)。前線のどちら側にあるかで色が変わる
       B.posts = [[24, 118], [176, 121], [100, 94], [28, 184], [172, 181], [100, 210]].map(function (p) {
         return { x: p[0], y: p[1], owner: p[1] < F0 ? 0 : 1, flipT: -9 };
       });
-      CAM.x = CXW; CAM.y = 158; CAM.z = 0.58; // 最初は戦場全体を引きで見せ、前線へ寄っていく
+      CAM.x = CXW; CAM.y = 128; CAM.z = 0.6; // 最初は川を渡るところから戦場全体を引きで見せ、前線へ寄っていく
       setSpeed(speed);
       buildSkillBar();
       setAutoUI();
@@ -2170,7 +2232,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var t = q.type, boss = q.boss;
       var n = Math.round(FIGMAX[t] * (boss ? 1.5 : 1));
       var sp = FIGSP[t];
-      var cols = (t === 'tank' || t === 'art') ? Math.min(n, 3) : Math.ceil(Math.sqrt(n * 2.3));
+      var cols = (t === 'tank' || t === 'art') ? Math.min(n, 3) : Math.ceil(Math.sqrt(n * 3.4));
       var rows = Math.ceil(n / cols);
       var rnd = TF.rngFrom(id * 7919 + 3);
       var figs = [];
@@ -2187,8 +2249,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       var farOy = Math.max.apply(null, figs.map(function (f) { return f.oy; }));
       return {
         id: id, side: side, slot: slot, type: t, maxHp: q.maxHp, hp: q.maxHp, hero: q.hero, boss: boss,
-        troop: TROOP[t] * (boss ? 2 : 1), figs: figs, farOy: farOy, big: boss && (t === 'tank' || t === 'art') ? 1.35 : 1,
-        wx: CXW, wy: 0, col: CXW, row: 0, jx: 0, jy: 0, moving: false, hitT: -9, dead: false
+        troop: Math.round(TROOP[t] * (1 + B.info.s / 40) * (boss ? 2 : 1) / 50) * 50, figs: figs, farOy: farOy, big: boss && (t === 'tank' || t === 'art') ? 1.35 : 1,
+        wx: CXW, wy: 0, col: CXW, row: 0, jx: 0, jy: 0, moving: false, hitT: -9, dead: false, colF: 0, aim: null, aimT: -9, bridge: CXW
       };
     }
     function layout() {
@@ -2202,7 +2264,9 @@ if (typeof module !== 'undefined') module.exports = TF;
           u.col = CXW + (j - (k - 1) / 2) * 40;
           u.jx = (r() - 0.5) * 6; u.jy = (r() - 0.5) * 3;
           u.wx = u.col + u.jx;
-          u.wy = side === 0 ? F0 - 50 - row * 10 : F0 + 50 + row * 10;
+          u.bridge = u.col < CXW - 1 ? BRIDGES[0] : u.col > CXW + 1 ? BRIDGES[1] : BRIDGES[u.slot % 2];
+          if (side === 0) { u.wx = u.col + (u.bridge - u.col) * 0.35 + u.jx; u.wy = RY - 18 - row * 7; }
+          else u.wy = F0 + 50 + row * 10;
           B.pillars.push({ wx: u.wx, wy: u.wy, side: side, t: 0.15 * (i + side * 0.5), big: 1 });
         });
       });
@@ -2288,12 +2352,16 @@ if (typeof module !== 'undefined') module.exports = TF;
           if (B.phase !== 'intro') text(p.x, p.y, o === 0 ? '拠点確保!' : '拠点を奪われた', o === 0 ? '#bfffc8' : '#ffb3a8', 13, 34);
         }
       });
+      // 前線が押し上がると、敵の土のうの壁が崩れる
+      B.walls.forEach(function (w) {
+        if (w.ok && frontAt(w.x) > w.y + 3) { w.ok = false; part(w.x, w.y, { vy: -12, life: 0.6, r: 1.6, c: 'dust' }); }
+      });
       // 勝ったら前線が敵陣を越えるたびに占領
       if (B.ending && B.res.win) B.blds.forEach(function (b) {
-        if (b.owner === 1 && frontAt(b.x) > b.y - 4) {
+        if (b.owner === 1 && !b.ruin && frontAt(b.x) > b.y - 4) {
           b.owner = 0; bgKey = '';
           B.pillars.push({ wx: b.x, wy: b.y, side: 0, t: fxNow(), big: 1.6 });
-          text(b.x, b.y, '占領!', '#bfffc8', 16, b.h * 4 + 14);
+          if (!b.fragile) text(b.x, b.y, '占領!', '#bfffc8', 16, b.h * 4 + 14);
         }
       });
     }
@@ -2302,7 +2370,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.userCam) return;
       if (B.ending) B.camTY = B.front + 4;
       else if (Math.abs(B.front + 14 - B.camTY) > 14) B.camTY = B.front + 14; // 前線が大きく動いたときだけ追う
-      var k = Math.min(1, rdt * (B.ending ? 2.4 : B.phase === 'intro' ? 1.5 : 1.6));
+      var k = Math.min(1, rdt * (B.ending ? 2.4 : B.phase === 'intro' ? (B.introT < 0.9 ? 0.35 : 1.3) : 1.6));
       var ty = Math.max(40, Math.min(300, B.camTY));
       // 目に見えないほど近づいたら止める(地面の描き直しを減らす)
       CAM.x = Math.abs(CXW - CAM.x) < 0.08 ? CXW : CAM.x + (CXW - CAM.x) * k;
@@ -2316,7 +2384,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var sp = B.speed, gdt = dtReal * sp, fxdt = dtReal * Math.sqrt(sp);
       if (B.phase === 'intro') {
         B.introT += gdt;
-        if (B.introT > 1.9) B.phase = 'fight';
+        if (B.introT > 2.4) B.phase = 'fight';
       } else if (!B.ending) {
         B.clock += gdt;
         B.eng.step(B.clock);
@@ -2332,12 +2400,33 @@ if (typeof module !== 'undefined') module.exports = TF;
       updateCam(dtReal);
       B.units.forEach(function (u) {
         if (u.dead) return;
+        var hold = B.phase === 'intro' && B.introT < 0.45;
         var tx = u.col + u.jx, gap = (u.row === 0 ? 10 : 26) + (B.ending ? 8 : 0);
-        var ty = (B.phase === 'intro' && B.introT < 0.45) ? u.wy : frontAt(tx) + (u.side === 0 ? -gap : gap) + u.jy;
+        var ty = hold ? u.wy : frontAt(tx) + (u.side === 0 ? -gap : gap) + u.jy;
+        if (hold) tx = u.wx;
+        if (u.side === 0) {
+          ty = Math.max(RY + 13, ty);
+          // 川の手前にいる間は橋へ向かい、縦一列になって渡る
+          var bx = u.bridge, by = riverY(bx);
+          if (!hold && u.wy < by + 10) {
+            if (u.wy < by - 8 && Math.abs(u.wx - bx) > 1.2) { tx = bx; ty = by - 9; }
+            else { tx = bx; ty = by + 11; }
+          }
+          var near = Math.abs(u.wx - bx) < 12 ? Math.max(0, Math.min(1, 1 - (Math.abs(u.wy - by) - 5) / 11)) : 0;
+          u.colF += (near - u.colF) * Math.min(1, dtReal * 8);
+        }
         var dx = tx - u.wx, dy = ty - u.wy, d = Math.hypot(dx, dy);
-        var vmax = (B.ending ? 55 * dtReal : 38 * gdt) * (u.type === 'tank' ? 1.15 : 1);
+        var vmax = (B.ending ? 55 * dtReal : (B.phase === 'intro' ? 62 : 38) * gdt) * (u.type === 'tank' ? 1.15 : 1);
         if (d > 0.01) { var m = Math.min(1, vmax / d); u.wx += dx * m; u.wy += dy * m; }
         u.moving = d > 0.8;
+      });
+      // 壊れた家は、しばらく燃えて煙を上げる
+      B.blds.forEach(function (b) {
+        if (b.ruin && fxNow() - b.ruinT < 9 && Math.random() < 0.35 * Math.min(1, B.speed)) {
+          var fx = b.x + (Math.random() - 0.5) * b.w, fy = b.y + (Math.random() - 0.5) * b.d;
+          if (Math.random() < 0.5) part(fx, fy, { vx: (Math.random() - 0.5) * 6, vy: -16 - Math.random() * 10, life: 0.6, r: 0.9, c: 'fire' });
+          else part(fx, fy, { vx: 3, vy: -18, life: 1.6, r: 1.6, c: 'smoke' });
+        }
       });
       B.projs = B.projs.filter(function (p) { return B.clock < p.t1 + 0.02; });
       B.beams = B.beams.filter(function (b) { b.life -= fxdt; return b.life > 0; });
@@ -2355,21 +2444,29 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.hint) { B.hint.t += dtReal; if (B.hint.t > B.hint.dur) B.hint = null; }
       updateSkillBar();
       B.projs.forEach(function (p) {
-        if (p.kind === 'at' && Math.random() < 0.7) {
+        if ((p.kind === 'at' && Math.random() < 0.7) || p.kind === 'rocket') {
           var wk = (B.clock - p.t0) / (p.t1 - p.t0);
-          if (wk >= 0 && wk <= 1) part(p.x0 + (p.x1 - p.x0) * wk, p.y0 + (p.y1 - p.y0) * wk, { oy: -(1.6 + Math.sin(Math.PI * wk) * 4) * proj(p.x0, p.y0).k, vx: (Math.random() - 0.5) * 8, vy: -6, life: 0.5, r: 0.7 + Math.random() * 0.5, c: 'smoke' });
+          if (wk < 0 || wk > 1) return;
+          var wx = p.x0 + (p.x1 - p.x0) * wk, wy = p.y0 + (p.y1 - p.y0) * wk;
+          part(wx, wy, { oy: -liftOf(p, wk) * proj(wx, wy).k, vx: (Math.random() - 0.5) * 8, vy: -4, life: p.kind === 'rocket' ? 1.1 : 0.5, r: (p.kind === 'rocket' ? 1.3 : 0.7) + Math.random() * 0.5, c: 'smoke' });
         }
       });
     }
     function aliveFigs(u) { return u.figs.filter(function (f) { return f.alive; }); }
+    function figPos(u, f) {
+      var c = u.colF || 0;
+      return { x: u.wx + f.ox * u.big * (1 - 0.72 * c), y: u.wy + f.oy * u.big * (1 + 1.8 * c) };
+    }
     function figWorld(u) {
       var a = aliveFigs(u);
       var f = a.length ? a[Math.floor(Math.random() * a.length)] : { ox: 0, oy: 0 };
-      return { x: u.wx + f.ox * u.big, y: u.wy + f.oy * u.big, f: f };
+      var q = figPos(u, f);
+      return { x: q.x, y: q.y, f: f };
     }
     function fire(ev) {
       var s = B.units[ev.s];
       if (ev.k === 'atk') {
+        s.aim = ev.d; s.aimT = B.clock;
         var d = B.units[ev.d], fl = FLIGHT[s.type];
         var n = s.type === 'inf' ? 3 : 1;
         for (var i = 0; i < n; i++) {
@@ -2394,11 +2491,13 @@ if (typeof module !== 'undefined') module.exports = TF;
         } else if (ev.sk === 'barrage') {
           ev.hits.forEach(function (h, i) {
             var d3 = B.units[h.d];
-            for (var k = 0; k < 3; k++) {
-              var t0 = B.clock + i * 0.06 + k * 0.08, tw = figWorld(d3);
-              B.projs.push({ kind: 'art', x0: tw.x + (Math.random() - 0.5) * 30, y0: s.side === 0 ? s.wy - 60 : s.wy + 60, x1: tw.x, y1: tw.y, t0: t0, t1: t0 + 0.75, side: s.side, big: true });
-              if (k === 2) B.imps.push({ at: t0 + 0.75, d: h.d, dmg: h.dmg, kill: h.kill, kind: 'art', wx: tw.x, wy: tw.y, big: true, crit: 1 });
-              else B.imps.push({ at: t0 + 0.75, d: h.d, dmg: 0, kind: 'art', wx: tw.x, wy: tw.y, big: true, fx: true });
+            // 後方の陣地からミサイルを撃ち込む
+            for (var k = 0; k < 2; k++) {
+              var t0 = B.clock + i * 0.1 + k * 0.14, tw = figWorld(d3);
+              var lx = CXW + (Math.random() - 0.5) * 70, ly = s.side === 0 ? 34 : 266;
+              B.projs.push({ kind: 'rocket', x0: lx, y0: ly, x1: tw.x, y1: tw.y, t0: t0, t1: t0 + 1.0, side: s.side });
+              if (k === 1) B.imps.push({ at: t0 + 1.0, d: h.d, dmg: h.dmg, kill: h.kill, kind: 'rocket', wx: tw.x, wy: tw.y, big: true, crit: 1 });
+              else B.imps.push({ at: t0 + 1.0, d: h.d, dmg: 0, kind: 'rocket', wx: tw.x, wy: tw.y, big: true, fx: true });
             }
           });
         }
@@ -2418,6 +2517,22 @@ if (typeof module !== 'undefined') module.exports = TF;
       for (i = 0; i < n * 0.7; i++) part(wx + (Math.random() - 0.5) * 3, wy, { vx: (Math.random() - 0.5) * 20, vy: -14 - Math.random() * 24, life: 0.9 + Math.random() * 0.6, max: 1.5, r: (1.2 + Math.random() * 1.7) * size, c: 'smoke' });
       for (i = 0; i < n * 0.5; i++) { var a2 = -Math.PI * Math.random(); part(wx, wy, { vx: Math.cos(a2) * 70, vy: Math.sin(a2) * 110, g: 300, life: 0.5, r: 0.35, c: 'debris' }); }
       part(wx, wy, { life: 0.3, r: 5.5 * size, c: 'ring' });
+      if (size >= 1.4) part(wx, wy, { life: 0.55, r: 9 * size, c: 'shock' });
+      // 近くの土のうと家にも被害
+      var R = 2.5 + 2 * size;
+      B.walls.forEach(function (w) { if (w.ok && Math.abs(w.x - wx) < R && Math.abs(w.y - wy) < R * 0.8) { w.ok = false; } });
+      B.blds.forEach(function (b) {
+        if (!b.fragile || b.ruin) return;
+        if (Math.abs(b.x - wx) < b.w / 2 + 3 + 2 * size && Math.abs(b.y - wy) < b.d / 2 + 3 + 2 * size) {
+          b.hp -= size;
+          if (b.hp <= 0) { b.ruin = true; b.ruinT = fxNow(); bgKey = ''; B.shake = Math.max(B.shake, 6); boomRaw(b.x, b.y, 1.5); }
+        }
+      });
+    }
+    function boomRaw(wx, wy, size) {
+      var n = Math.round(5 + size * 6);
+      for (var i = 0; i < n; i++) { var a = Math.random() * Math.PI * 2, v = 20 + Math.random() * 70 * size; part(wx, wy, { vx: Math.cos(a) * v, vy: Math.sin(a) * v * 0.5 - 20, life: 0.35 + Math.random() * 0.25, max: 0.6, r: (0.9 + Math.random() * 1.4) * size, c: 'fire' }); }
+      for (i = 0; i < n; i++) part(wx + (Math.random() - 0.5) * 4, wy, { vx: (Math.random() - 0.5) * 20, vy: -16 - Math.random() * 24, life: 1.2 + Math.random() * 0.6, max: 1.8, r: (1.4 + Math.random() * 1.8) * size, c: 'smoke' });
     }
     function puff(wx, wy) { for (var i = 0; i < 3; i++) part(wx + (Math.random() - 0.5) * 2, wy, { vx: (Math.random() - 0.5) * 16, vy: -10 - Math.random() * 10, life: 0.4, r: 0.8, c: 'dust' }); }
     // 文字も地面上の点に結びつけて、上へ浮かせる
@@ -2433,7 +2548,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       while (alive.length > want) {
         var f = alive.splice(Math.floor(Math.random() * alive.length), 1)[0];
         f.alive = false;
-        var wx = u.wx + f.ox * u.big, wy = u.wy + f.oy * u.big;
+        var fp = figPos(u, f), wx = fp.x, wy = fp.y;
         var heavy = u.type === 'tank' || u.type === 'art';
         B.marks.push({ wx: wx, wy: wy, side: u.side, kind: heavy ? 'wreck' : 'fallen', big: u.big, t: B.clock, flip: Math.random() < 0.5 });
         if (!quiet && heavy) boom(wx, wy, 1.1);
@@ -2443,17 +2558,17 @@ if (typeof module !== 'undefined') module.exports = TF;
       var d = B.units[im.d];
       var wx = im.wx === undefined ? d.wx : im.wx, wy = im.wy === undefined ? d.wy : im.wy;
       if (im.miss) { if (!im.quiet) puff(wx, wy); return; }
-      if (im.fx) { if (!im.quiet) boom(wx, wy, 1.0); return; }
+      if (im.fx) { if (!im.quiet) { boom(wx, wy, im.kind === 'rocket' ? 1.6 : 1.0); B.shake = Math.max(B.shake, 5); } return; }
       d.hp = Math.max(0, d.hp - im.dmg);
       if (im.kill) d.hp = 0;
       syncFigs(d, im.quiet);
       if (im.quiet) { if (d.hp <= 0) d.dead = true; return; }
       d.hitT = B.clock;
       if (im.from) B.beams.push({ x0: im.from.wx, y0: im.from.wy, x1: d.wx, y1: d.wy, life: 0.3, max: 0.3 });
-      var size = im.kind === 'art' ? (im.big ? 1.25 : 1.1) : im.kind === 'snipe' ? 1.4 : im.kind === 'tank' ? 0.9 : im.kind === 'at' ? 0.9 : 0;
+      var size = im.kind === 'rocket' ? 1.8 : im.kind === 'art' ? (im.big ? 1.25 : 1.1) : im.kind === 'snipe' ? 1.4 : im.kind === 'tank' ? 0.9 : im.kind === 'at' ? 0.9 : 0;
       if (size) boom(wx, wy, size); else puff(wx, wy);
       if (im.crit || im.kind === 'snipe') text(wx, wy, (im.kind === 'snipe' ? '' : '会心 ') + '-' + fmt(im.dmg), '#ffe066', 15);
-      if (im.kind === 'art' || im.kind === 'snipe') B.shake = Math.max(B.shake, im.kind === 'snipe' ? 8 : 3.5);
+      if (im.kind === 'art' || im.kind === 'snipe' || im.kind === 'rocket') B.shake = Math.max(B.shake, im.kind === 'art' ? 3.5 : 8);
       if (d.hp <= 0 && !d.dead) {
         d.dead = true;
         boom(d.wx, d.wy, 1.7);
@@ -2461,13 +2576,17 @@ if (typeof module !== 'undefined') module.exports = TF;
         text(d.wx, d.wy, d.side === 1 ? '撃破!' : '全滅…', d.side === 1 ? '#ffd166' : '#ff8b78', 18, 32);
       }
     }
+    function liftOf(p, k) {
+      if (p.kind === 'art') return 1.6 + Math.sin(Math.PI * k) * (16 + Math.abs(p.y1 - p.y0) * 0.35);
+      if (p.kind === 'at') return 1.6 + Math.sin(Math.PI * k) * 4;
+      if (p.kind === 'rocket') return 1.6 + Math.pow(Math.sin(Math.PI * k), 0.75) * Math.min(70, 30 + Math.abs(p.y1 - p.y0) * 0.3);
+      return 1.6;
+    }
     function projPos(p, c) {
       var k = (c - p.t0) / (p.t1 - p.t0);
       if (k < 0 || k > 1) return null;
       var wx = p.x0 + (p.x1 - p.x0) * k, wy = p.y0 + (p.y1 - p.y0) * k;
-      var q = proj(wx, wy), lift = 1.6;
-      if (p.kind === 'art') lift += Math.sin(Math.PI * k) * (16 + Math.abs(p.y1 - p.y0) * 0.35);
-      if (p.kind === 'at') lift += Math.sin(Math.PI * k) * 4;
+      var q = proj(wx, wy), lift = liftOf(p, k);
       return { x: q.x, y: q.y - lift * q.k, gx: q.x, gy: q.y, s: q.s, k: k };
     }
 
@@ -2487,6 +2606,42 @@ if (typeof module !== 'undefined') module.exports = TF;
         for (var xx = MAP.x0, j = 0; xx <= MAP.x1; xx += step, j++) { var p = proj(xx, frontAt(xx) + a[1]); if (j) cx.lineTo(p.x, p.y); else cx.moveTo(p.x, p.y); }
         cx.strokeStyle = 'rgba(' + TEAM[a[0]].rgb + ',.28)'; cx.lineWidth = 9; cx.stroke();
         cx.strokeStyle = a[0] === 0 ? '#5cff7c' : '#ff5a4e'; cx.lineWidth = 2.6; cx.stroke();
+      });
+    }
+    function drawWalls() {
+      B.walls.forEach(function (w) {
+        var p = proj(w.x, w.y), k = p.k;
+        if (p.y < -20 || p.y > H + 20 || p.x < -20 || p.x > W + 20) return;
+        if (w.ok) {
+          cx.fillStyle = 'rgba(0,0,0,.18)'; cx.beginPath(); cx.ellipse(p.x + 0.4 * k, p.y, 1.6 * k, 0.5 * k, 0, 0, Math.PI * 2); cx.fill();
+          [[-0.62, -0.45], [0.62, -0.45], [0, -1.2]].forEach(function (o) {
+            cx.fillStyle = '#a88f62'; cx.beginPath(); cx.ellipse(p.x + o[0] * k, p.y + o[1] * k, 0.78 * k, 0.46 * k, 0, 0, Math.PI * 2); cx.fill();
+            cx.fillStyle = '#cdb685'; cx.beginPath(); cx.ellipse(p.x + o[0] * k - 0.1 * k, p.y + o[1] * k - 0.13 * k, 0.56 * k, 0.26 * k, 0, 0, Math.PI * 2); cx.fill();
+          });
+        } else {
+          cx.fillStyle = 'rgba(120,100,70,.6)';
+          cx.beginPath(); cx.ellipse(p.x - 0.7 * k, p.y - 0.15 * k, 0.75 * k, 0.32 * k, 0.3, 0, Math.PI * 2); cx.fill();
+          cx.beginPath(); cx.ellipse(p.x + 0.7 * k, p.y + 0.1 * k, 0.65 * k, 0.28 * k, -0.4, 0, Math.PI * 2); cx.fill();
+        }
+      });
+    }
+    // 各部隊から、いま狙っている敵へ細い線を引く(自軍は緑、敵は赤)
+    function drawAims() {
+      B.units.forEach(function (u) {
+        if (u.dead || u.aim === null) return;
+        var tg = B.units[u.aim];
+        if (!tg || tg.dead) return;
+        if (u.side === 0 && B.eng.U[u.id].order !== null) return; // 指示中は指示の矢印を出す
+        var age = B.clock - u.aimT;
+        if (age > 2.4 || age < 0) return;
+        var a = 0.2 + 0.5 * (1 - age / 2.4);
+        var p0 = proj(u.wx, u.wy), p1 = proj(tg.wx, tg.wy);
+        var y0 = p0.y - 2.4 * p0.k, y1 = p1.y - 1.6 * p1.k;
+        cx.lineCap = 'round';
+        cx.strokeStyle = 'rgba(' + TEAM[u.side].rgb + ',' + (a * 0.45) + ')'; cx.lineWidth = 5;
+        cx.beginPath(); cx.moveTo(p0.x, y0); cx.lineTo(p1.x, y1); cx.stroke();
+        cx.strokeStyle = u.side === 0 ? 'rgba(150,255,170,' + a + ')' : 'rgba(255,140,120,' + a + ')'; cx.lineWidth = 1.5;
+        cx.beginPath(); cx.moveTo(p0.x, y0); cx.lineTo(p1.x, y1); cx.stroke();
       });
     }
     function drawPosts() {
@@ -2517,7 +2672,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       for (var i = 0; i < u.figs.length; i++) {
         var f = u.figs[i];
         if (!f.alive) continue;
-        var p = proj(u.wx + f.ox * u.big, u.wy + f.oy * u.big);
+        var fq = figPos(u, f), p = proj(fq.x, fq.y);
         var bob = u.moving ? Math.abs(Math.sin(B.clock * 9 + B.introT * 9 + B.endT * 9 + f.ph)) * 0.5 * p.k : 0;
         var w = spr.w * p.k * u.big, h = spr.h * p.k * u.big;
         cx.drawImage(spr.c, p.x - w / 2, p.y - h - bob, w, h);
@@ -2593,6 +2748,14 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.fillStyle = '#ffb347'; cx.beginPath(); cx.moveTo(-4, 0); cx.lineTo(-10 - Math.random() * 5, -2.2); cx.lineTo(-10 - Math.random() * 5, 2.2); cx.fill();
         cx.fillStyle = '#e0e2d6'; cx.fillRect(-4, -1.6, 8, 3.2); cx.fillStyle = '#c0392b'; cx.fillRect(3, -1.6, 2, 3.2);
         cx.restore();
+      } else if (p.kind === 'rocket') {
+        var nr = projPos(p, Math.min(p.t1, c + 0.012)) || pos, ar = Math.atan2(nr.y - pos.y, nr.x - pos.x);
+        cx.save(); cx.translate(pos.x, pos.y); cx.rotate(ar);
+        cx.fillStyle = 'rgba(255,200,90,.9)'; cx.beginPath(); cx.moveTo(-7, 0); cx.lineTo(-17 - Math.random() * 8, -3.5); cx.lineTo(-17 - Math.random() * 8, 3.5); cx.fill();
+        cx.fillStyle = '#e9ece2'; cx.fillRect(-7, -2.4, 13, 4.8);
+        cx.fillStyle = p.side === 0 ? TEAM[0].main : TEAM[1].main; cx.beginPath(); cx.moveTo(6, -2.4); cx.lineTo(10, 0); cx.lineTo(6, 2.4); cx.fill();
+        cx.fillStyle = '#7d8278'; cx.fillRect(-7, -3.6, 3, 1.2); cx.fillRect(-7, 2.4, 3, 1.2);
+        cx.restore();
       } else if (p.kind === 'art') {
         cx.fillStyle = 'rgba(0,0,0,.22)'; cx.beginPath(); cx.ellipse(pos.gx, pos.gy, 4 * pos.s + 1, 1.8 * pos.s + 0.6, 0, 0, Math.PI * 2); cx.fill();
         cx.fillStyle = p.big ? '#ffcf5a' : '#2b2b26'; cx.beginPath(); cx.arc(pos.x, pos.y, 3.5 * pos.s + 1.2, 0, Math.PI * 2); cx.fill();
@@ -2607,6 +2770,11 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (p.c === 'fire') { cx.fillStyle = 'rgba(255,' + Math.round(120 + 120 * a) + ',' + Math.round(40 * a) + ',' + (a * 0.9) + ')'; cx.beginPath(); cx.arc(x, y, r * (0.6 + 0.6 * (1 - a)), 0, Math.PI * 2); cx.fill(); }
         else if (p.c === 'smoke' || p.c === 'dust') { cx.fillStyle = (p.c === 'dust' ? 'rgba(200,185,150,' : 'rgba(70,70,64,') + (a * 0.5) + ')'; cx.beginPath(); cx.arc(x, y, r * (1 + (1 - a)), 0, Math.PI * 2); cx.fill(); }
         else if (p.c === 'debris') { cx.fillStyle = 'rgba(60,50,40,' + a + ')'; cx.fillRect(x, y, r * 1.6 + 0.8, r * 1.6 + 0.8); }
+        else if (p.c === 'shock') {
+          var rr2 = r * (0.3 + 1.0 * (1 - a));
+          cx.fillStyle = 'rgba(255,190,80,' + (0.28 * a) + ')'; cx.beginPath(); cx.ellipse(x, y, rr2, rr2 * 0.55, 0, 0, Math.PI * 2); cx.fill();
+          cx.strokeStyle = 'rgba(255,150,40,' + (0.9 * a) + ')'; cx.lineWidth = 3; cx.stroke();
+        }
         else if (p.c === 'ring') { cx.strokeStyle = 'rgba(255,230,160,' + a + ')'; cx.lineWidth = 2.5; cx.beginPath(); cx.ellipse(x, y, r * (1.3 - a), r * (1.3 - a) * 0.5, 0, 0, Math.PI * 2); cx.stroke(); }
       });
     }
@@ -2718,7 +2886,12 @@ if (typeof module !== 'undefined') module.exports = TF;
       drawPosts();
       drawMarks();
       var order = B.units.slice().sort(function (a, b) { return b.wy - a.wy; });
-      order.forEach(drawSquad);
+      // 壁より奥の部隊 → 壁 → 手前の部隊 の順に描く
+      var wallY = F0 + 3;
+      order.forEach(function (u) { if (u.wy > wallY) drawSquad(u); });
+      drawWalls();
+      order.forEach(function (u) { if (u.wy <= wallY) drawSquad(u); });
+      drawAims();
       drawPillars();
       B.sights.forEach(function (m) {
         var p = proj(m.u.wx, m.u.wy), k = (B.clock - m.t0) / 0.45, r = (34 - 16 * k) * (0.6 + 0.4 * p.s);
@@ -2991,6 +3164,11 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (!B) return null;
         return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
           captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
+          walls: B.walls.filter(function (w) { return w.ok; }).length, wallsTotal: B.walls.length,
+          ruins: B.blds.filter(function (b) { return b.ruin; }).length,
+          aims: B.units.filter(function (u) { return !u.dead && u.aim !== null && B.clock - u.aimT < 2.4; }).length,
+          rockets: B.projs.filter(function (p) { return p.kind === 'rocket'; }).length,
+          bridgeY: RY, minAllyY: Math.min.apply(null, B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return u.wy; })),
           units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, order: eu.order, alive: eu.alive, skNext: eu.sk ? eu.skNext : null }; }),
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
       } };
