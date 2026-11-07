@@ -244,7 +244,12 @@ check('武装: 研究所がないと開発できず、レベル上限は研究�
   assert.strictEqual(TF.canArm(st, 'tank', 'w').cap, true, '上限(研究所Lv3×2=6)を超えた');
   assert.strictEqual(1000 - st.bp, TF.armCost('tank', 'w', 0).bp + TF.armCost('tank', 'w', 5).bp, '設計図は開発のときだけ減る');
   assert.strictEqual(TF.armCost('tank', 'w', 3).bp, 0);
-  assert(/改二$/.test(TF.armName('tank', 'w', 31)), TF.armName('tank', 'w', 31));
+  const nw = TF.ARMS.tank.w.length;
+  assert.strictEqual(TF.armName('tank', 'w', nw * 5), TF.ARMS.tank.w[nw - 1]);
+  assert.strictEqual(TF.armName('tank', 'w', nw * 5 + 1), TF.ARMS.tank.w[nw - 1] + '改', '最後の新型の次が「改」にならない');
+  assert.strictEqual(TF.armName('tank', 'w', (nw + 2) * 5), TF.ARMS.tank.w[nw - 1] + '改二');
+  // 名前は兵種・系統の中で重複しない
+  TF.TYPES.forEach(t => TF.ARM_KINDS.forEach(k => assert.strictEqual(new Set(TF.ARMS[t][k]).size, TF.ARMS[t][k].length, t + k)));
 });
 check('武装: 武器は攻撃力、防護は耐久、特殊は苦手な敵へのダメージだけを上げる(上限は苦手の半分まで。増援にも反映)', () => {
   const st = TF.newState(0);

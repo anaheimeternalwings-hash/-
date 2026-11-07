@@ -39,6 +39,7 @@ b,strong{font-weight:700}
 .res{display:flex;align-items:center;gap:6px;background:#10150e;border:1px solid #33402b;border-radius:999px;padding:4px 10px 4px 5px;min-width:0;flex:1 1 0}
 .res svg{width:22px;height:22px;flex:none}
 .res b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:370px){.res{gap:4px;padding:4px 8px 4px 4px}.res svg{width:18px;height:18px}.res b{font-size:13.5px}}
 .res.bump b{animation:bump .5s}
 @keyframes bump{30%{transform:scale(1.18);color:#fff}}
 .stagepill{flex:none;font-size:12px;color:var(--khaki);border:1px solid #4d5a3c;border-radius:8px;padding:3px 7px;white-space:nowrap}
@@ -470,23 +471,24 @@ var TF = (function () {
     a: { name: '防護', stat: '耐久' },
     x: { name: '特殊', stat: '' }
   };
+  // 名前は実在の兵器・装備から(おおむね年代順)。性能はゲーム用の数値
   var ARMS = {
     inf:  { vs: ['tank'],
-      w: ['小銃', '自動小銃', '突撃銃', '分隊支援火器', '電磁ライフル'],
-      a: ['鉄帽', '防弾チョッキ', '複合防弾服', '強化外骨格', '光学迷彩服'],
-      x: ['対戦車手榴弾', '吸着地雷', '携行ロケット', '携行ミサイル', '誘導ミサイル'] },
+      w: ['三八式歩兵銃', 'M1ガーランド', 'StG44', 'AK-47', 'M16A2', 'HK416', '20式小銃'],
+      a: ['M1ヘルメット', 'M1952防弾ベスト', 'PASGTベスト', 'インターセプター', 'IOTV', '防弾チョッキ3型'],
+      x: ['九九式破甲爆雷', 'M1バズーカ', 'パンツァーファウスト', 'RPG-7', 'AT4', 'ジャベリン'] },
     at:   { vs: ['inf', 'art'],
-      w: ['無反動砲', '対戦車ロケット', '対戦車ミサイル', 'トップアタック弾', '電磁砲'],
-      a: ['たこつぼ壕', '偽装網', 'コンクリート壕', '防弾盾', '電子妨害装置'],
-      x: ['短機関銃', '軽機関銃', '擲弾発射器', '散弾ロケット', '制圧ドローン'] },
+      w: ['ボーイズ対戦車銃', 'パンツァーシュレック', 'M40無反動砲', 'カール・グスタフ', 'TOW', 'コルネット', '中距離多目的誘導弾'],
+      a: ['M3ハーフトラック', 'M113装甲兵員輸送車', '73式装甲車', '96式装輪装甲車', 'ストライカー', 'パトリアAMV'],
+      x: ['MP40', 'ブレン軽機関銃', 'M1919機関銃', 'M60機関銃', 'ミニミ軽機関銃', 'Mk19自動擲弾銃'] },
     tank: { vs: ['at'],
-      w: ['75mm砲', '88mm砲', '105mm砲', '120mm砲', '140mm電磁砲'],
-      a: ['鋼板装甲', '傾斜装甲', '複合装甲', '爆発反応装甲', 'アクティブ防護'],
-      x: ['同軸機銃', '榴弾', 'キャニスター弾', '遠隔機銃塔', '対人ドローン'] },
+      w: ['75mm M3戦車砲', '88mm KwK36', '105mm L7', '120mm L44', '120mm L55', '130mm Rh-130'],
+      a: ['均質圧延装甲', '傾斜装甲', 'シュルツェン', 'チョバム・アーマー', 'コンタクト5', 'トロフィーAPS'],
+      x: ['MG34車載機関銃', 'M2重機関銃', '74式車載機関銃', 'M1028キャニスター弾', 'M830A1多目的弾', 'CROWS遠隔銃塔'] },
     art:  { vs: ['tank'],
-      w: ['野砲', '榴弾砲', '重榴弾砲', '多連装ロケット', '誘導砲弾'],
-      a: ['掩体', '偽装網', '自走化', '装甲砲塔', '迎撃システム'],
-      x: ['徹甲榴弾', '成形炸薬弾', '子弾散布弾', '対戦車誘導弾', 'トップアタック砲弾'] }
+      w: ['M101榴弾砲', 'sFH18重榴弾砲', 'M114榴弾砲', 'FH70榴弾砲', 'M777榴弾砲', 'M270 MLRS', 'M142ハイマース'],
+      a: ['M7プリースト', 'M109自走榴弾砲', '75式自走りゅう弾砲', '99式自走りゅう弾砲', 'PzH2000', '19式装輪自走砲'],
+      x: ['M483A1 DPICM', 'M712カッパーヘッド', 'M898 SADARM', 'BONUS対装甲弾', 'SMArt155', 'M982エクスカリバー'] }
   };
 
   // ====== バランス調整値 ======
@@ -1634,11 +1636,12 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (!TF.lv(st, 'lab')) return false;
     return TF.unlockedTypes(st).some(function (t) { return TF.ARM_KINDS.some(function (k) { return TF.canArm(st, t, k).ok; }); });
   }
-  function pct(v) { return '+' + Math.round(v * 100) + '%'; }
+  // 小さい差も見えるよう、端数があれば小数1桁まで
+  function armPct(v) { var x = Math.round(v * 1000) / 10; return '+' + (x % 1 ? x.toFixed(1) : x) + '%'; }
   function armEffText(t, k, l) {
     var e = TF.armEffect(k, l, t);
-    if (k === 'x') return names(TF.ARMS[t].vs) + 'へのダメージ ' + pct(e);
-    return TF.ARM_KIND[k].stat + ' ' + pct(e);
+    if (k === 'x') return names(TF.ARMS[t].vs) + 'へのダメージ ' + armPct(e);
+    return TF.ARM_KIND[k].stat + ' ' + armPct(e);
   }
   function renderArms() {
     var lab = TF.lv(st, 'lab'), t = armSel();
@@ -1678,14 +1681,14 @@ if (typeof module !== 'undefined') module.exports = TF;
         '<button class="btn ' + (dev ? 'dev' : 'green') + '" data-act="arm-up" data-t="' + t + '" data-k="' + k + '"' + (chk.ok ? '' : ' disabled') + '>' + (dev ? '開発' : '強化') + '</button></div>' +
         (chk.ok ? '' : '<div class="why">' + esc(chk.reason) + (chk.cap ? '(武装のレベル上限は 研究所Lv×' + TF.K.armLab + ')' : '') + '</div>') + '</div>';
     });
-    html += '</div><div class="small" style="margin-top:8px;line-height:1.6">研究所 Lv' + lab + ': 武装のレベル上限 ' + TF.armMax(st) + '。' + TF.K.armPer + 'レベルごとに新型の開発(設計図が必要)。増援の部隊にも武装が反映されます。</div>';
+    html += '</div><div class="small" style="margin-top:8px;line-height:1.6">研究所 Lv' + lab + ': 武装のレベル上限 ' + TF.armMax(st) + '。' + TF.K.armPer + 'レベルごとに新型の開発(設計図が必要)。増援の部隊にも武装が反映されます。武装の名前は実在の兵器から取っています(性能はゲーム用の数値です)。</div>';
     $('scr-arms').innerHTML = html;
     if (st.flags.armNew) { delete st.flags.armNew; save(); renderTop(); }
   }
   function showDevDone(t, k, r) {
     openModal('<div class="result"><div class="sub" style="color:#d9b8ff;font-weight:900;letter-spacing:.2em;margin-bottom:0">新型兵器 開発成功!</div>' +
       '<div class="devart"><div class="ring">' + unitSvg(t, ALLY_C) + '<span class="kb ' + k + '">' + KICO[k] + '</span></div></div>' +
-      '<h2 class="win" style="font-size:28px">' + esc(r.name) + '</h2><div class="sub">' + TF.UNIT[t].name + 'の' + TF.ARM_KIND[k].name + ' ・ Lv' + r.lv + '</div>' +
+      '<h2 class="win" style="font-size:' + (r.name.length > 11 ? 20 : r.name.length > 8 ? 24 : 28) + 'px;letter-spacing:.02em">' + esc(r.name) + '</h2><div class="sub">' + TF.UNIT[t].name + 'の' + TF.ARM_KIND[k].name + ' ・ Lv' + r.lv + '</div>' +
       '<div class="rlist"><div class="rline"><span style="color:#d9b8ff">' + KICO[k].replace('<svg ', '<svg style="width:22px;height:22px" ') + '</span><span class="grow">' + armEffText(t, k, r.lv - 1).replace(/ [^ ]*$/, '') + '</span><span class="small">' + armEffText(t, k, r.lv - 1).replace(/^.* /, '') + ' → </span><b class="up">' + armEffText(t, k, r.lv).replace(/^.* /, '') + '</b></div></div>' +
       '<div class="btns"><button class="btn wide" data-act="modal-close">配備する!</button></div></div>');
   }
