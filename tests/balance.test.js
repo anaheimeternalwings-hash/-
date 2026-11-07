@@ -227,6 +227,68 @@ check('配置の指示: 前進は与えるダメージ・受けるダメージ�
   assert(Math.abs(d2 / d0 - TF.K.stDeal['-1']) < 0.02 && Math.abs(t2 / t0 - TF.K.stTake['-1']) < 0.02, '後退 ' + [d0, d2, t0, t2]);
   assert(TF.K.stDeal['1'] > 1 && TF.K.stTake['1'] > 1 && TF.K.stTake['-1'] < 1);
 });
+check('武装: 研究所がないと開発できず、レベル上限は研究所Lv×2。新型の開発(Lv0→1、Lv5→6…)には設計図が要る', () => {
+  const st = TF.newState(0);
+  st.money = st.steel = 1e9; st.bp = 0;
+  st.bld.factory = { lv: 5, slot: 5 };
+  assert(!TF.canArm(st, 'tank', 'w').ok && TF.canArm(st, 'tank', 'w').locked, '研究所なしで開発できた');
+  assert(!TF.canArm(st, 'art', 'w').ok, '未解放の兵種の武装が開発できた');
+  st.bld.lab = { lv: 3, slot: 8 };
+  assert.strictEqual(TF.canArm(st, 'tank', 'w').reason, '設計図が不足');
+  st.bp = 1000;
+  const names = [];
+  for (let i = 0; i < 6; i++) { const r = TF.doArm(st, 'tank', 'w'); assert(r.ok, r.reason); names.push(r.name); assert.strictEqual(r.dev, i === 0 || i === 5); }
+  assert.strictEqual(TF.armLv(st, 'tank', 'w'), 6);
+  assert.strictEqual(names[0], names[4]);
+  assert.notStrictEqual(names[4], names[5], '5レベルごとに新型にならない');
+  assert.strictEqual(TF.canArm(st, 'tank', 'w').cap, true, '上限(研究所Lv3×2=6)を超えた');
+  assert.strictEqual(1000 - st.bp, TF.armCost('tank', 'w', 0).bp + TF.armCost('tank', 'w', 5).bp, '設計図は開発のときだけ減る');
+  assert.strictEqual(TF.armCost('tank', 'w', 3).bp, 0);
+  assert(/改二$/.test(TF.armName('tank', 'w', 31)), TF.armName('tank', 'w', 31));
+});
+check('武装: 武器は攻撃力、防護は耐久、特殊は苦手な敵へのダメージだけを上げる(上限は苦手の半分まで。増援にも反映)', () => {
+  const st = TF.newState(0);
+  st.bld.factory = { lv: 5, slot: 5 }; st.bld.lab = { lv: 10, slot: 8 };
+  const q0 = TF.squadStats(st, 'tank', null);
+  st.arms = { tank: { w: 10 } };
+  const q1 = TF.squadStats(st, 'tank', null);
+  assert(Math.abs(q1.atk / q0.atk - (1 + 10 * K.armW)) < 1e-9 && q1.maxHp === q0.maxHp);
+  st.arms = { tank: { a: 10 } };
+  const q2 = TF.squadStats(st, 'tank', null);
+  assert(Math.abs(q2.maxHp / q0.maxHp - (1 + 10 * K.armA)) < 0.01 && q2.atk === q0.atk);
+  st.arms = { tank: { x: 10 } };
+  const q3 = TF.squadStats(st, 'tank', null);
+  assert.deepStrictEqual(Object.keys(q3.vs), TF.ARMS.tank.vs);
+  const xm = 1 + TF.armEffect('x', 10, 'tank');
+  assert.strictEqual(TF.battleReserves(st, 30).p.defs.tank.vs.at, xm, '増援に武装が反映されない');
+  // 特殊は苦手の半分を打ち消すまで: どれだけ上げても相性×効果は等倍との中間を超えない(相性で編成を考える意味が残る)
+  TF.TYPES.forEach(t => TF.ARMS[t].vs.forEach(d => { const a = TF.AFF[t][d]; assert(a * (1 + TF.armEffect('x', 999, t)) <= (a + 1) / 2 + 1e-4, t + '→' + d); }));
+  assert(TF.armEffect('x', 1, 'tank') > TF.armEffect('x', 20, 'tank') - TF.armEffect('x', 19, 'tank'), '伸びが小さくならない');
+  // 苦手な敵(対戦車兵)に撃つときだけダメージが上がる
+  function firstHit(attacker, target) {
+    const p = [Object.assign({}, attacker, { maxHp: 1e6 })], e = [{ type: target, maxHp: 1e6, atk: 1, cd: 9, hero: null, boss: false, power: 1 }];
+    const b = TF.createBattle(p, e, 3, { record: true });
+    b.step(5);
+    return b.ev.find(x => x.k === 'atk' && x.s === 0 && !x.miss);
+  }
+  const base = firstHit(q0, 'at'), sp = firstHit(q3, 'at'), other = firstHit(q3, 'inf'), other0 = firstHit(q0, 'inf');
+  assert(Math.abs(sp.dmg / base.dmg - xm) < 0.02 && sp.sp === 1, '特効が乗らない');
+  assert.strictEqual(other.dmg, other0.dmg, '苦手でない敵にも乗った');
+  assert(!other.sp);
+});
+check('設計図: 勝つと手に入り(先のステージほど多く、ボス戦と初クリアは2倍)、負けると増えない', () => {
+  const st = TF.newState(0);
+  assert.strictEqual(st.bp, 0);
+  let r = TF.applyResult(st, 1, true, st.form);
+  assert.strictEqual(r.bp, TF.stageReward(1).bp * K.firstMul);
+  r = TF.applyResult(st, 1, true, st.form);
+  assert.strictEqual(r.bp, TF.stageReward(1).bp);
+  const before = st.bp;
+  r = TF.applyResult(st, 2, false, st.form);
+  assert.strictEqual(r.bp, 0); assert.strictEqual(st.bp, before);
+  assert(TF.stageReward(60).bp > TF.stageReward(5).bp);
+  assert.strictEqual(TF.stageReward(50).bp, TF.stageReward(49).bp * 2 * (1 + Math.floor(50 / K.bpStep)) / (1 + Math.floor(49 / K.bpStep)));
+});
 check('おまかせ編成は枠数どおりで、指揮官が重複しない', () => {
   const st = TF.newState(0);
   st.bld = { hq: { lv: 9, slot: 4 }, barracks: { lv: 5, slot: 0 }, atpost: { lv: 5, slot: 1 }, factory: { lv: 5, slot: 2 }, artpost: { lv: 5, slot: 3 } };
@@ -259,7 +321,9 @@ function playthrough(opt) {
   const cache = new Map();
   let r = 12345;
   const rnd = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
-  const key = s => s + '|' + Object.keys(st.bld).map(k => k + st.bld[k].lv).join(',') + '|' + Object.keys(st.heroes).map(k => k + st.heroes[k].lv).join(',');
+  const key = s => s + '|' + Object.keys(st.bld).map(k => k + st.bld[k].lv).join(',') + '|' + Object.keys(st.heroes).map(k => k + st.heroes[k].lv).join(',') + '|' + JSON.stringify(st.arms);
+  const armTrace = {};
+  let want = null;
   function getForm(s) {
     const k = key(s);
     if (cache.has(k)) return cache.get(k);
@@ -295,23 +359,46 @@ function playthrough(opt) {
         if (cur > 0 && cur >= TF.maxLevel(st, id)) continue;
         cands.push({ id, delta });
       }
+      // 武装(兵器開発): 武器・防護は兵種の攻撃力・耐久、特殊は次のステージの苦手な敵の割合で価値を測る
+      let armCap = 0;
+      if (opt.arms !== false && TF.lv(st, 'lab') > 0) {
+        const nextE = TF.stageInfo(st.cleared + 1).enemies;
+        for (const t of TF.unlockedTypes(st)) for (const k of TF.ARM_KINDS) {
+          const l = TF.armLv(st, t, k), e0 = TF.armEffect(k, l, t), e1 = TF.armEffect(k, l + 1, t);
+          const frac = k === 'x' ? nextE.filter(e => TF.ARMS[t].vs.includes(e.type)).length / nextE.length : 1;
+          const delta = (usage[t] + avgP * 0.15) * frac * 0.5 * ((1 + e1) / (1 + e0) - 1);
+          if (l >= TF.armMax(st)) { armCap += delta; continue; }
+          const cost = TF.armCost(t, k, l);
+          cands.push({ id: 'arm', t, k, delta, cost, bpOk: (st.bp || 0) >= cost.bp });
+        }
+        const lab = cands.find(c => c.id === 'lab');
+        if (lab) lab.delta += armCap;
+      }
       const hq = TF.lv(st, 'hq');
       let dh = TF.slotsFor(hq + 1) > TF.slotsFor(hq) ? avgP : 0;
       for (const id of ['barracks', 'atpost', 'factory', 'artpost', 'lab']) { const c = TF.lv(st, id); if (c > 0 && c >= TF.maxLevel(st, id)) dh += deltaOf[id]; }
       for (const id of TF.BLD_ORDER) if (TF.BLD[id].req === hq + 1 && id !== 'supply' && id !== 'steel') dh += avgP * 0.5;
       if (dh > 0) cands.push({ id: 'hq', delta: dh });
       cands.forEach(c => {
-        c.cost = TF.upgradeCost(c.id, TF.lv(st, c.id));
+        if (c.id !== 'arm') c.cost = TF.upgradeCost(c.id, TF.lv(st, c.id));
         c.ratio = c.delta / (c.cost.m + c.cost.s * STEEL_PRICE);
-        c.afford = st.money >= c.cost.m && st.steel >= c.cost.s;
+        c.afford = st.money >= c.cost.m && st.steel >= c.cost.s && c.bpOk !== false;
       });
       cands.sort((a, b) => b.ratio - a.ratio);
       let pick = null;
       if (opt.strategy === 'random') {
-        const ok = cands.filter(c => c.afford);
-        if (ok.length) pick = ok[Math.floor(rnd() * ok.length)];
+        // 欲しい強化をランダムに決め、買えるまで貯める
+        const same = c => want && c.id === want.id && c.t === want.t && c.k === want.k;
+        if (!cands.some(same)) {
+          // 基地の画面と兵器の画面を気まぐれに見て、その画面の強化から選ぶ
+          const arm = cands.filter(c => c.id === 'arm'), bld = cands.filter(c => c.id !== 'arm');
+          const pool = arm.length && (!bld.length || rnd() < 0.5) ? arm : bld;
+          want = pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
+        }
+        const c = cands.find(same);
+        if (c && c.afford) { pick = c; want = null; }
       } else if (opt.strategy === 'mono') {
-        const ok = cands.filter(c => ['factory', 'lab', 'hq'].includes(c.id) || TF.lv(st, c.id) === 0);
+        const ok = cands.filter(c => ['factory', 'lab', 'hq'].includes(c.id) || (c.id === 'arm' ? c.t === 'tank' : TF.lv(st, c.id) === 0));
         if (ok.length && ok[0].afford) pick = ok[0];
       } else if (cands.length) {
         pick = cands[0].afford ? cands[0] : cands.find(c => c.afford && c.ratio >= cands[0].ratio * 0.6) || null;
@@ -324,7 +411,7 @@ function playthrough(opt) {
           if (st.money >= c.m && st.steel >= c.s && c.m + c.s * STEEL_PRICE < (st.money + st.steel * STEEL_PRICE) * 0.35) { pick = { id }; break; }
         }
       }
-      if (!pick || !TF.doUpgrade(st, pick.id, now).ok) break;
+      if (!pick || !(pick.id === 'arm' ? TF.doArm(st, pick.t, pick.k) : TF.doUpgrade(st, pick.id, now)).ok) break;
       cache.clear();
     }
   }
@@ -356,11 +443,12 @@ function playthrough(opt) {
     if (sum.first) {
       const used = battles - lastClear;
       perStage[stage] = used;
+      armTrace[stage] = b.p.reduce((a, q) => { const o = TF.armOpt(st, q.type); return a + Math.sqrt(o.atkMul * o.hpMul); }, 0) / b.p.length;
       if (used > stuckMax) { stuckMax = used; stuckAt = stage; }
       lastClear = battles;
     }
   }
-  return { st, battles, perStage, stuckMax, stuckAt, hours: now / 3600e3, avgTime: timeSum / battles, timeouts, farmMin };
+  return { st, battles, perStage, stuckMax, stuckAt, hours: now / 3600e3, avgTime: timeSum / battles, timeouts, farmMin, armTrace };
 }
 
 function segments(res, size) {
@@ -379,6 +467,7 @@ function report(label, res) {
   console.log('    ' + segments(res, 20).map(g => `s${g.from}-${g.to}: 平均${g.avg.toFixed(1)} 最大${g.max}`).join('\n    '));
   const b = res.st.bld;
   console.log('    施設: ' + Object.keys(b).map(k => TF.BLD[k].name + b[k].lv).join(' '));
+  console.log('    武装: ' + TF.TYPES.filter(t => TF.typeUnlocked(res.st, t)).map(t => TF.UNIT[t].name + ' ' + TF.ARM_KINDS.map(k => TF.armLv(res.st, t, k)).join('/')).join('  ') + ` (武器/防護/特殊のLv) 設計図の残り ${res.st.bp}`);
 }
 
 const TARGET = +process.env.STAGES || 120;
@@ -388,7 +477,7 @@ const t0 = Date.now();
 const greedy = playthrough({ target: TARGET, maxBattles: 20000 });
 report('堅実なプレイヤー(相性を見て強化)', greedy);
 const random = playthrough({ target: TARGET, maxBattles: 20000, strategy: 'random' });
-report('気まぐれなプレイヤー(買える強化をランダムに)', random);
+report('気まぐれなプレイヤー(欲しい強化をランダムに決めて貯める)', random);
 const mono = playthrough({ target: Math.min(TARGET, 100), maxBattles: 20000, strategy: 'mono' });
 report('戦車ひと筋のプレイヤー(相性を無視)', mono);
 const idle = playthrough({ target: Math.min(TARGET, 80), maxBattles: 20000, production: true, sessionBattles: 30, idleMs: 4 * 3600e3 });

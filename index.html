@@ -46,7 +46,7 @@ b,strong{font-weight:700}
 .iconbtn svg{width:20px;height:20px}
 #main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .screen{max-width:520px;margin:0 auto;padding:12px 16px 24px}
-#tabs{flex:none;display:grid;grid-template-columns:repeat(3,1fr);background:#151b12;border-top:1px solid #2e3828;padding-bottom:var(--sab)}
+#tabs{flex:none;display:grid;grid-template-columns:repeat(4,1fr);background:#151b12;border-top:1px solid #2e3828;padding-bottom:var(--sab)}
 #tabs button{position:relative;display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 0 6px;color:var(--dim);font-size:12px;font-weight:700;min-height:54px}
 #tabs button svg{width:26px;height:26px}
 #tabs button.on{color:var(--gold)}
@@ -274,6 +274,55 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 
 /* ===== 結果 ===== */
 .result h2{margin:0;text-align:center;font-size:40px;font-weight:900;letter-spacing:.1em}
+.armhead{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.armhead .bpv{display:flex;align-items:center;gap:6px;font-size:20px;font-weight:900;flex:none}
+.armhead .bpv svg{width:28px;height:28px}
+.armhead .small{line-height:1.45}
+.armtypes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+.armtypes button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;border-radius:12px;background:#1f281a;border:1px solid #34402c;color:var(--sub);font-size:11px;font-weight:800;position:relative}
+.armtypes button svg{width:30px;height:30px}
+.armtypes button.on{background:#24402f;border-color:var(--gold);color:var(--text)}
+.armtypes button:disabled{opacity:.4}
+.armtypes button .lvs{font-size:10px;color:var(--khaki);font-weight:700}
+.armtypes button .dot{position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--bad);display:none}
+.armtypes button .dot.on{display:block}
+.armsum{display:flex;align-items:center;gap:12px;padding:10px 12px;background:linear-gradient(135deg,#1f3427,#18221a)}
+.armsum .big{width:64px;height:64px;flex:none;border-radius:16px;background:#14251d;border:1px solid #2f5248;display:grid;place-items:center}
+.armsum .big svg{width:50px;height:50px}
+.armsum .st{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;color:var(--sub);margin-top:4px}
+.armsum .st b{color:var(--text)}
+.armlist{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.arm{display:flex;flex-direction:column;gap:8px;padding:11px 12px}
+.arm .top{display:flex;gap:10px;align-items:center}
+.arm .kico{width:42px;height:42px;flex:none;border-radius:12px;display:grid;place-items:center;background:#161d13;border:1px solid #34402c}
+.arm .kico svg{width:26px;height:26px}
+.arm .kico.w{color:#ff9a5c} .arm .kico.a{color:#8fd0ff} .arm .kico.x{color:#d9a6ff}
+.arm .kind{font-size:11px;color:var(--dim);font-weight:800;letter-spacing:.08em}
+.arm .nm{font-size:16px;font-weight:900}
+.arm .nm.none{color:var(--dim)}
+.arm .pips{display:flex;gap:3px;margin-top:3px}
+.arm .pips i{width:14px;height:5px;border-radius:3px;background:#34402c}
+.arm .pips i.on{background:var(--gold)}
+.arm .eff{font-size:12px;color:var(--sub)}
+.arm .eff b{color:var(--good)}
+.arm .act{display:flex;align-items:center;gap:8px}
+.arm .act .costs{flex:1;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13px;min-width:0}
+.arm .act .btn{min-height:42px;padding:0 14px;font-size:14px;flex:none}
+.arm .act .btn.dev{background:linear-gradient(#b48cff,#7a52d6);color:#fff;box-shadow:0 3px 0 #4a2f8f}
+.arm .why{font-size:12px;color:var(--warn)}
+.arm{position:relative}
+.arm.flash{animation:armflash .6s}
+.armfloat{position:absolute;right:14px;top:10px;font-weight:900;font-size:16px;color:var(--good);text-shadow:0 2px 0 rgba(0,0,0,.6);pointer-events:none;animation:armfloat 1s ease-out forwards}
+@keyframes armfloat{0%{transform:translateY(8px);opacity:0}20%{opacity:1}100%{transform:translateY(-18px);opacity:0}}
+@keyframes armflash{0%{box-shadow:0 0 0 0 rgba(241,196,83,.9)}100%{box-shadow:0 0 0 14px rgba(241,196,83,0)}}
+.devart{display:grid;place-items:center;margin:8px 0 4px}
+.devart .ring{width:130px;height:130px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle,#3b2f66 0%,#1d1830 70%);box-shadow:0 0 30px rgba(180,140,255,.55);animation:devspin 1.2s ease-out}
+.devart .ring{position:relative}
+.devart .ring>svg{width:84px;height:84px}
+.devart .kb{position:absolute;right:2px;bottom:6px;width:40px;height:40px;border-radius:50%;background:#161d13;border:2px solid #b48cff;display:grid;place-items:center}
+.devart .kb svg{width:24px;height:24px}
+.devart .kb.w{color:#ff9a5c} .devart .kb.a{color:#8fd0ff} .devart .kb.x{color:#d9a6ff}
+@keyframes devspin{0%{transform:scale(.3) rotate(-90deg);opacity:0}70%{transform:scale(1.08) rotate(6deg);opacity:1}100%{transform:scale(1) rotate(0)}}
 .result h2.win{color:var(--gold);text-shadow:0 0 18px rgba(241,196,83,.45)}
 .result h2.lose{color:#c9b0a6}
 .result .sub{text-align:center;color:var(--sub);font-size:13px;margin-bottom:12px}
@@ -301,11 +350,13 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
   <main id="main">
     <section class="screen" id="scr-base"></section>
     <section class="screen hidden" id="scr-army"></section>
+    <section class="screen hidden" id="scr-arms"></section>
     <section class="screen hidden" id="scr-sortie"></section>
   </main>
   <nav id="tabs">
     <button data-act="tab" data-tab="base"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>基地<i class="dot" id="dotBase"></i></button>
     <button data-act="tab" data-tab="army"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5c-3.7 0-6.6 2.5-6.8 6H3.8v1.8h16.4V8.5h-1.4C18.6 5 15.7 2.5 12 2.5zM8.3 11.4c0 2.4 1.7 4.3 3.7 4.3s3.7-1.9 3.7-4.3zM4 21.6c.4-3.4 3.8-5.3 8-5.3s7.6 1.9 8 5.3z"/></svg>部隊<i class="dot" id="dotArmy"></i></button>
+    <button data-act="tab" data-tab="arms"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M14.7 2.6a5.3 5.3 0 0 0-5 7l-7 7a2.1 2.1 0 0 0 3 3l7-7a5.3 5.3 0 0 0 7-5l-3.1 3.1-2.9-.9-.9-2.9z"/></svg>兵器<i class="dot" id="dotArms"></i></button>
     <button data-act="tab" data-tab="sortie"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 9 9H2l5.6 4.2L5.5 21 12 16.4 18.5 21l-2.1-7.8L22 9h-7z"/></svg>出撃<i class="dot" id="dotSortie"></i></button>
   </nav>
 </div>
@@ -331,6 +382,7 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="i-money" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#c99a2e"/><circle cx="12" cy="12" r="8.2" fill="#f1c453"/><circle cx="12" cy="12" r="6.4" fill="none" stroke="#c99a2e" stroke-width="1"/><path d="M12 6.7l1.6 3.3 3.6.4-2.7 2.4.8 3.6-3.3-1.9-3.3 1.9.8-3.6-2.7-2.4 3.6-.4z" fill="#a8791c"/></symbol>
+    <symbol id="i-bp" viewBox="0 0 24 24"><path d="M4 2.5h11.5L20 7v14.5H4z" fill="#2f6fb2"/><path d="M15.5 2.5V7H20z" fill="#9cc8f2"/><g stroke="#d6ebff" stroke-width=".9" opacity=".75" fill="none"><path d="M6.5 9.5h11M6.5 13h11M6.5 16.5h11M9.5 7v12.5M14 7v12.5"/></g><path d="M7.5 18.5l3-3.5 2 2 3.5-4.5" stroke="#ffe08a" stroke-width="1.5" fill="none" stroke-linecap="round"/></symbol>
     <symbol id="i-steel" viewBox="0 0 24 24"><path d="M3 5h18v3h-6.5v8H21v3H3v-3h6.5V8H3z" fill="#7d95ab"/><path d="M3 5h18v1.4H3zM9.5 8h1.4v8H9.5zM3 16h6.5v1.3H3z" fill="#d3e3f1"/></symbol>
   </defs>
 </svg>
@@ -410,6 +462,33 @@ var TF = (function () {
     barrage: { name: '一斉射撃', first: 6, cd: 12, mul: 1.2,         desc: '敵全体に、攻撃力120%の砲撃ダメージ' }
   };
 
+  // ====== 武装 ======
+  // 兵種ごとに 武器(攻撃力)・防護(耐久)・特殊(苦手な敵へのダメージ) の3系統。5レベルごとに新型を開発する
+  var ARM_KINDS = ['w', 'a', 'x'];
+  var ARM_KIND = {
+    w: { name: '武器', stat: '攻撃力' },
+    a: { name: '防護', stat: '耐久' },
+    x: { name: '特殊', stat: '' }
+  };
+  var ARMS = {
+    inf:  { vs: ['tank'],
+      w: ['小銃', '自動小銃', '突撃銃', '分隊支援火器', '電磁ライフル'],
+      a: ['鉄帽', '防弾チョッキ', '複合防弾服', '強化外骨格', '光学迷彩服'],
+      x: ['対戦車手榴弾', '吸着地雷', '携行ロケット', '携行ミサイル', '誘導ミサイル'] },
+    at:   { vs: ['inf', 'art'],
+      w: ['無反動砲', '対戦車ロケット', '対戦車ミサイル', 'トップアタック弾', '電磁砲'],
+      a: ['たこつぼ壕', '偽装網', 'コンクリート壕', '防弾盾', '電子妨害装置'],
+      x: ['短機関銃', '軽機関銃', '擲弾発射器', '散弾ロケット', '制圧ドローン'] },
+    tank: { vs: ['at'],
+      w: ['75mm砲', '88mm砲', '105mm砲', '120mm砲', '140mm電磁砲'],
+      a: ['鋼板装甲', '傾斜装甲', '複合装甲', '爆発反応装甲', 'アクティブ防護'],
+      x: ['同軸機銃', '榴弾', 'キャニスター弾', '遠隔機銃塔', '対人ドローン'] },
+    art:  { vs: ['tank'],
+      w: ['野砲', '榴弾砲', '重榴弾砲', '多連装ロケット', '誘導砲弾'],
+      a: ['掩体', '偽装網', '自走化', '装甲砲塔', '迎撃システム'],
+      x: ['徹甲榴弾', '成形炸薬弾', '子弾散布弾', '対戦車誘導弾', 'トップアタック砲弾'] }
+  };
+
   // ====== バランス調整値 ======
   var K = {
     unitPerLv: 0.12, labPerLv: 0.08, heroBase: 1.05, heroPerLv: 0.03, favMul: 1.25,
@@ -425,6 +504,12 @@ var TF = (function () {
     baseCapH: 2, depotCapH: 1, depotMaxLv: 22,
     // 敵の総合戦力倍率 T(s) = b + a*s^p + c*s^2
     enA: 0.33, enP: 1.3, enC: 0.0095, enB: 1.2,
+    // 武装: 1レベルごとの効果(武器=攻撃力、防護=耐久、特殊=苦手な敵へのダメージ)、5レベルごとに新型の開発(設計図が必要)
+    // 特殊は苦手の半分を打ち消すまで(相性0.6→0.8など)で、レベルが上がるほど伸びが小さくなる: 上限×(1 - armXd^Lv)
+    armW: 0.05, armA: 0.05, armXd: 0.9, armXk: 0.5, armPer: 5, armLab: 2,
+    armM: 80, armS: 30, armG: 1.9, armBp: 4, armBpP: 1.8, bpStep: 20, bpBoss: 2,
+    // 武装の普及に合わせて敵も強くなる(武装を使う前提の難しさ): 1 + arR * max(0, s - arS)^arP
+    arR: 0.012, arS: 8, arP: 0.8,
     // 報酬
     rwM: 20, rwS: 12, rwP: 1.5, rwExpA: 4, rwExpP: 1.2,
     // 生産(1時間あたり)
@@ -542,9 +627,69 @@ var TF = (function () {
     var u = UNIT[t];
     var hp = Math.max(1, Math.round(u.hp * mult * (opt.hpMul || 1)));
     var atk = u.atk * mult * (opt.atkMul || 1);
-    return { type: t, maxHp: hp, atk: atk, cd: u.cd, hero: opt.hero || null, boss: !!opt.boss, power: powerOf(hp, atk, u.cd) };
+    var q = { type: t, maxHp: hp, atk: atk, cd: u.cd, hero: opt.hero || null, boss: !!opt.boss, power: powerOf(hp, atk, u.cd) };
+    if (opt.vs) q.vs = opt.vs;
+    return q;
   }
-  function squadStats(st, t, heroId) { return makeSquad(t, squadMult(st, t, heroId), { hero: heroId }); }
+  function squadStats(st, t, heroId) {
+    var o = armOpt(st, t);
+    o.hero = heroId;
+    return makeSquad(t, squadMult(st, t, heroId), o);
+  }
+
+  // ====== 武装の開発・強化 ======
+  function armLv(st, t, k) { var a = st.arms && st.arms[t]; return a && a[k] > 0 ? a[k] | 0 : 0; }
+  function armTier(l) { return l <= 0 ? 0 : Math.ceil(l / K.armPer); }
+  // 新型の名前。5種を超えたら「改」「改二」…
+  function armName(t, k, l) {
+    var list = ARMS[t][k], tr = Math.max(1, armTier(l));
+    if (tr <= list.length) return list[tr - 1];
+    var n = tr - list.length;
+    return list[list.length - 1] + '改' + (n === 1 ? '' : n < 10 ? '二三四五六七八九'[n - 2] : n);
+  }
+  function armMax(st) { return lv(st, 'lab') * K.armLab; }
+  function armIsDev(l) { return l % K.armPer === 0; } // Lv0→1、Lv5→6… は新型の開発
+  function armCost(t, k, l) {
+    var f = Math.pow(l + 1, K.armG);
+    var c = { m: Math.round(K.armM * f / 10) * 10, s: Math.round(K.armS * f / 10) * 10, bp: 0 };
+    if (armIsDev(l)) c.bp = Math.round(K.armBp * Math.pow(armTier(l) + 1, K.armBpP));
+    return c;
+  }
+  // 効果(倍率の増分)。特殊の上限は「苦手な相性を等倍との中間まで戻す」分
+  function armXMax(t) { var a = AFF[t][ARMS[t].vs[0]]; return (a + (1 - a) * K.armXk) / a - 1; }
+  function armEffect(k, l, t) {
+    if (k === 'w') return K.armW * l;
+    if (k === 'a') return K.armA * l;
+    return armXMax(t) * (1 - Math.pow(K.armXd, l));
+  }
+  function canArm(st, t, k) {
+    if (!typeUnlocked(st, t)) return { ok: false, reason: BLD[TYPE_BLD[t]].name + 'で解放', locked: true };
+    if (!lv(st, 'lab')) return { ok: false, reason: '研究所を建てると開発できます', locked: true };
+    var cur = armLv(st, t, k), c = armCost(t, k, cur), dev = c.bp > 0;
+    if (cur >= armMax(st)) return { ok: false, reason: '研究所Lv' + (Math.floor(cur / K.armLab) + 1) + 'が必要', cap: true, cost: c, dev: dev };
+    if ((st.bp || 0) < c.bp) return { ok: false, reason: '設計図が不足', cost: c, dev: dev, short: true };
+    if (st.money < c.m || st.steel < c.s) return { ok: false, reason: '資源が不足', cost: c, dev: dev, short: true };
+    return { ok: true, cost: c, dev: dev };
+  }
+  function doArm(st, t, k) {
+    var chk = canArm(st, t, k);
+    if (!chk.ok) return chk;
+    st.money -= chk.cost.m; st.steel -= chk.cost.s; st.bp = (st.bp || 0) - chk.cost.bp;
+    if (!st.arms) st.arms = {};
+    if (!st.arms[t]) st.arms[t] = {};
+    var l = armLv(st, t, k) + 1;
+    st.arms[t][k] = l;
+    return { ok: true, cost: chk.cost, dev: chk.dev, lv: l, name: armName(t, k, l) };
+  }
+  // 部隊に載せる武装の効果
+  function armOpt(st, t) {
+    var o = { atkMul: 1 + armEffect('w', armLv(st, t, 'w')), hpMul: 1 + armEffect('a', armLv(st, t, 'a')) };
+    var x = armLv(st, t, 'x');
+    if (x > 0) { o.vs = {}; ARMS[t].vs.forEach(function (d) { o.vs[d] = 1 + armEffect('x', x, t); }); }
+    return o;
+  }
+  // 敵が想定する武装の普及度(ステージが進むほど強い武装を前提にする)
+  function armRef(s) { return 1 + K.arR * Math.pow(Math.max(0, s - K.arS), K.arP); }
   function expNeed(l) { return Math.round(20 + 14 * Math.pow(l, 1.55)); }
   function addHeroExp(st, id, exp) {
     var h = st.heroes[id];
@@ -564,7 +709,7 @@ var TF = (function () {
   function enemyCount(s) { return s <= 3 ? 2 : s <= 8 ? 3 : s <= 18 ? 4 : s <= 30 ? 5 : 6; }
   function enemyTotal(s) {
     var ease = s < 12 ? 0.75 + 0.25 * (s - 1) / 11 : 1; // 序盤はやさしく
-    return (K.enB + K.enA * Math.pow(s, K.enP) + K.enC * s * s) * ease;
+    return (K.enB + K.enA * Math.pow(s, K.enP) + K.enC * s * s) * ease * armRef(s);
   }
   function stagePool(s) {
     if (s <= 1) return ['inf'];
@@ -616,7 +761,8 @@ var TF = (function () {
     return {
       m: Math.round((40 + K.rwM * rm) * (boss ? K.bossMul : 1) / 5) * 5,
       s: Math.round((25 + K.rwS * rm) * (boss ? K.bossMul : 1) / 5) * 5,
-      exp: Math.round((10 + K.rwExpA * Math.pow(s, K.rwExpP)) * (boss ? 1.5 : 1))
+      exp: Math.round((10 + K.rwExpA * Math.pow(s, K.rwExpP)) * (boss ? 1.5 : 1)),
+      bp: (1 + Math.floor(s / K.bpStep)) * (boss ? K.bpBoss : 1)
     };
   }
   var stageCache = {};
@@ -721,7 +867,7 @@ var TF = (function () {
       var u = {
         id: U.length, side: side, slot: slot, type: q.type, hp: q.maxHp, maxHp: q.maxHp, atk: q.atk, cd: q.cd,
         next: (at || 0) + (at ? 1.4 : 0.3) + rnd() * 0.7 * q.cd, alive: true, hero: q.hero, boss: q.boss, sk: null, skNext: Infinity, skLast: 0, order: null,
-        stance: 0, reserve: !!at
+        stance: 0, reserve: !!at, vs: q.vs || null
       };
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       U.push(u); live[side].push(u);
@@ -796,9 +942,9 @@ var TF = (function () {
         for (j = 0; j < n; j++) { r -= aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1); if (r <= 0) { f = foes[j]; break; } }
       }
       if (rnd() < K.miss) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
-      var crit = rnd() < K.crit;
-      var h = hit(u, f, u.atk * AFF[u.type][f.type] * (0.9 + rnd() * 0.2) * (crit ? K.critMul : 1));
-      if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, dmg: Math.abs(h), crit: crit ? 1 : 0, kill: h < 0 ? 1 : 0 });
+      var crit = rnd() < K.crit, vm = u.vs && u.vs[f.type] || 1;
+      var h = hit(u, f, u.atk * AFF[u.type][f.type] * vm * (0.9 + rnd() * 0.2) * (crit ? K.critMul : 1));
+      if (ev) { var e1 = { t: t, k: 'atk', s: u.id, d: f.id, dmg: Math.abs(h), crit: crit ? 1 : 0, kill: h < 0 ? 1 : 0 }; if (vm > 1) e1.sp = 1; ev.push(e1); }
     }
     function cast(u) {
       var id = u.sk, sk = SKILL[id], foes = live[1 - u.side], j, h;
@@ -816,12 +962,12 @@ var TF = (function () {
           var f = foes[j];
           if (aff[f.type] > aff[best.type] || (aff[f.type] === aff[best.type] && f.hp < best.hp)) best = f;
         }
-        h = hit(u, best, u.atk * sk.mul * aff[best.type]);
+        h = hit(u, best, u.atk * sk.mul * aff[best.type] * (u.vs && u.vs[best.type] || 1));
         if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, hits: [{ d: best.id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 }] });
       } else if (id === 'barrage') {
         var targets = foes.slice(), hits = [];
         for (j = 0; j < targets.length; j++) {
-          h = hit(u, targets[j], u.atk * sk.mul * AFF[u.type][targets[j].type] * (0.9 + rnd() * 0.2));
+          h = hit(u, targets[j], u.atk * sk.mul * AFF[u.type][targets[j].type] * (u.vs && u.vs[targets[j].type] || 1) * (0.9 + rnd() * 0.2));
           hits.push({ d: targets[j].id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 });
         }
         if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, hits: hits });
@@ -925,7 +1071,7 @@ var TF = (function () {
   function enemyReserveCount(s) { return s < 6 ? 0 : 1 + (s >= 20 ? 1 : 0) + (s >= 45 ? 1 : 0); }
   function battleReserves(st, s) {
     var defs = {};
-    unlockedTypes(st).forEach(function (t) { defs[t] = makeSquad(t, unitMult(st, t) * labMult(st) * K.resMul); });
+    unlockedTypes(st).forEach(function (t) { defs[t] = makeSquad(t, unitMult(st, t) * labMult(st) * K.resMul, armOpt(st, t)); });
     var info = stageInfo(s), list = [], rnd = rngFrom(hashInt(s * 977 + 5)), n = enemyReserveCount(s);
     var normal = info.enemies.filter(function (e) { return !e.boss; });
     if (!normal.length) normal = info.enemies;
@@ -987,15 +1133,16 @@ var TF = (function () {
     var info = stageInfo(s);
     form = form || st.form || [];
     var first = win && s > st.cleared;
-    var gm = 0, gs = 0, exp;
+    var gm = 0, gs = 0, gb = 0, exp;
     if (win) {
       gm = info.reward.m * (first ? K.firstMul : 1);
       gs = info.reward.s * (first ? K.firstMul : 1);
+      gb = info.reward.bp * (first ? K.firstMul : 1);
       exp = info.reward.exp;
     } else {
       exp = Math.round(info.reward.exp * K.lossExp);
     }
-    st.money += gm; st.steel += gs;
+    st.money += gm; st.steel += gs; st.bp = (st.bp || 0) + gb;
     var heroExp = [];
     var seen = {};
     form.forEach(function (f) {
@@ -1017,7 +1164,7 @@ var TF = (function () {
     }
     st.stats.battles++;
     if (win) st.stats.wins++;
-    return { win: win, first: first, m: gm, s: gs, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
+    return { win: win, first: first, m: gm, s: gs, bp: gb, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
   }
 
   function newState(now) {
@@ -1025,7 +1172,7 @@ var TF = (function () {
       v: 1, money: K.startMoney, steel: K.startSteel,
       bld: { hq: { lv: 1, slot: 4 }, barracks: { lv: 1, slot: 1 } },
       heroes: { oni: { lv: 1, exp: 0 } },
-      cleared: 0, sel: 1,
+      cleared: 0, sel: 1, arms: {}, bp: 0,
       form: [{ type: 'inf', hero: 'oni' }, { type: 'inf', hero: null }],
       pending: null, tab: 'base', speed: 1,
       stats: { battles: 0, wins: 0 }, created: now
@@ -1043,6 +1190,8 @@ var TF = (function () {
     enemyCount: enemyCount, enemyTotal: enemyTotal, stageInfo: stageInfo, stageReward: stageReward, normalizeForm: normalizeForm, formSquads: formSquads,
     assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
+    ARMS: ARMS, ARM_KINDS: ARM_KINDS, ARM_KIND: ARM_KIND, armLv: armLv, armTier: armTier, armName: armName, armMax: armMax, armIsDev: armIsDev,
+    armCost: armCost, armEffect: armEffect, armXMax: armXMax, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
     clearCache: function () { stageCache = {}; }
   };
 })();
@@ -1076,6 +1225,7 @@ if (typeof module !== 'undefined') module.exports = TF;
   }
   function now() { return Date.now(); }
   function icoMoney(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-money"/></svg>'; }
+  function icoBp(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-bp"/></svg>'; }
   function icoSteel(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-steel"/></svg>'; }
   function costHtml(c) {
     return '<span class="cost' + (st.money < c.m ? ' short' : '') + '">' + icoMoney() + fmt(c.m) + '</span>' +
@@ -1210,8 +1360,23 @@ if (typeof module !== 'undefined') module.exports = TF;
     s.form = TF.normalizeForm(s, s.form);
     s.stats = s.stats || { battles: 0, wins: 0 };
     if ([1, 2, 4].indexOf(s.speed) < 0) s.speed = 1;
-    if (['base', 'army', 'sortie'].indexOf(s.tab) < 0) s.tab = 'base';
+    if (['base', 'army', 'arms', 'sortie'].indexOf(s.tab) < 0) s.tab = 'base';
     s.flags = o.flags || {};
+    // 武装(兵器開発)。追加前のデータには、これまでのクリア分の設計図を渡す
+    var arms = {};
+    TF.TYPES.forEach(function (t) {
+      var a = s.arms && s.arms[t];
+      if (!a) return;
+      arms[t] = {};
+      TF.ARM_KINDS.forEach(function (k) { var l = Math.max(0, a[k] | 0); if (l) arms[t][k] = l; });
+    });
+    s.arms = arms;
+    if (o.bp === undefined) {
+      var g = 0;
+      for (var k = 1; k <= s.cleared; k++) g += TF.stageReward(k).bp;
+      s.bp = g;
+      if (s.cleared > 0) s.flags.armNew = 1;
+    } else s.bp = Math.max(0, +o.bp || 0);
     s.auto = o.auto !== false;
     s.lastSeen = +o.lastSeen || now();
     return s;
@@ -1240,6 +1405,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var info = TF.storedInfo(st, now());
     var full = (info.supply && info.supply.full) || (info.steel && info.steel.full);
     $('dotBase').classList.toggle('on', !!(anyUp || full) && curTab !== 'base');
+    $('dotArms').classList.toggle('on', (anyArm() || !!st.flags.armNew) && curTab !== 'arms');
   }
 
   // ====== 次の目標 ======
@@ -1255,7 +1421,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (!L('depot')) return '「倉庫」を建てると、放置で資源が貯まる時間が延びます。';
     if (L('hq') < 3) return '「司令部」をLv3にすると、砲兵陣地と研究所が建てられます。';
     if (!L('artpost')) return '「砲兵陣地」を建てよう。砲兵は歩兵と対戦車兵に強い。';
-    if (!L('lab')) return '「研究所」を建てよう。全兵種をまとめて強化できます。';
+    if (!L('lab')) return '「研究所」を建てよう。全兵種の強化と、兵器の開発ができるようになります。';
+    if (!TF.TYPES.some(function (t) { return TF.ARM_KINDS.some(function (k) { return TF.armLv(st, t, k) > 0; }); })) return '下の「兵器」で武装を開発しよう。設計図は戦闘に勝つと手に入ります。';
     if (TF.slots(st) < 6) return '司令部を強化して部隊の枠を増やそう(現在 ' + TF.slots(st) + '/6)。';
     return '敵の編成を見て相性の良い兵種で挑もう。勝てないときは前のステージで稼いで強化!';
   }
@@ -1415,6 +1582,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       html += '<div class="card urow"><div class="uicon' + (on ? '' : ' off') + '">' + unitSvg(t, ALLY_C) + '</div><div class="grow">' +
         '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">' + TF.BLD[b].name + ' Lv' + TF.lv(st, b) + '</span>' : '<span class="pill red">' + TF.BLD[b].name + 'で解放</span>') + '</div>' +
         (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div>' : '') +
+        (on ? '<div class="small" style="margin-top:2px">武装: ' + TF.ARM_KINDS.map(function (k) { var l = TF.armLv(st, t, k); return l ? TF.armName(t, k, l) + ' Lv' + l : '<span style="opacity:.6">' + TF.ARM_KIND[k].name + 'なし</span>'; }).join(' ・ ') + '</div>' : '') +
         '<div class="aff"><span class="s">強い: ' + names(STRONG[t]) + '</span> / <span class="w">弱い: ' + names(WEAK[t]) + '</span></div></div></div>';
     });
     html += '</div><div class="small" style="margin-top:6px">研究所 Lv' + TF.lv(st, 'lab') + ': 全兵種 ×' + TF.labMult(st).toFixed(2) + '(数値は指揮官なしの場合)</div>';
@@ -1448,6 +1616,78 @@ if (typeof module !== 'undefined') module.exports = TF;
     });
     html += '</table><div class="small" style="margin-top:6px">行の兵種が列の兵種を攻撃したときのダメージ倍率。</div></div>';
     $('scr-army').innerHTML = html;
+  }
+
+  // ====== 画面: 兵器(武装の開発・強化) ======
+  var KICO = {
+    w: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/></svg>',
+    a: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5.5-3.4 9.4-8 11-4.6-1.6-8-5.5-8-11V5z" fill="currentColor"/><path d="M12 5.2v14" stroke="#000" stroke-opacity=".25" stroke-width="1.4"/></svg>',
+    x: '<svg viewBox="0 0 24 24"><path d="M13.5 2 4.5 14h6.2l-1.2 8 9-12.2h-6.2z" fill="currentColor"/></svg>'
+  };
+  function armSel() {
+    var ts = TF.unlockedTypes(st);
+    var t = st.flags.armSel;
+    if (!t || ts.indexOf(t) < 0) t = ts[0] || 'inf';
+    return t;
+  }
+  function anyArm() {
+    if (!TF.lv(st, 'lab')) return false;
+    return TF.unlockedTypes(st).some(function (t) { return TF.ARM_KINDS.some(function (k) { return TF.canArm(st, t, k).ok; }); });
+  }
+  function pct(v) { return '+' + Math.round(v * 100) + '%'; }
+  function armEffText(t, k, l) {
+    var e = TF.armEffect(k, l, t);
+    if (k === 'x') return names(TF.ARMS[t].vs) + 'へのダメージ ' + pct(e);
+    return TF.ARM_KIND[k].stat + ' ' + pct(e);
+  }
+  function renderArms() {
+    var lab = TF.lv(st, 'lab'), t = armSel();
+    var html = '<div class="card armhead"><div class="bpv">' + icoBp() + '<span class="num" id="vBp">' + fmt(st.bp || 0) + '</span></div>' +
+      '<div class="small"><b>設計図</b>は勝利で手に入ります(先のステージほど多く、ボス戦・初クリアは2倍)。新型の開発に使います。</div></div>';
+    if (!lab) {
+      html += '<div class="card" style="margin-top:10px;text-align:center;line-height:1.7"><div style="font-weight:900;font-size:16px;margin-bottom:4px">兵器開発</div>' +
+        '各兵種の<b>武器</b>(攻撃力)・<b>防護</b>(耐久)・<b>特殊</b>(苦手な敵へのダメージ)を開発・強化できます。<br>' +
+        '<span style="color:var(--warn)">基地に「研究所」を建てると使えるようになります(司令部Lv3から)。</span>' +
+        '<div style="margin-top:10px"><button class="btn sub" data-act="tab" data-tab="base">基地へ</button></div></div>';
+      $('scr-arms').innerHTML = html;
+      return;
+    }
+    html += '<div class="armtypes">' + TF.TYPES.map(function (x) {
+      var on = TF.typeUnlocked(st, x), tot = 0;
+      TF.ARM_KINDS.forEach(function (k) { tot += TF.armLv(st, x, k); });
+      var can = on && TF.ARM_KINDS.some(function (k) { return TF.canArm(st, x, k).ok; });
+      return '<button data-act="arm-type" data-t="' + x + '"' + (x === t ? ' class="on"' : '') + (on ? '' : ' disabled') + '>' + unitSvg(x, on ? ALLY_C : '#6b7466') +
+        '<span>' + SHORT[x] + '</span><span class="lvs">' + (on ? '武装Lv' + tot : '未解放') + '</span><i class="dot' + (can ? ' on' : '') + '"></i></button>';
+    }).join('') + '</div>';
+    var o = TF.armOpt(st, t), q = TF.squadStats(st, t, null);
+    html += '<div class="card armsum"><div class="big">' + unitSvg(t, ALLY_C) + '</div><div class="grow"><div style="font-weight:900;font-size:16px">' + TF.UNIT[t].name + 'の武装</div>' +
+      '<div class="st"><span>攻撃力 <b>×' + o.atkMul.toFixed(2) + '</b></span><span>耐久 <b>×' + o.hpMul.toFixed(2) + '</b></span><span>' + names(TF.ARMS[t].vs) + 'へ <b>×' + (o.vs ? o.vs[TF.ARMS[t].vs[0]] : 1).toFixed(2) + '</b></span></div>' +
+      '<div class="st"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div></div></div>';
+    html += '<div class="armlist">';
+    TF.ARM_KINDS.forEach(function (k) {
+      var l = TF.armLv(st, t, k), chk = TF.canArm(st, t, k), c = chk.cost || TF.armCost(t, k, l), dev = TF.armIsDev(l);
+      var inTier = l === 0 ? 0 : ((l - 1) % TF.K.armPer) + 1, pips = '';
+      for (var i = 1; i <= TF.K.armPer; i++) pips += '<i' + (i <= inTier ? ' class="on"' : '') + '></i>';
+      var nextName = TF.armName(t, k, l + 1);
+      html += '<div class="card arm" id="arm-' + t + '-' + k + '"><div class="top"><div class="kico ' + k + '">' + KICO[k] + '</div><div class="grow">' +
+        '<div class="kind">' + TF.ARM_KIND[k].name + (k === 'x' ? '(' + names(TF.ARMS[t].vs) + 'に強くなる)' : '') + '</div>' +
+        '<div class="row"><span class="nm' + (l ? '' : ' none') + '">' + (l ? esc(TF.armName(t, k, l)) : '未開発') + '</span>' + (l ? '<span class="pill gold">Lv' + l + '</span>' : '') + '</div>' +
+        (l ? '<div class="pips">' + pips + '</div>' : '') +
+        '<div class="eff">' + (l ? armEffText(t, k, l) : TF.ARM_KIND[k].name + 'なし') + ' → <b>' + armEffText(t, k, l + 1).replace(/^.* /, '') + '</b>' + (dev ? ' <span class="pill blue">新型: ' + esc(nextName) + '</span>' : '') + '</div></div></div>';
+      html += '<div class="act"><div class="costs">' + (c.bp ? '<span class="cost' + ((st.bp || 0) < c.bp ? ' short' : '') + '">' + icoBp() + fmt(c.bp) + '</span>' : '') + costHtml(c) + '</div>' +
+        '<button class="btn ' + (dev ? 'dev' : 'green') + '" data-act="arm-up" data-t="' + t + '" data-k="' + k + '"' + (chk.ok ? '' : ' disabled') + '>' + (dev ? '開発' : '強化') + '</button></div>' +
+        (chk.ok ? '' : '<div class="why">' + esc(chk.reason) + (chk.cap ? '(武装のレベル上限は 研究所Lv×' + TF.K.armLab + ')' : '') + '</div>') + '</div>';
+    });
+    html += '</div><div class="small" style="margin-top:8px;line-height:1.6">研究所 Lv' + lab + ': 武装のレベル上限 ' + TF.armMax(st) + '。' + TF.K.armPer + 'レベルごとに新型の開発(設計図が必要)。増援の部隊にも武装が反映されます。</div>';
+    $('scr-arms').innerHTML = html;
+    if (st.flags.armNew) { delete st.flags.armNew; save(); renderTop(); }
+  }
+  function showDevDone(t, k, r) {
+    openModal('<div class="result"><div class="sub" style="color:#d9b8ff;font-weight:900;letter-spacing:.2em;margin-bottom:0">新型兵器 開発成功!</div>' +
+      '<div class="devart"><div class="ring">' + unitSvg(t, ALLY_C) + '<span class="kb ' + k + '">' + KICO[k] + '</span></div></div>' +
+      '<h2 class="win" style="font-size:28px">' + esc(r.name) + '</h2><div class="sub">' + TF.UNIT[t].name + 'の' + TF.ARM_KIND[k].name + ' ・ Lv' + r.lv + '</div>' +
+      '<div class="rlist"><div class="rline"><span style="color:#d9b8ff">' + KICO[k].replace('<svg ', '<svg style="width:22px;height:22px" ') + '</span><span class="grow">' + armEffText(t, k, r.lv - 1).replace(/ [^ ]*$/, '') + '</span><span class="small">' + armEffText(t, k, r.lv - 1).replace(/^.* /, '') + ' → </span><b class="up">' + armEffText(t, k, r.lv).replace(/^.* /, '') + '</b></div></div>' +
+      '<div class="btns"><button class="btn wide" data-act="modal-close">配備する!</button></div></div>');
   }
 
   // ====== 画面: 出撃 ======
@@ -1512,7 +1752,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var rw = info.reward, first = !cleared;
     html += '<div class="winbox card"><div class="wr"><svg class="c" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" fill="none" stroke="#11160f" stroke-width="4"/>' + (pct > 0 ? '<circle cx="18" cy="18" r="15.5" fill="none" stroke="' + wi[1] + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + (pct * 0.974).toFixed(1) + ' 100" transform="rotate(-90 18 18)"/>' : '') + '</svg><div><div class="v num" style="color:' + wi[1] + '">' + pct + '%</div><div class="l" style="color:' + wi[1] + '">' + wi[0] + '</div></div></div>' +
       '<div class="grow rewards"><div class="small">予想勝率(自動戦闘で100回模擬戦)</div><div style="font-weight:800">勝利報酬' + (first ? ' <span class="pill gold">初回×' + TF.K.firstMul + '</span>' : '') + '</div>' +
-      '<div class="row"><span class="cost">' + icoMoney() + fmt(rw.m * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoSteel() + fmt(rw.s * (first ? TF.K.firstMul : 1)) + '</span></div>' +
+      '<div class="row"><span class="cost">' + icoMoney() + fmt(rw.m * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoSteel() + fmt(rw.s * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoBp() + fmt(rw.bp * (first ? TF.K.firstMul : 1)) + '</span></div>' +
       '<div class="small">指揮官EXP +' + fmt(rw.exp) + '(敗北時は半分)</div></div></div>';
     var auto = st.auto !== false;
     html += '<div class="modesel"><span class="lbl">戦闘</span><div class="seg"><button data-act="mode" data-m="auto" class="' + (auto ? 'on' : '') + '">自動</button><button data-act="mode" data-m="manual" class="' + (auto ? '' : 'on') + '">手動(指示・スキル)</button></div></div>';
@@ -1565,7 +1805,7 @@ if (typeof module !== 'undefined') module.exports = TF;
   // ====== タブ切替 ======
   function show(tab) {
     curTab = tab; st.tab = tab;
-    ['base', 'army', 'sortie'].forEach(function (k) { $('scr-' + k).classList.toggle('hidden', k !== tab); });
+    ['base', 'army', 'arms', 'sortie'].forEach(function (k) { $('scr-' + k).classList.toggle('hidden', k !== tab); });
     Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
     render();
     $('main').scrollTop = 0;
@@ -1574,6 +1814,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     renderTop();
     if (curTab === 'base') renderBase();
     else if (curTab === 'army') renderArmy();
+    else if (curTab === 'arms') renderArms();
     else renderSortie();
   }
 
@@ -1792,6 +2033,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       html += '<h2 class="win">勝利!</h2><div class="sub">ステージ' + p.s + ' ' + (sum.first ? '初クリア!' : 'クリア') + '</div>';
       html += '<div class="rlist"><div class="rline">' + icoMoney() + '<span class="grow">資金</span><b class="num">+' + fmt(sum.m) + '</b></div>' +
         '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num">+' + fmt(sum.s) + '</b></div>' +
+        '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num">+' + fmt(sum.bp) + '</b></div>' +
         (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') + '</div>';
     } else {
       html += '<h2 class="lose">' + (p.timeout ? '時間切れ' : '敗北…') + '</h2><div class="sub">兵は失われていません。強化して再挑戦しよう。</div>';
@@ -1946,6 +2188,20 @@ if (typeof module !== 'undefined') module.exports = TF;
   // ====== 操作 ======
   var actions = {
     tab: function (el) { show(el.dataset.tab); },
+    'arm-type': function (el) { st.flags.armSel = el.dataset.t; save(); renderArms(); },
+    'arm-up': function (el) {
+      var t = el.dataset.t, k = el.dataset.k;
+      var r = TF.doArm(st, t, k);
+      if (!r.ok) { toast(r.reason); return; }
+      save(); render(); bump('resM'); bump('resS');
+      var card = $('arm-' + t + '-' + k);
+      if (card) {
+        card.classList.add('flash');
+        var f = document.createElement('div'); f.className = 'armfloat'; f.textContent = 'Lv' + r.lv + '! ' + armEffText(t, k, r.lv).replace(/^.* /, '');
+        card.appendChild(f);
+      }
+      if (r.dev) showDevDone(t, k, r);
+    },
     tile: function (el) {
       var slot = +el.dataset.slot, id = null;
       Object.keys(st.bld).forEach(function (k) { if (st.bld[k].slot === slot) id = k; });
@@ -2807,7 +3063,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           a.f.fire = B.clock + i * 0.05;
           if (ev.miss) { b.x += (Math.random() < 0.5 ? -1 : 1) * (9 + Math.random() * 4); b.y += (Math.random() - 0.5) * 6; }
           B.projs.push({ kind: s.type, x0: a.x, y0: a.y, x1: b.x, y1: b.y, t0: B.clock + i * 0.05, t1: B.clock + i * 0.05 + fl, side: s.side });
-          if (i === n - 1) B.imps.push({ at: B.clock + i * 0.05 + fl, d: ev.d, dmg: ev.dmg, crit: ev.crit, kill: ev.kill, miss: ev.miss, kind: s.type, wx: b.x, wy: b.y });
+          if (i === n - 1) B.imps.push({ at: B.clock + i * 0.05 + fl, d: ev.d, dmg: ev.dmg, crit: ev.crit, kill: ev.kill, miss: ev.miss, sp: ev.sp, kind: s.type, wx: b.x, wy: b.y });
         }
         if (s.type === 'inf' || s.type === 'at') for (i = 0; i < 4; i++) { var ff = figWorld(s).f; ff.fire = B.clock + Math.random() * 0.15; }
       } else if (ev.k === 'spawn') {
@@ -2903,6 +3159,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var size = im.kind === 'rocket' ? 1.8 : im.kind === 'art' ? (im.big ? 1.25 : 1.1) : im.kind === 'snipe' ? 1.4 : im.kind === 'tank' ? 0.9 : im.kind === 'at' ? 0.9 : 0;
       if (size) boom(wx, wy, size); else puff(wx, wy);
       if (im.crit || im.kind === 'snipe') text(wx, wy, (im.kind === 'snipe' ? '' : '会心 ') + '-' + fmt(im.dmg), '#ffe066', 15);
+      else if (im.sp && !(B.clock - (d.spT || -9) < 1.2)) { d.spT = B.clock; B.spHits = (B.spHits || 0) + 1; text(wx, wy - 4, '特効!', '#e2b8ff', 14); }
       if (im.kind === 'art' || im.kind === 'snipe' || im.kind === 'rocket') B.shake = Math.max(B.shake, im.kind === 'art' ? 3.5 : 8);
       if (d.hp <= 0 && !d.dead) {
         d.dead = true;
@@ -3651,7 +3908,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           rockets: B.projs.filter(function (p) { return p.kind === 'rocket'; }).length,
           reserve: B.eng.reserveInfo(B.clock), spawned: B.ev.filter(function (e) { return e.k === 'spawn'; }).map(function (e) { return e.side; }),
           stances: B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return B.eng.U[u.id].stance; }),
-          coins: B.coinGot || 0, coinTotal: B.coinTotal || 0,
+          coins: B.coinGot || 0, coinTotal: B.coinTotal || 0, spHits: B.spHits || 0,
           bridgeY: RY, minAllyY: Math.min.apply(null, B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return u.wy; })),
           units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, wx: u.wx, order: eu.order, alive: eu.alive, stance: eu.stance, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };

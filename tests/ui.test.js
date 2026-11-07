@@ -320,9 +320,10 @@ function midState(over) {
       assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).reserve.used, 0, 'ポイント不足なのに出た');
       await page.waitForSelector('#cardBar .rcard.on', { timeout: 20000 });
       await page.click('#cardBar .rcard.on >> nth=0');
+      assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).reserve.used, 1, 'タップで増援が出ない');
+      // 戦場への登場は次の描画で反映される
+      await page.waitForFunction(n => { const d = window.__game.battle.debug(); return d && d.units.filter(u => u.side === 0).length === n + 1 && d.units.some(u => u.side === 0 && u.reserve); }, n0, { timeout: 3000 });
       const d = await page.evaluate(() => window.__game.battle.debug());
-      assert.strictEqual(d.reserve.used, 1, 'タップで増援が出ない');
-      assert(d.units.filter(u => u.side === 0).length === n0 + 1 && d.units.some(u => u.side === 0 && u.reserve));
       assert(d.reserve.pts < d.reserve.cost, 'ポイントが減っていない');
       assert.strictEqual(await page.locator('#cardBar .rcard.on').count(), 0, '使った直後もカードが使える表示のまま');
       await page.click('[data-act="skip"]');
@@ -340,8 +341,9 @@ function midState(over) {
       for (let i = 1; i <= 10; i++) await page.mouse.move(x0 + (tx - x0) * i / 10, y0 + (ty - y0) * i / 10);
       assert(await page.isVisible('.cardghost'), 'ドラッグ中のカードが見えない');
       await page.mouse.up();
+      assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).reserve.used, 1, 'ドラッグで増援が出ない');
+      await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.units.some(u => u.side === 0 && u.reserve); }, null, { timeout: 3000 });
       const d = await page.evaluate(() => window.__game.battle.debug());
-      assert.strictEqual(d.reserve.used, 1, 'ドラッグで増援が出ない');
       const added = d.units.filter(u => u.side === 0 && u.reserve).pop();
       assert(added.wx < 100, '置いた列(左側)に出ていない ' + added.wx);
       await page.click('[data-act="skip"]');
@@ -400,6 +402,62 @@ function midState(over) {
     assert.strictEqual(s.sel, 16);
     assert(!s.flags.conq, '演出の印が残っている');
   }, midState({ cleared: 14, sel: 15, tab: 'base' })));
+
+  await test('兵器: 研究所がないと案内が出る。設計図で新型を開発、資源で強化、数値が上がる', async () => {
+    // 研究所なし
+    await withPage('iPhone 13', async page => {
+      await page.click('[data-act="tab"][data-tab="arms"]');
+      assert((await page.textContent('#scr-arms')).includes('研究所'), '案内が出ない');
+      assert.strictEqual(await page.locator('[data-act="arm-up"]').count(), 0);
+    }, midState({ bld: { hq: { lv: 2, slot: 4 }, barracks: { lv: 3, slot: 1 } } }));
+    // 以前のデータ(設計図なし)には、これまでのクリア分の設計図が配られ、タブに印が出る
+    await withPage('iPhone 13', async page => {
+      let s = await state(page);
+      assert(s.bp > 0, '設計図が配られていない');
+      assert(await page.isVisible('#dotArms.on'), '兵器タブに印がない');
+      await page.click('[data-act="tab"][data-tab="arms"]');
+      await page.click('[data-act="arm-type"][data-t="tank"]');
+      const atk0 = (await page.evaluate(() => window.__game.TF.squadStats(window.__game.state, 'tank', null).atk));
+      const bp0 = s.bp;
+      await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+      await page.waitForSelector('#modalWrap:not(.hidden) .devart');
+      assert((await page.textContent('#modalWrap')).includes('開発成功'));
+      await page.click('[data-act="modal-close"]');
+      s = await state(page);
+      assert.strictEqual(s.arms.tank.w, 1);
+      assert(s.bp < bp0, '設計図が減っていない');
+      const m0 = s.money;
+      await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+      s = await state(page);
+      assert.strictEqual(s.arms.tank.w, 2, '強化できない');
+      assert(s.money < m0);
+      assert.strictEqual(s.bp, bp0 - (await page.evaluate(() => window.__game.TF.armCost('tank', 'w', 0).bp)), '強化で設計図が減った');
+      const atk1 = (await page.evaluate(() => window.__game.TF.squadStats(window.__game.state, 'tank', null).atk));
+      assert(atk1 > atk0 * 1.09, '攻撃力が上がらない');
+      assert((await page.textContent('#arm-tank-w')).includes('Lv2'));
+      await noHorizontalScroll(page);
+      // 部隊タブにも武装が表示される
+      await page.click('[data-act="tab"][data-tab="army"]');
+      assert((await page.textContent('#scr-army')).includes(await page.evaluate(() => window.__game.TF.armName('tank', 'w', 2))));
+    }, Object.assign(midState({ money: 1e6, steel: 1e6 }), { bp: undefined }));
+    // 勝てば設計図が増え、特殊武装は苦手な敵に「特効!」
+    await withPage('iPhone 13', async page => {
+      const bp0 = (await state(page)).bp;
+      await page.click('[data-act="tab"][data-tab="sortie"]');
+      await page.evaluate(() => { const st = window.__game.state; st.form = st.form.map(f => ({ type: 'tank', hero: f.hero })); });
+      await page.click('[data-act="tab"][data-tab="army"]');
+      await page.click('[data-act="tab"][data-tab="sortie"]');
+      await page.click('[data-act="sortie"]');
+      await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.spHits > 0; }, null, { timeout: 20000 });
+      await page.click('[data-act="skip"]');
+      await page.waitForSelector('#modalWrap:not(.hidden) .result');
+      if ((await page.textContent('.result h2')).includes('勝利')) {
+        assert((await page.textContent('.result')).includes('設計図'));
+        assert((await state(page)).bp > bp0, '勝っても設計図が増えない');
+      }
+    }, midState({ cleared: 35, sel: 36, bp: 0, speed: 2, arms: { tank: { w: 10, a: 10, x: 10 } },
+      bld: { hq: { lv: 8, slot: 4 }, barracks: { lv: 14, slot: 1 }, atpost: { lv: 12, slot: 3 }, factory: { lv: 16, slot: 5 }, artpost: { lv: 10, slot: 7 }, lab: { lv: 8, slot: 8 } } }));
+  });
 
   await test('広い戦場: なぞって見回し、2本指で拡大・縮小、「戦況を追う」で戻る。勝てば敵陣を占領', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
