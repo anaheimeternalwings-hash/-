@@ -416,16 +416,18 @@ function playthrough(opt) {
       for (const id of ['barracks', 'atpost', 'factory', 'artpost', 'lab']) { const c = TF.lv(st, id); if (c > 0 && c >= TF.maxLevel(st, id)) dh += deltaOf[id]; }
       for (const id of TF.BLD_ORDER) if (TF.BLD[id].req === hq + 1 && id !== 'supply' && id !== 'steel') dh += avgP * 0.5;
       if (dh > 0) cands.push({ id: 'hq', delta: dh });
+      // 試作部品は集めるのに手間がかかる(平均 1/ドロップ率 回のボス戦)ので、その分の稼ぎを費用に含めて比べる
+      const rwNow = TF.stageInfo(Math.max(1, st.cleared)).reward, partEq = opt.strategy ? 0 : (opt.partEqMul === undefined ? 0.3 : opt.partEqMul) * (rwNow.m + rwNow.s * STEEL_PRICE) / K.partRate;
       cands.forEach(c => {
         if (c.id !== 'arm') c.cost = TF.upgradeCost(c.id, TF.lv(st, c.id));
-        c.ratio = c.delta / (c.cost.m + c.cost.s * STEEL_PRICE);
+        c.ratio = c.delta / (c.cost.m + c.cost.s * STEEL_PRICE + (c.cost.part ? partEq : 0));
         c.afford = st.money >= c.cost.m && st.steel >= c.cost.s && c.bpOk !== false;
       });
       cands.sort((a, b) => b.ratio - a.ratio);
-      // 試作部品だけが足りない開発(資金・設計図は足りている)があれば、その等級の部品を狙う
+      // 試作部品だけが足りない開発(資金・設計図は足りている)が一番の候補なら、その等級の部品を狙う
       const mine = cands.filter(c => opt.strategy !== 'mono' || ['factory', 'lab', 'hq'].includes(c.id) || (c.id === 'arm' && c.t === 'tank'));
       const blocked = mine.find(c => c.id === 'arm' && !c.partOk && st.money >= c.cost.m && st.steel >= c.cost.s && (st.bp || 0) >= c.cost.bp);
-      partWish = blocked && mine.length && blocked.ratio >= mine[0].ratio * 0.5 ? blocked.cost.part : 0;
+      partWish = blocked && mine.length && blocked.ratio >= mine[0].ratio * (opt.partFarmMin === undefined ? 1 : opt.partFarmMin) ? blocked.cost.part : 0;
       let pick = null;
       if (opt.strategy === 'random') {
         // 欲しい強化をランダムに決め、買えるまで貯める
@@ -472,11 +474,11 @@ function playthrough(opt) {
         if (v > best) { best = v; stage = s; form = gg.f; }
       }
       // 開発したいのに試作部品が足りなければ、その等級のボス戦で部品を狙う(十分勝てるとき)
-      if (partWish) {
+      if (partWish && !opt.noPartFarm) {
         for (const s of TF.partStages(partWish)) {
           if (s > st.cleared) continue;
           const gg = getForm(s);
-          if (gg.wr >= 0.6) { stage = s; form = gg.f; partFarm++; break; }
+          if (gg.wr >= (opt.partFarmWr || 0.6)) { stage = s; form = gg.f; partFarm++; break; }
         }
       }
       farmMin = Math.min(farmMin, getForm(stage).wr);
