@@ -380,7 +380,7 @@ function midState(over) {
     bld: { hq: { lv: 10, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('配置: 出撃すると広大な戦場(7列)で部隊を配置。地形が表示され、ドラッグで列を変更、おまかせ配置、戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
+  await test('配置: 出撃すると広大な戦場(7列)で部隊を配置。地形が表示され、ドラッグで好きな場所(列の間・前後も)に置ける。戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
@@ -411,20 +411,36 @@ function midState(over) {
     const moved = d.lanes[i0];
     assert.notStrictEqual(moved, lane0, 'ドラッグで列が変わらない');
     assert(moved === 0 || moved === 6, '端の列にならない ' + moved);
+    // 自由配置: 列と列の間・前寄りの好きな場所に置ける(置いた場所に止まり、前に置いた分だけ早く着く)
+    const i1 = d.units.findIndex((u, k) => u.side === 0 && k !== i0 && u.type !== 'art');
+    const u1 = d.units[i1], to = await page.evaluate(() => window.__game.battle.worldToScreen(122, 103));
+    await page.mouse.move(box.x + u1.x, box.y + u1.y - 6); await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + u1.x + (to.x - u1.x) * i / 10, box.y + u1.y - 6 + (to.y - u1.y + 6) * i / 10);
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+    d = await page.evaluate(() => window.__game.battle.debug());
+    const p1 = d.units[i1];
+    assert(Math.abs(p1.wx - 122) < 16 && Math.abs(p1.wy - 103) < 4, '置いた場所にいない ' + p1.wx + ',' + p1.wy);
+    const f1 = (await page.evaluate(() => window.__game.battle.debugForm()))[i1];
+    assert(typeof f1.lx === 'number' && Math.abs(f1.lx - Math.round(f1.lx)) > 0.05, '列の間の位置が残らない ' + JSON.stringify(f1));
+    assert(f1.adv > 0.45, '前に置いた奥行きが残らない ' + JSON.stringify(f1));
     // 戦闘開始: その配置のまま戦い、途中で閉じても同じ配置で決着できるよう保存される
     await page.click('[data-act="deploy-go"]');
     await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight'; }, null, { timeout: 8000 });
     d = await page.evaluate(() => window.__game.battle.debug());
     assert.strictEqual(d.lanes[i0], moved, '配置が戦闘に反映されない');
-    const pend = await page.evaluate(() => window.__game.state.pending.form.map(f => f.lane));
-    assert.strictEqual(pend[i0], moved, '配置が保存されない');
+    const pend = await page.evaluate(() => window.__game.state.pending.form);
+    assert.strictEqual(pend[i0].lane, moved, '配置が保存されない');
+    assert.strictEqual(pend[i1].lx, f1.lx, '自由配置の位置が保存されない');
+    const ex = await page.evaluate(([type, lane]) => { const G = window.__game, T = G.battle.debug().terrain; return G.TF.K.app[type] / G.TF.terrMove(T.p[lane], type); }, [d.units[i1].type, d.lanes[i1]]);
+    assert(d.units[i1].arrT < ex - 0.05, '前に置いても早く着かない ' + d.units[i1].arrT + ' ' + ex);
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
   }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 },
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('移動: 戦闘が始まると出撃線から前線へ進み、地形に応じた時刻に着く。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
+  await test('移動: 戦闘が始まると配置した場所から前線へ進み、地形に応じた時刻に着く。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
@@ -437,7 +453,7 @@ function midState(over) {
     // 到着時刻は地形の速さどおり(エンジンの値)
     const exp = await page.evaluate(ids => { const G = window.__game, T = G.battle.debug().terrain; return ids.map(([type, lane]) => G.TF.K.app[type] / G.TF.terrMove(T.p[lane], type)); }, movers.map(u => [u.type, d.lanes[u.id]]));
     movers.forEach((u, i) => assert(Math.abs(u.arrT - exp[i]) < 1e-9, '到着時刻が地形どおりでない ' + u.arrT + ' ' + exp[i]));
-    assert(movers.some(u => Math.abs(u.wy - d.front) > 70), '出撃線から始まらない');
+    assert(movers.every(u => Math.abs(u.wy - d.front) > 50), '配置した場所から始まらない ' + movers.map(u => Math.round(u.wy - d.front)));
     const last = Math.max(...movers.map(u => u.arrT));
     await page.waitForFunction(t => { const x = window.__game.battle.debug(); return x && (x.clock > t + 0.6 || x.ending); }, last, { timeout: 20000 });
     d = await page.evaluate(() => window.__game.battle.debug());

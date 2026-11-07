@@ -351,6 +351,34 @@ check('移動: 地形で進む速さが変わり(戦車は平原で速く湿地�
   assert(!m.ev.some(x => x.k === 'atk' && x.s === 0 && x.t > 5 && x.t < 5 + lv.dur), '移動中に撃った');
   assert(m.ev.some(x => x.k === 'atk' && x.s === 0 && x.t > 5 + lv.dur), '移動のあと撃たない');
 });
+check('自由配置: 列の間(小数の列)や前後の好きな位置に置ける。前に置くほど早く着き、列の間はとなりの列との中間の狙い方になる', () => {
+  const st = TF.newState(0);
+  st.bld.hq.lv = 12;
+  const f = TF.normalizeForm(st, [{ type: 'inf', hero: null, lane: 2, lx: 2.4, adv: 9 }, { type: 'inf', hero: null, lane: 2, lx: 5, adv: -9 }, { type: 'inf', hero: null, lane: null, lx: 1, adv: 0.5 }]);
+  assert.strictEqual(f[0].lx, 2.4); assert.strictEqual(f[0].adv, K.advMax, '前に置ける範囲を超えた');
+  assert.strictEqual(f[1].lx, undefined, '列から離れた位置が通った'); assert.strictEqual(f[1].adv, K.advMin);
+  assert.strictEqual(f[2].lx, undefined, '列なしで位置が通った');
+  const p = TF.prepareBattle(st, [{ type: 'inf', hero: null, lane: 3, lx: 3.3, adv: 0.5 }], 30);
+  assert(p.p[0].lane === 3 && p.p[0].lx === 3.3 && p.p[0].adv === 0.5, '出撃の準備で位置が消えた');
+  // 前に置くほど早く着く(ふだんの位置ならこれまでどおり)
+  const pl = ['plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'];
+  const mk = (adv, lx) => ({ type: 'inf', maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: 0, lx: lx, adv: adv });
+  const arr = adv => TF.createBattle([mk(adv)], [mk()], 3, { terrain: { p: pl, e: pl } }).U[0].arrT;
+  assert(arr(K.advMax) < arr(undefined) && arr(undefined) < arr(K.advMin), '前後の位置で到着が変わらない');
+  assert(Math.abs(arr(undefined) - K.app.inf / TF.terrMove('plain', 'inf')) < 1e-12);
+  // 狙い方: 列の間は、となりの列との中間
+  assert.strictEqual(TF.laneW(K.laneAim, 1), K.laneAim[1]);
+  const mid = TF.laneW(K.laneAim, 0.5);
+  assert(mid < K.laneAim[0] && mid > K.laneAim[1]);
+  function share(lx) {
+    const b = TF.createBattle([Object.assign(mk(), { lane: Math.round(lx), lx: lx, maxHp: 1e7 })], [Object.assign(mk(), { lane: 0, maxHp: 1e7 }), Object.assign(mk(), { lane: 1, maxHp: 1e7 })], 9, { record: true });
+    b.step(60);
+    const a = b.ev.filter(x => x.k === 'atk' && x.s === 0);
+    return a.filter(x => x.d === 2).length / a.length;
+  }
+  const s0 = share(0), s5 = share(0.5), s1 = share(1);
+  assert(s0 < 0.4 && s1 > 0.6 && s5 > s0 + 0.15 && s5 < s1 - 0.15, '列の間で狙い方が中間にならない ' + [s0, s5, s1]);
+});
 check('ステージ: 地形は7列×両軍、敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
   assert.strictEqual(K.laneN, 7);
   for (let s = 1; s <= 200; s += 7) {

@@ -267,8 +267,9 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .skb.dead{opacity:.35}
 .deploybar{position:absolute;left:6px;right:6px;bottom:6px;z-index:4;background:rgba(14,19,12,.9);border:1px solid #4a5a3a;border-radius:14px;padding:7px 9px;color:var(--text);font-size:11.5px;line-height:1.4}
 .deploybar .tt{font-weight:900;font-size:14px;color:var(--gold)}
-.deploybar .trn{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
-.deploybar .trn button{padding:2px 7px;border-radius:9px;background:#22301c;border:1px solid #3d4a33;color:var(--sub);font-size:11px}
+.deploybar .trn{display:flex;flex-wrap:nowrap;gap:4px;margin:6px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.deploybar .trn::-webkit-scrollbar{display:none}
+.deploybar .trn button{flex:none;white-space:nowrap;padding:2px 7px;border-radius:9px;background:#22301c;border:1px solid #3d4a33;color:var(--sub);font-size:11px}
 .deploybar .trn b{color:var(--text);margin-right:3px}
 .deploybar .row2{display:flex;align-items:center;gap:8px}
 .deploybar .wrp{font-weight:900;font-size:15px}
@@ -569,6 +570,12 @@ var TF = (function () {
   function terrAtk(tr, t) { var a = TERRAIN[tr].atk; return a[t] || a.all || 1; }
   function terrTake(tr, t) { var a = TERRAIN[tr].take; return a[t] || a.all || 1; }
   function terrMove(tr, t) { var a = TERRAIN[tr].move; return a[t] || a.all || 1; }
+  // 列の距離 d(小数も可)に応じた重み。自由配置で列の間に置いた部隊は、となりの列との間の値になる
+  function laneW(arr, d) {
+    var i = Math.floor(d), f = d - i;
+    if (i >= arr.length - 1) return arr[arr.length - 1];
+    return f ? arr[i] + (arr[i + 1] - arr[i]) * f : arr[i];
+  }
 
   // ====== バランス調整値 ======
   var K = {
@@ -581,6 +588,9 @@ var TF = (function () {
     // 移動: 陣地から射撃位置までの所要時間(秒・地形の速さで割る)。砲兵は陣地から撃てる。
     // 列の移動は1列あたりの秒数。増援は後方から来るので resApp 倍かかり、前線基地(占領した拠点)1つごとに fwdApp ずつ短くなる
     app: { inf: 1.6, at: 1.7, tank: 1.1, art: 0 }, side: { inf: 1.0, at: 1.1, tank: 0.7, art: 1.5 }, resApp: 1.3, fwdApp: 0.3,
+    // 配置の奥行き(adv): 出撃線(0)から射撃位置(1)へどれだけ前に置いたか。ふだん(おまかせ・敵)は advDef で、app はそのときの所要時間。
+    // 自由配置では advMin〜advMax の範囲に置け、前に置くほど早く着く(所要時間は (1-adv)/(1-advDef) 倍)
+    advDef: 0.4, advMin: -0.1, advMax: 0.6,
     // 拠点: 敵部隊を撃破すると前線が進んで拠点を占領。占領した拠点は前線基地になり(増援+1・ポイント回復が速く)、
     // 特殊ユニットを1回発進できる(攻撃ヘリ・対地攻撃機・自爆ドローン)。味方がやられると拠点を奪われる
     postRate: 0.3, postRes: 1, supDelay: 1.2, supGap: 1.5, supMul: 0.6, supHeli: 0.9, supHeliTank: 1.5, supHeliN: 4, supAir: 0.8, supDrone: 3.0,
@@ -967,16 +977,29 @@ var TF = (function () {
       var h = f && f.hero && st.heroes[f.hero] && !used[f.hero] ? f.hero : null;
       if (h) used[h] = true;
       var ln = f && typeof f.lane === 'number' && f.lane >= 0 && f.lane < K.laneN ? f.lane | 0 : null;
-      out.push({ type: t, hero: h, lane: ln });
+      var o = { type: t, hero: h, lane: ln };
+      // 自由配置: 横の位置(列の番号を小数で)と奥行き
+      if (ln !== null && typeof f.lx === 'number' && f.lx >= 0 && f.lx <= K.laneN - 1 && Math.abs(f.lx - ln) <= 0.5) o.lx = f.lx;
+      if (ln !== null && typeof f.adv === 'number' && isFinite(f.adv)) o.adv = Math.max(K.advMin, Math.min(K.advMax, f.adv));
+      out.push(o);
     }
     return out;
   }
   function formSquads(st, form) {
-    return form.map(function (f) { var q = squadStats(st, f.type, f.hero); if (f.lane !== null && f.lane !== undefined) q.lane = f.lane; return q; });
+    return form.map(function (f) {
+      var q = squadStats(st, f.type, f.hero);
+      if (f.lane !== null && f.lane !== undefined) { q.lane = f.lane; if (typeof f.lx === 'number') q.lx = f.lx; if (typeof f.adv === 'number') q.adv = f.adv; }
+      return q;
+    });
   }
   // おまかせ配置: 強い部隊から順に、相性の良い敵がいて地形が合う列へ(同じ列に集まりすぎないように)
   function autoLanes(st, form, s) {
-    var info = stageInfo(s), T = info.terrain, out = form.map(function (f) { return { type: f.type, hero: f.hero, lane: f.lane }; });
+    var info = stageInfo(s), T = info.terrain, out = form.map(function (f) {
+      var o = { type: f.type, hero: f.hero, lane: f.lane };
+      if (typeof f.lx === 'number') o.lx = f.lx;
+      if (typeof f.adv === 'number') o.adv = f.adv;
+      return o;
+    });
     var cnt = [];
     for (var L = 0; L < K.laneN; L++) cnt.push(0);
     out.forEach(function (f) { if (f.lane !== null && f.lane !== undefined) cnt[f.lane]++; });
@@ -1041,9 +1064,12 @@ var TF = (function () {
       var u = {
         id: U.length, side: side, slot: slot, type: q.type, hp: q.maxHp, maxHp: q.maxHp, atk: q.atk, cd: q.cd,
         next: (at || 0) + (at ? 1.4 : 0.3) + rnd() * 0.7 * q.cd, alive: true, hero: q.hero, boss: q.boss, sk: null, skNext: Infinity, skLast: 0, order: null,
-        stance: 0, reserve: !!at, vs: q.vs || null, lane: ln, arrT: at || 0
+        stance: 0, reserve: !!at, vs: q.vs || null, lane: ln, arrT: at || 0,
+        // lx: 横の位置(列の番号。自由配置では小数)。adv: 配置の奥行き(前に置くほど早く着く)
+        lx: ln === null ? null : !at && lane === undefined && typeof q.lx === 'number' ? q.lx : ln,
+        adv: at || typeof q.adv !== 'number' ? K.advDef : q.adv
       };
-      var ap = approach(side, u.type, ln, at ? Math.max(0.4, K.resApp - K.fwdApp * fwd(side)) : 1);
+      var ap = approach(side, u.type, ln, at ? Math.max(0.4, K.resApp - K.fwdApp * fwd(side)) : u.adv === K.advDef ? 1 : (1 - u.adv) / (1 - K.advDef));
       if (ap > 0) { u.arrT = (at || 0) + ap; u.next += ap; }
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       U.push(u); live[side].push(u);
@@ -1056,13 +1082,13 @@ var TF = (function () {
     var ev = opt.record ? [] : null;
     var t = 0, winner = -1, done = false, maxT = K.maxT;
     var auto = opt.auto !== false; // false: 自軍のスキル・増援・配置は手動
-    function laneDist(a, b) { return a.lane === null || b.lane === null || a.lane === undefined || b.lane === undefined ? 0 : Math.abs(a.lane - b.lane); }
+    function laneDist(a, b) { return a.lx === null || b.lx === null || a.lx === undefined || b.lx === undefined ? 0 : Math.abs(a.lx - b.lx); }
     // 増援を出す列: 相性の良い敵が近く、味方が少ない列
     function chooseLane(side, ty) {
       var best = (K.laneN - 1) >> 1, bs = -1e9, foes = live[1 - side];
       for (var L = 0; L < K.laneN; L++) {
         var sc = 0, own = 0;
-        foes.forEach(function (f) { var d = f.lane === null ? 0 : Math.abs(f.lane - L); sc += K.laneAim[d] * f.hp * (AFF[ty][f.type] - AFF[f.type][ty] * 0.8); });
+        foes.forEach(function (f) { var d = f.lx === null ? 0 : Math.abs(f.lx - L); sc += laneW(K.laneAim, d) * f.hp * (AFF[ty][f.type] - AFF[f.type][ty] * 0.8); });
         live[side].forEach(function (u2) { if (u2.lane === L) own += u2.hp; });
         sc -= own * 0.3;
         if (TR) { var tf = terrAtk(TR[side][L], ty) / terrTake(TR[side][L], ty) * (0.85 + 0.15 * terrMove(TR[side][L], ty)); sc = sc > 0 ? sc * tf : sc / tf; }
@@ -1193,14 +1219,14 @@ var TF = (function () {
       } else {
         u.order = null;
         var aff = AFF2[u.type], tot = 0, LA = u.type === 'art' ? K.laneAimArt : K.laneAim;
-        for (j = 0; j < n; j++) tot += aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * LA[laneDist(u, foes[j])];
+        for (j = 0; j < n; j++) tot += aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * laneW(LA, laneDist(u, foes[j]));
         var r = rnd() * tot;
         f = foes[n - 1];
-        for (j = 0; j < n; j++) { r -= aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * LA[laneDist(u, foes[j])]; if (r <= 0) { f = foes[j]; break; } }
+        for (j = 0; j < n; j++) { r -= aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * laneW(LA, laneDist(u, foes[j])); if (r <= 0) { f = foes[j]; break; } }
       }
       if (rnd() < K.miss) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
       var crit = rnd() < K.crit, vm = u.vs && u.vs[f.type] || 1;
-      var ld = u.type === 'art' ? 1 : K.laneDmg[laneDist(u, f)];
+      var ld = u.type === 'art' ? 1 : laneW(K.laneDmg, laneDist(u, f));
       var h = hit(u, f, u.atk * AFF[u.type][f.type] * vm * ld * (0.9 + rnd() * 0.2) * (crit ? K.critMul : 1));
       if (ev) { var e1 = { t: t, k: 'atk', s: u.id, d: f.id, dmg: Math.abs(h), crit: crit ? 1 : 0, kill: h < 0 ? 1 : 0 }; if (vm > 1) e1.sp = 1; ev.push(e1); }
     }
@@ -1311,20 +1337,20 @@ var TF = (function () {
         if (ptsAt(0, t) < K.resCost) return null;
         return deploy(0, ty, typeof lane === 'number' && lane >= 0 && lane < K.laneN ? lane | 0 : undefined).id;
       },
-      // 部隊を別の列へ動かす(手動のとき)
+      // 部隊を横へ動かす(手動のとき)。lane は列の番号で、小数なら列の間の好きな位置
       setLane: function (id, lane, now) {
         var u = U[id];
-        if (done || auto || !u || !u.alive || u.side !== 0 || typeof lane !== 'number' || !(lane >= 0 && lane < K.laneN)) return false;
+        if (done || auto || !u || !u.alive || u.side !== 0 || typeof lane !== 'number' || !(lane >= 0 && lane <= K.laneN - 1)) return false;
         var tt = Math.max(t, now);
         step(tt);
         if (done || !u.alive) return false;
-        var from = u.lane, nl = lane | 0, dur = 0;
-        if (nl === from) return false;
+        var from = u.lane, fx = u.lx, nl = Math.round(lane), dur = 0;
+        if (fx !== null && fx !== undefined && Math.abs(lane - fx) < 1e-6) return false;
         // 横への移動には時間がかかる(地形が悪いと遅い)。移動中は撃てない
-        if (TR && from !== null && from !== undefined) dur = Math.abs(nl - from) * K.side[u.type] / terrMove(TR[0][nl], u.type);
-        u.lane = nl;
+        if (TR && fx !== null && fx !== undefined) dur = Math.abs(lane - fx) * K.side[u.type] / terrMove(TR[0][nl], u.type);
+        u.lane = nl; u.lx = lane;
         if (dur > 0) { u.arrT = Math.max(u.arrT, tt + dur); u.next = Math.max(u.next, u.arrT); }
-        if (ev) ev.push({ t: tt, k: 'lane', s: u.id, lane: u.lane, from: from, dur: dur });
+        if (ev) ev.push({ t: tt, k: 'lane', s: u.id, lane: u.lane, lx: lane, from: from, dur: dur });
         return true;
       },
       // 攻撃目標の指示(target=null で自由攻撃に戻す)
@@ -1492,7 +1518,7 @@ var TF = (function () {
     assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
     POST_KIND: POST_KIND, POST_ORDER: POST_ORDER, SUPPORT: SUPPORT,
-    TERRAIN: TERRAIN, TERRAIN_KEYS: TERRAIN_KEYS, terrAtk: terrAtk, terrTake: terrTake, terrMove: terrMove, stageTerrain: stageTerrain, autoLanes: autoLanes,
+    TERRAIN: TERRAIN, TERRAIN_KEYS: TERRAIN_KEYS, terrAtk: terrAtk, terrTake: terrTake, terrMove: terrMove, laneW: laneW, stageTerrain: stageTerrain, autoLanes: autoLanes,
     ARMS: ARMS, ARM_KINDS: ARM_KINDS, ARM_KIND: ARM_KIND, armLv: armLv, armTier: armTier, armName: armName, armMax: armMax, armIsDev: armIsDev,
     armCost: armCost, armEffect: armEffect, armXMax: armXMax,
     partGrade: partGrade, partStages: partStages, partName: partName, partCount: partCount, partDrop: partDrop, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
@@ -3045,7 +3071,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var LANES = [-18, 38, 94, 150, 206, 262, 318], LANEW = 56; // 部隊の列(7列)
     var LMID = 3, COLS = LANES;
     var ZOOM0 = 0.46;                                     // ふだんの拡大率
-    var ZOOMD = 0.24;                                     // 配置のときは戦場全体を見渡す
+    var ZOOMD = 0.27;                                     // 配置のときは戦場全体を見渡す
     var ZMIN = 0.15, ZMAX = 1.8;                          // 拡大・縮小の範囲(いちばん引くと戦場全体が見える)
     var RY = Yd(70), BRIDGES = [10, 80, 150, 220, 290];   // 自軍の陣地の手前を流れる川と、5本の橋
     function laneOfX(x) { var b = 0; for (var i = 1; i < LANES.length; i++) if (Math.abs(x - LANES[i]) < Math.abs(x - LANES[b])) b = i; return b; }
@@ -3054,6 +3080,14 @@ if (typeof module !== 'undefined') module.exports = TF;
     var ZONE = { hw: 26, p: [Yd(96), 146], e: [154, Yd(204)] };
     // 出撃線: 配置した部隊が待つ所(地形の区画の奥)。戦闘が始まると、ここから前線へ進む
     var START = { p: ZONE.p[0] + 10, e: ZONE.e[1] - 10 };
+    // 射撃位置(前線の少し手前)。配置の奥行き adv は、出撃線(0)から射撃位置(1)までのどこに置いたか
+    var FIRE = { p: F0 - 10, e: F0 + 10 };
+    function advToY(side, adv) { return side === 0 ? START.p + adv * (FIRE.p - START.p) : START.e - adv * (START.e - FIRE.e); }
+    function yToAdv(y) { return (y - START.p) / (FIRE.p - START.p); }
+    function xToLx(x) { return Math.max(0, Math.min(LANES.length - 1, (x - LANES[0]) / LANEW)); }
+    // 自軍の配置エリア: 7列の幅いっぱい・出撃線の少し後ろから、自軍の陣地の中ほどまで(前に置くほど早く撃ち始める)
+    var DEP = { x0: LANES[0] - LANEW / 2 + 6, x1: LANES[LANES.length - 1] + LANEW / 2 - 6, y0: advToY(0, TF.K.advMin), y1: advToY(0, TF.K.advMax) };
+    function clampDep(x, y) { return { x: Math.max(DEP.x0, Math.min(DEP.x1, x)), y: Math.max(DEP.y0, Math.min(DEP.y1, y)) }; }
     function riverY(x) { return RY + Math.sin(x * 0.05 + 1.1) * 2.5; }
 
     // ---- カメラ(遠近つき・見回し・拡大縮小) ----
@@ -3563,16 +3597,31 @@ if (typeof module !== 'undefined') module.exports = TF;
     // 部隊の列(エンジンの列番号。なければ中央)
     function laneOfUnit(u) { var e = B.eng && B.eng.U[u.id]; return e && e.lane !== null && e.lane !== undefined ? e.lane : u.lane0 !== undefined ? u.lane0 : LMID; }
     // 列の中での並び: 同じ列の部隊は横に並び、3部隊目からは後ろの段
+    // (自由に置いた部隊はその場所のまま)
     function placeInLanes(side, onlyCol) {
-      var list = B.units.filter(function (u) { return u.side === side && !u.dead; }), by = {};
+      var list = B.units.filter(function (u) { return u.side === side && !u.dead && !u.free; }), by = {};
       list.forEach(function (u) { var L = laneOfUnit(u); (by[L] = by[L] || []).push(u); });
       list.forEach(function (u) {
         var L = laneOfUnit(u), grp = by[L], j = grp.indexOf(u), k = grp.length;
         var row = j < 2 ? 0 : 1, inRow = row === 0 ? Math.min(2, k) : k - 2, jj = row === 0 ? j : j - 2;
-        u.row = row;
         u.col = LANES[L] + (jj - (inRow - 1) / 2) * 20;
         u.homeCol = u.col;
+        if (u.side === 0 && B.phase === 'deploy' || u.homeY === undefined) u.homeY = advToY(side, TF.K.advDef) + (side === 0 ? -1 : 1) * row * 12;
         if (!onlyCol) u.bridge = nearBridge(u.col);
+      });
+      frontRows(side);
+    }
+    // 前線での並び: すぐ横(18以内)により前に置いた部隊がいれば、その後ろの段に付く
+    function frontRows(side) {
+      var list = B.units.filter(function (u) { return u.side === side && !u.dead; });
+      list.forEach(function (u) {
+        var r = 0, fu = side === 0 ? u.homeY : -u.homeY;
+        list.forEach(function (v) {
+          if (v === u || Math.abs(v.col - u.col) >= 18) return;
+          var fv = side === 0 ? v.homeY : -v.homeY;
+          if (fv > fu + 0.01 || (Math.abs(fv - fu) <= 0.01 && v.id < u.id)) r++;
+        });
+        u.row = Math.min(2, r);
       });
     }
     function layout(deploy) {
@@ -3582,11 +3631,11 @@ if (typeof module !== 'undefined') module.exports = TF;
           var r = TF.rngFrom(B.seed + u.id * 97);
           u.jx = (r() - 0.5) * 6; u.jy = (r() - 0.5) * 3;
           u.wx = u.col + u.jx;
-          // 自軍: 配置したときは出撃線、配置を省略したときは川の手前から。敵は出撃線で待つ
+          // 自軍: 配置したときは配置エリア、配置を省略したときは川の手前から。敵は自分の陣地で待つ
           if (side === 0) {
-            if (deploy) { u.wx = u.col + u.jx; u.wy = START.p - u.row * 12; u.bridge = nearBridge(u.col); }
+            if (deploy) { u.wx = u.col + u.jx; u.wy = u.homeY; u.bridge = nearBridge(u.col); }
             else { u.wx = u.col + (u.bridge - u.col) * 0.35 + u.jx; u.wy = RY - 18 - u.row * 7; }
-          } else u.wy = START.e + u.row * 12;
+          } else u.wy = u.homeY;
           B.pillars.push({ wx: u.wx, wy: u.wy, side: side, t: 0.15 * (i + side * 0.5), big: 1 });
         });
       });
@@ -3696,7 +3745,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
     }
     // ---- カメラの追従 ----
-    var CAMD = { y: START.p + 14 }; // 配置のときの視点(下は配置の操作パネルに隠れるので、自軍の出撃線を画面の中ほどに)
+    var CAMD = { y: DEP.y1 + 18 }; // 配置のときの視点(下は配置の操作パネルに隠れるので、自軍の出撃線を画面の中ほどに)
     function updateCam(rdt) {
       if (B.userCam) return;
       if (B.ending) B.camTY = B.front + 4;
@@ -3745,14 +3794,26 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.units.forEach(function (u) {
         if (u.dead) return;
         var eu = B.eng.U[u.id];
-        // 戦闘前(展開中)は出撃線で待つ。配置を省略したときは、川を渡って出撃線へ
+        // 配置中にドラッグしている部隊は指に付いてくる
+        if (B.phase === 'deploy' && B.drag && B.drag.deploy && B.drag.moved && B.drag.u === u) {
+          var dp = clampDep(unproj(B.drag.x, B.drag.y).x, unproj(B.drag.x, B.drag.y).y);
+          u.wx = dp.x; u.wy = dp.y; u.moving = true;
+          return;
+        }
+        // 戦闘前(展開中)は配置した場所で待つ。配置を省略したときは、川を渡って配置エリアへ
         var intro = B.phase === 'intro' || B.phase === 'deploy';
         var hold = B.phase === 'intro' && !B.deployed && u.side === 0 && B.introT < 0.45;
-        var tx = u.col + u.jx, gap = (u.row === 0 ? 10 : 26) + (B.ending && !B.res.win ? 8 : 0);
-        if (u.type === 'art') gap = 80 + u.row * 14; // 砲兵は後方の陣地から撃つ
+        var tx = u.col + u.jx, gap = 10 + 16 * (u.row || 0) + (B.ending && !B.res.win ? 8 : 0);
         var stc = u.side === 0 && !B.ending ? eu.stance : 0;
-        if (stc > 0) gap = u.type === 'art' ? 40 : -3; else if (stc < 0) gap += 40;   // 前進は前線の上、後退はずっと後ろ
-        var ty = hold ? u.wy : intro ? (u.side === 0 ? START.p - u.row * 12 : START.e + u.row * 12) + u.jy : frontAt(tx) + (u.side === 0 ? -gap : gap) + u.jy;
+        if (stc > 0) gap = -3; else if (stc < 0) gap += 40;   // 前進は前線の上、後退はずっと後ろ
+        var hy = u.homeY !== undefined ? u.homeY : advToY(u.side, 0), ty;
+        if (hold) ty = u.wy;
+        else if (intro) ty = hy + u.jy;
+        else if (u.type === 'art') {
+          // 砲兵は置いた場所(後方)から撃つ。前線が下がってきたら少し下がる
+          var fa = frontAt(tx);
+          ty = u.side === 0 ? Math.min(stc > 0 ? fa - 40 : hy - (stc < 0 ? 20 : 0), fa - 30) : Math.max(hy, fa + 30);
+        } else ty = frontAt(tx) + (u.side === 0 ? -gap : gap) + u.jy;
         if (hold) tx = u.wx;
         // 射撃位置へ向かっている間は、エンジンの到着時刻にちょうど着く速さで進む(地形が悪いと遅い)
         var marchT = !intro && !B.ending && eu.arrT > B.clock ? eu.arrT - B.clock : 0;
@@ -3940,7 +4001,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         lane = LANES[cnt.indexOf(Math.min.apply(null, cnt))];
       }
       B.lanePref = null;
-      u.col = lane; u.row = 1; u.jx = (Math.random() - 0.5) * 6; u.jy = (Math.random() - 0.5) * 3;
+      u.col = lane; u.row = 1; u.jx = (Math.random() - 0.5) * 6; u.jy = (Math.random() - 0.5) * 3; u.homeY = advToY(ev.side, 0);
       u.bridge = nearBridge(lane);
       if (ev.side === 0) { u.wx = u.bridge; u.wy = riverY(u.bridge) + 12; } else { u.wx = lane; u.wy = Math.min(START.e + 20, B.front + 120); }
       // 占領した拠点があれば、そこ(前線基地)から出てくる
@@ -4652,12 +4713,30 @@ if (typeof module !== 'undefined') module.exports = TF;
       return sc / (tot || 1) + 0.6 * (TF.terrAtk(T.p[L], t) / TF.terrTake(T.p[L], t) - 1) + 0.25 * (TF.terrMove(T.p[L], t) - 1);
     }
     function deployForm() {
-      return B.units.filter(function (u) { return u.side === 0; }).map(function (u) { var f = B.prep.form[u.id] || {}; return { type: u.type, hero: f.hero || null, lane: laneOfUnit(u) }; });
+      return B.units.filter(function (u) { return u.side === 0; }).map(function (u) {
+        var f = B.prep.form[u.id] || {}, q = B.prep.p[u.id], o = { type: u.type, hero: f.hero || null, lane: laneOfUnit(u) };
+        if (u.free && typeof q.lx === 'number') { o.lx = q.lx; o.adv = q.adv; }
+        return o;
+      });
     }
-    function setDeployLane(u, L) {
-      B.eng.U[u.id].lane = L; B.prep.p[u.id].lane = L;
-      placeInLanes(0, true);
-      text(LANES[L], START.p, TF.TERRAIN[B.info.terrain.p[L]].name + 'へ', '#cfe9ff', 13, 26);
+    // 自由配置: 落とした場所(配置エリアの中)にそのまま置く。重なるときは少し横へずらす
+    function setDeployPos(u, w) {
+      var p = clampDep(w.x, w.y), x = p.x, y = p.y;
+      for (var it = 0; it < 8; it++) {
+        var hit = null;
+        B.units.forEach(function (v) { if (v !== u && v.side === 0 && !v.dead && Math.abs(v.col - x) < 13 && Math.abs(v.homeY - y) < 9) hit = v; });
+        if (!hit) break;
+        var nx = x + (x >= hit.col ? 1 : -1) * 14;
+        if (nx < DEP.x0 || nx > DEP.x1) nx = x - (x >= hit.col ? 1 : -1) * 28;
+        x = Math.max(DEP.x0, Math.min(DEP.x1, nx));
+      }
+      var L = laneOfX(x), lx = Math.round(xToLx(x) * 1000) / 1000, adv = Math.round(yToAdv(y) * 1000) / 1000;
+      u.free = true; u.col = u.homeCol = x; u.homeY = y; u.jx = 0; u.jy = 0; u.bridge = nearBridge(x);
+      var e = B.eng.U[u.id], q = B.prep.p[u.id];
+      e.lane = L; e.lx = lx; q.lane = L; q.lx = lx; q.adv = adv;
+      frontRows(0);
+      var ap = (1 - adv) / (1 - TF.K.advDef);
+      text(x, y, TF.TERRAIN[B.info.terrain.p[L]].name + (u.type === 'art' ? '' : ap < 0.85 ? '・早く着く' : ap > 1.15 ? '・遅く着く' : ''), '#cfe9ff', 13, 26);
       deployPredict();
     }
     var predT = 0;
@@ -4677,7 +4756,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var T = B.info.terrain, seen = {};
       T.p.concat(T.e).forEach(function (k) { seen[k] = 1; });
       var bar = $('deployBar');
-      bar.innerHTML = '<div><span class="tt">部隊の配置</span> 自軍の部隊を左右の列へドラッグ(緑=有利・赤=不利、×は進む速さ)</div>' +
+      bar.innerHTML = '<div><span class="tt">部隊の配置</span> 好きな場所へドラッグ(緑=有利・赤=不利・×=進む速さ。前ほど早く撃ち始める)</div>' +
         '<div class="trn">' + TF.TERRAIN_KEYS.filter(function (k) { return seen[k]; }).map(function (k) { return '<button data-act="terrain-info" data-k="' + k + '"><b>' + TF.TERRAIN[k].name + '</b>' + esc(TF.TERRAIN[k].short) + '</button>'; }).join('') + '</div>' +
         '<div class="row2"><span class="wrp grow" id="dpWr"></span><button class="btn sub" data-act="deploy-auto">おまかせ配置</button><button class="btn" data-act="deploy-go">戦闘開始 ▶</button></div>' +
         '<label><input type="checkbox" data-act="deploy-skipnext"' + (st.flags && st.flags.skipDeploy ? ' checked' : '') + '> 次から配置を省略(おまかせ配置で始める)</label>';
@@ -4687,7 +4766,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     function deployAuto() {
       if (!B || B.phase !== 'deploy') return;
       var f = TF.autoLanes(st, deployForm().map(function (x) { return { type: x.type, hero: x.hero, lane: null }; }), B.info.s);
-      B.units.filter(function (u) { return u.side === 0; }).forEach(function (u) { B.eng.U[u.id].lane = f[u.id].lane; B.prep.p[u.id].lane = f[u.id].lane; });
+      B.units.filter(function (u) { return u.side === 0; }).forEach(function (u) {
+        var q = B.prep.p[u.id], e = B.eng.U[u.id];
+        u.free = false; e.lane = f[u.id].lane; e.lx = e.lane; q.lane = f[u.id].lane; delete q.lx; delete q.adv;
+      });
       placeInLanes(0, true);
       showHint('おまかせで配置しました', 1.6);
       deployPredict();
@@ -4739,9 +4821,21 @@ if (typeof module !== 'undefined') module.exports = TF;
           }
         });
       }
+      // 配置エリア(前に置くほど早く撃ち始める)
+      var a0 = proj(DEP.x0, DEP.y0), a1 = proj(DEP.x1, DEP.y0), a2 = proj(DEP.x1, DEP.y1), a3 = proj(DEP.x0, DEP.y1);
+      cx.fillStyle = drag ? 'rgba(140,210,255,.13)' : 'rgba(140,210,255,.06)';
+      cx.beginPath(); cx.moveTo(a0.x, a0.y); cx.lineTo(a1.x, a1.y); cx.lineTo(a2.x, a2.y); cx.lineTo(a3.x, a3.y); cx.closePath(); cx.fill();
+      cx.strokeStyle = 'rgba(170,225,255,' + (drag ? 0.85 : 0.5) + ')'; cx.lineWidth = 1.5; cx.setLineDash([6, 5]); cx.stroke(); cx.setLineDash([]);
       if (drag) {
-        var g0 = proj(LANES[dl], START.p);
-        cx.strokeStyle = '#ffe08a'; cx.lineWidth = 2; cx.beginPath(); cx.ellipse(g0.x, g0.y, 22 * g0.s, 8 * g0.s, 0, 0, Math.PI * 2); cx.stroke();
+        // ドラッグ中だけ、配置エリアの名前を前の端に出す
+        var lb = proj(CXW, DEP.y1), lt = '配置エリア ▲前ほど早く撃ち始める';
+        cx.font = '800 11px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+        cx.fillStyle = 'rgba(10,14,9,.7)'; var lw = cx.measureText(lt).width + 10; cx.fillRect(lb.x - lw / 2, lb.y - 17, lw, 15);
+        cx.fillStyle = '#cfe9ff'; cx.fillText(lt, lb.x, lb.y - 3);
+      }
+      if (drag) {
+        var dw = unproj(drag.x, drag.y), dp = clampDep(dw.x, dw.y), g0 = proj(dp.x, dp.y);
+        cx.strokeStyle = '#ffe08a'; cx.lineWidth = 2; cx.beginPath(); cx.ellipse(g0.x, g0.y, 16 * g0.s, 6 * g0.s, 0, 0, Math.PI * 2); cx.stroke();
       }
       cx.restore();
     }
@@ -4750,11 +4844,12 @@ if (typeof module !== 'undefined') module.exports = TF;
       var stc = rel > 0 ? 1 : rel < -20 ? -1 : 0;
       B.eng.order(u.id, null);
       B.eng.setStance(u.id, stc);
-      var L = laneOfX(w.x), moved = false;
-      if (L !== laneOfUnit(u) && B.eng.setLane(u.id, L, B.clock)) { moved = true; placeInLanes(0, true); }
-      else u.col = Math.max(LANES[0] - 20, Math.min(LANES[LANES.length - 1] + 20, w.x));
-      u.jx = 0;
-      text(u.wx, u.wy, moved ? (TF.TERRAIN[B.info.terrain.p[L]].name + 'の列へ') : stc > 0 ? '前進!' : stc < 0 ? '後退' : '移動', stc > 0 ? '#ffe08a' : '#cfe9ff', 14, 30);
+      // 横はなぞった場所へ自由に動かせる(列が変わればその地形に。動いている間は撃てない)
+      var L = laneOfX(w.x), L0 = laneOfUnit(u), e = B.eng.U[u.id], lx = Math.round(xToLx(w.x) * 1000) / 1000, moved = false;
+      if (e.lx !== null && Math.abs(lx - e.lx) >= 0.3 && B.eng.setLane(u.id, lx, B.clock)) moved = true;
+      u.col = u.homeCol = Math.max(DEP.x0, Math.min(DEP.x1, w.x)); u.free = true; u.jx = 0;
+      frontRows(0);
+      text(u.wx, u.wy, moved ? (L !== L0 ? TF.TERRAIN[B.info.terrain.p[L]].name + 'の列へ' : '横へ移動') : stc > 0 ? '前進!' : stc < 0 ? '後退' : '移動', stc > 0 ? '#ffe08a' : '#cfe9ff', 14, 30);
       part(w.x, w.y, { life: 0.45, r: 6, c: 'ring' });
     }
     function issueOrder(u, target) {
@@ -4831,8 +4926,8 @@ if (typeof module !== 'undefined') module.exports = TF;
         B.drag = null;
         if (d.u.dead) return;
         if (d.deploy) {
-          if (!d.moved) { showHint('部隊を左右の列へドラッグして配置', 1.8); return; }
-          setDeployLane(d.u, laneOfX(unproj(d.x, d.y).x));
+          if (!d.moved) { showHint('部隊をドラッグして、配置エリアの好きな場所に置けます', 1.8); return; }
+          setDeployPos(d.u, unproj(d.x, d.y));
           return;
         }
         if (!d.moved) { B.sel = B.sel === d.u ? null : d.u; if (B.sel) showHint('攻撃する敵部隊をタップ', 1.8); return; }
@@ -4914,7 +5009,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           cx.strokeStyle = '#ff5a4e'; cx.lineWidth = 3;
           cx.beginPath(); cx.ellipse(h.x, h.y, hw * 1.2, hw * 0.5, 0, 0, Math.PI * 2); cx.stroke();
         }
-        arrow(s0.x, s0.y - 4, d.x, d.y, 'rgba(90,255,120,.95)', 6);
+        if (!d.deploy) arrow(s0.x, s0.y - 4, d.x, d.y, 'rgba(90,255,120,.95)', 6);
       }
     }
     function drawHint() {
@@ -4950,6 +5045,8 @@ if (typeof module !== 'undefined') module.exports = TF;
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
       },
       // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標
+      worldToScreen: function (x, y) { if (!B) return null; var p = proj(x, y); return { x: p.x, y: p.y }; },
+      debugForm: function () { return B && B.phase === 'deploy' ? deployForm() : null; },
       frontPoint: function (x, rel) { if (!B) return null; var p = proj(x, frontAt(x) + rel); return { x: p.x, y: p.y }; } };
   })();
 
