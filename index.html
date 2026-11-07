@@ -570,6 +570,79 @@ var TF = (function () {
   function terrAtk(tr, t) { var a = TERRAIN[tr].atk; return a[t] || a.all || 1; }
   function terrTake(tr, t) { var a = TERRAIN[tr].take; return a[t] || a.all || 1; }
   function terrMove(tr, t) { var a = TERRAIN[tr].move; return a[t] || a.all || 1; }
+  // ====== 地形マップ ======
+  // 地形は戦場に広がる区域(森林・市街地・丘陵・湿地。それ以外は平原)。区域は少しゆがんだ楕円で、後のものが上に重なる。
+  // 座標: 横 x = 列の番号(0〜6、小数も可)、縦 y = -1(自軍の出撃線)・0(最初の前線)・1(敵の出撃線)
+  // 部隊は「いる場所」の地形の効果を受ける: 戦う場所(前線のすぐ手前)、砲兵は置いた場所。進む速さは通り道の地形で決まる
+  var FIRE_Y = 0.1;      // 前線から射撃位置までの距離
+  var FRONT_STEP = 0.22; // 拠点を1つ取るごとに前線が進む距離
+  // 拠点の場所(前線が進むと手前から占領される。POST_ORDER の順)
+  var POST_POS = [{ x: 0.9, y: -0.34 }, { x: 5.1, y: -0.12 }, { x: 3, y: -0.56 }, { x: 0.9, y: 0.34 }, { x: 5.1, y: 0.12 }, { x: 3, y: 0.56 }];
+  function frontY(fIdx) { return (fIdx - 3) * FRONT_STEP; }
+  function advY(side, adv) { return side === 0 ? -1 + adv * (1 - FIRE_Y) : 1 - adv * (1 - FIRE_Y); }
+  function blobR(b, th) { return 1 + b.a1 * Math.sin(3 * th + b.p1) + b.a2 * Math.sin(5 * th + b.p2); }
+  function inBlob(b, x, y) {
+    var dx = (x - b.x) / b.rx, dy = (y - b.y) / b.ry, r2 = dx * dx + dy * dy;
+    if (r2 > 1.75) return false;
+    var R = blobR(b, Math.atan2(dy, dx));
+    return r2 < R * R;
+  }
+  function terrAt(map, x, y) {
+    if (!map || !map.blobs) return 'plain';
+    for (var i = map.blobs.length - 1; i >= 0; i--) if (inBlob(map.blobs[i], x, y)) return map.blobs[i].k;
+    return 'plain';
+  }
+  // 縦に y0→y1 進む道のり÷速さ(16か所の地形で平均)
+  function marchCost(map, ty, x, y0, y1) {
+    var n = 16, d = (y1 - y0) / n, c = 0;
+    for (var i = 0; i < n; i++) c += Math.abs(d) / terrMove(terrAt(map, x, y0 + d * (i + 0.5)), ty);
+    return c;
+  }
+  // 横に x0→x1 進む道のり÷速さ
+  function sideCost(map, ty, x0, x1, y) {
+    var n = Math.max(2, Math.ceil(Math.abs(x1 - x0) * 4)), d = (x1 - x0) / n, c = 0;
+    for (var i = 0; i < n; i++) c += Math.abs(d) / terrMove(terrAt(map, x0 + d * (i + 0.5), y), ty);
+    return c;
+  }
+  var MARCH0 = 1 - FIRE_Y - (1 - FIRE_Y) * 0.4; // ふだんの位置から射撃位置までの道のり(K.advDef=0.4 のとき)
+  // 戦う場所の縦の位置(砲兵は置いた場所。前線が近づいたら下がる)
+  function fightY(side, type, adv, fIdx) {
+    var f = frontY(fIdx === undefined ? 3 : fIdx);
+    if (type === 'art') { var a = advY(side, adv); return side === 0 ? Math.min(a, f - 2 * FIRE_Y) : Math.max(a, f + 2 * FIRE_Y); }
+    return side === 0 ? f - FIRE_Y : f + FIRE_Y;
+  }
+  // 地図ごとの覚え書き(おまかせ配置・予想勝率で、ふだんの位置の同じ計算を何度もしないように)
+  function mapMemo(map) {
+    if (!map._c) Object.defineProperty(map, '_c', { value: {}, enumerable: false });
+    return map._c;
+  }
+  function fightTerr(map, side, type, x, adv, fIdx) {
+    var plainPos = map && (adv === undefined || adv === K.advDef) && (fIdx === undefined || fIdx === 3);
+    if (plainPos) { var c = mapMemo(map), k = 'f' + side + type + x; return c[k] !== undefined ? c[k] : (c[k] = terrAt(map, x, fightY(side, type, K.advDef))); }
+    return terrAt(map, x, fightY(side, type, adv === undefined ? K.advDef : adv, fIdx));
+  }
+  // 射撃位置に着くまでの秒数(置いた場所から前線へ。mul は増援などの倍率)
+  function arrivalTime(map, side, type, x, adv, fIdx, mul) {
+    if (!K.app[type]) return 0;
+    var plainPos = map && (adv === undefined || adv === K.advDef) && (fIdx === undefined || fIdx === 3);
+    var y0 = advY(side, adv === undefined ? K.advDef : adv), y1 = fightY(side, type, 0, fIdx);
+    if (side === 0 ? y0 >= y1 : y0 <= y1) return 0;
+    var cost;
+    if (plainPos) { var c = mapMemo(map), k = 'a' + side + type + x; cost = c[k] !== undefined ? c[k] : (c[k] = marchCost(map, type, x, y0, y1)); }
+    else cost = marchCost(map, type, x, y0, y1);
+    return K.app[type] * (mul || 1) * cost / MARCH0;
+  }
+  // 通り道の情報(画面の案内用): ふだんの平原と比べた時間の倍率と、いちばん遅い地形
+  function marchInfo(map, side, type, x, adv) {
+    var y0 = advY(side, adv === undefined ? K.advDef : adv), y1 = fightY(side, type, 0), n = 16, slow = 'plain', sm = 9;
+    for (var i = 0; i < n; i++) { var k = terrAt(map, x, y0 + (y1 - y0) * (i + 0.5) / n), m = terrMove(k, type); if (m < sm) { sm = m; slow = k; } }
+    return { time: arrivalTime(map, side, type, x, adv), base: K.app[type] / terrMove('plain', type), slow: slow, slowMove: sm };
+  }
+  // テスト・説明用: 自軍側・敵側をそれぞれ1つの地形にした地図
+  function flatTerrain(pk, ek) {
+    function b(k, y) { return { k: k, x: 3, y: y, rx: 40, ry: 1, a1: 0, a2: 0, p1: 0, p2: 0 }; }
+    return { blobs: [b(pk || 'plain', -1), b(ek || 'plain', 1)] };
+  }
   // 列の距離 d(小数も可)に応じた重み。自由配置で列の間に置いた部隊は、となりの列との間の値になる
   function laneW(arr, d) {
     var i = Math.floor(d), f = d - i;
@@ -825,7 +898,8 @@ var TF = (function () {
   };
   var BOSS_NAMES = { inf: '精鋭突撃隊', at: '重対戦車隊', tank: '重戦車', art: '列車砲' };
   function enemyCount(s) { return s <= 3 ? 2 : s <= 8 ? 3 : s <= 18 ? 4 : s <= 30 ? 5 : s <= 50 ? 6 : s <= 80 ? 7 : 8; }
-  // ステージの地形(自軍側・敵側の5列)。場所の名前で出やすい地形が変わる
+  // ステージの地形マップ。場所の名前で出やすい地形が変わる(平原が多い場所は区域が少ない)。
+  // 区域は自軍側・敵側に交互に置き、前線をまたぐものもある
   function stageTerrain(s) {
     var place = PLACES[hashInt(s * 31 + 7) % PLACES.length], rnd = rngFrom(hashInt(s * 4241 + 77));
     var w = { plain: 3, forest: 2, urban: 1, hill: 2, marsh: 1 };
@@ -835,11 +909,19 @@ var TF = (function () {
     if (/丘陵|高原|峠|鉱山|火山|渓谷/.test(place)) w.hill += 4;
     if (/湿地|河川|海岸/.test(place)) w.marsh += 4;
     if (/雪/.test(place)) { w.forest += 2; w.hill += 1; }
-    var tot = 0; TERRAIN_KEYS.forEach(function (k) { tot += w[k]; });
-    function pick() { var r = rnd() * tot; for (var i = 0; i < TERRAIN_KEYS.length; i++) { r -= w[TERRAIN_KEYS[i]]; if (r <= 0) return TERRAIN_KEYS[i]; } return 'plain'; }
-    var p = [], e = [];
-    for (var i = 0; i < K.laneN; i++) { p.push(pick()); e.push(pick()); }
-    return { p: p, e: e };
+    var keys = ['forest', 'urban', 'hill', 'marsh'], tot = 0;
+    keys.forEach(function (k) { tot += w[k]; });
+    function pick() { var r = rnd() * tot; for (var i = 0; i < keys.length; i++) { r -= w[keys[i]]; if (r <= 0) return keys[i]; } return 'forest'; }
+    var n = Math.round(6 + 8 * tot / (tot + w.plain)), blobs = [];
+    for (var i = 0; i < n; i++) {
+      var k = pick(), sgn = i % 2 ? 1 : -1;
+      blobs.push({
+        k: k, x: -0.4 + rnd() * 6.8, y: sgn * (0.05 + rnd() * 1.05),
+        rx: (0.6 + rnd() * 1.1) * (k === 'urban' ? 0.8 : 1), ry: 0.16 + rnd() * 0.24,
+        a1: 0.08 + rnd() * 0.12, a2: 0.04 + rnd() * 0.08, p1: rnd() * 6.283, p2: rnd() * 6.283
+      });
+    }
+    return { blobs: blobs };
   }
   // 敵の配置: 兵種に合った地形の列を選ぶ(列が偏りすぎないように)
   function enemyLanes(types, terr, s) {
@@ -848,7 +930,8 @@ var TF = (function () {
     types.forEach(function (t) {
       var best = 0, bs = -1e9;
       for (var L2 = 0; L2 < K.laneN; L2++) {
-        var sc = terrAtk(terr.e[L2], t) / terrTake(terr.e[L2], t) + rnd() * 0.35 - cnt[L2] * 0.45 - Math.abs(L2 - (K.laneN - 1) / 2) * 0.04 + 0.2 * (terrMove(terr.e[L2], t) - 1);
+        var tr = fightTerr(terr, 1, t, L2), sp = t === 'art' ? 1 : K.app[t] / terrMove('plain', t) / Math.max(0.05, arrivalTime(terr, 1, t, L2));
+        var sc = terrAtk(tr, t) / terrTake(tr, t) + rnd() * 0.35 - cnt[L2] * 0.45 - Math.abs(L2 - (K.laneN - 1) / 2) * 0.04 + 0.2 * (sp - 1);
         if (sc > bs) { bs = sc; best = L2; }
       }
       cnt[best]++; out.push(best);
@@ -1008,12 +1091,12 @@ var TF = (function () {
     order.forEach(function (i) {
       var t = out[i].type, best = (K.laneN - 1) >> 1, bs = -1e9;
       for (var L2 = 0; L2 < K.laneN; L2++) {
-        var sc = 0;
+        var sc = 0, own = fightTerr(T, 0, t, L2), sp = t === 'art' ? 1 : K.app[t] / terrMove('plain', t) / Math.max(0.05, arrivalTime(T, 0, t, L2));
         info.enemies.forEach(function (e) {
           var d = Math.abs(e.lane - L2), w = (t === 'art' ? K.laneAimArt : K.laneAim)[d];
-          sc += w * e.power * (AFF[t][e.type] * terrTake(T.e[e.lane], e.type) - AFF[e.type][t] * terrTake(T.p[L2], t) * 0.8);
+          sc += w * e.power * (AFF[t][e.type] * terrTake(fightTerr(T, 1, e.type, e.lane), e.type) - AFF[e.type][t] * terrTake(own, t) * 0.8);
         });
-        sc = sc / (info.power || 1) + 0.6 * (terrAtk(T.p[L2], t) / terrTake(T.p[L2], t) - 1) + 0.25 * (terrMove(T.p[L2], t) - 1) - 0.35 * cnt[L2];
+        sc = sc / (info.power || 1) + 0.6 * (terrAtk(own, t) / terrTake(own, t) - 1) + 0.25 * (sp - 1) - 0.35 * cnt[L2];
         if (sc > bs) { bs = sc; best = L2; }
       }
       out[i].lane = best; cnt[best]++;
@@ -1053,11 +1136,18 @@ var TF = (function () {
     opt = opt || {};
     var rnd = rngFrom(seed);
     var U = [], live = [[], []];
-    var TR = opt.terrain ? [opt.terrain.p, opt.terrain.e] : null; // 地形(列ごと)
+    var TR = opt.terrain && opt.terrain.blobs ? opt.terrain : null; // 地形マップ
     // 射撃位置に着くまでの時間(地形があるときだけ。列が決まっていない部隊は移動しない)
-    function approach(side, ty, lane, mul) {
-      if (!TR || lane === null || lane === undefined) return 0;
-      return K.app[ty] * (mul || 1) / terrMove(TR[side][lane], ty);
+    function approach(side, ty, x, adv, mul) {
+      if (!TR || x === null || x === undefined) return 0;
+      return arrivalTime(TR, side, ty, x, adv, PO && fIdx !== undefined ? fIdx : 3, mul);
+    }
+    // 部隊がいま戦っている場所の地形(前線が動いたら調べ直す)
+    function curTerr(u) {
+      if (!TR || u.lx === null || u.lx === undefined) return null;
+      var fi = PO && fIdx !== undefined ? fIdx : 3;
+      if (u.trF !== fi) { u.trF = fi; u.tr = terrAt(TR, u.lx, fightY(u.side, u.type, u.adv, fi)); }
+      return u.tr;
     }
     function spawn(q, side, slot, at, lane) {
       var ln = lane !== undefined ? lane : q.lane === undefined ? null : q.lane;
@@ -1069,7 +1159,7 @@ var TF = (function () {
         lx: ln === null ? null : !at && lane === undefined && typeof q.lx === 'number' ? q.lx : ln,
         adv: at || typeof q.adv !== 'number' ? K.advDef : q.adv
       };
-      var ap = approach(side, u.type, ln, at ? Math.max(0.4, K.resApp - K.fwdApp * fwd(side)) : u.adv === K.advDef ? 1 : (1 - u.adv) / (1 - K.advDef));
+      var ap = approach(side, u.type, u.lx, at ? K.advDef : u.adv, at ? Math.max(0.4, K.resApp - K.fwdApp * fwd(side)) : 1);
       if (ap > 0) { u.arrT = (at || 0) + ap; u.next += ap; }
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       U.push(u); live[side].push(u);
@@ -1091,7 +1181,7 @@ var TF = (function () {
         foes.forEach(function (f) { var d = f.lx === null ? 0 : Math.abs(f.lx - L); sc += laneW(K.laneAim, d) * f.hp * (AFF[ty][f.type] - AFF[f.type][ty] * 0.8); });
         live[side].forEach(function (u2) { if (u2.lane === L) own += u2.hp; });
         sc -= own * 0.3;
-        if (TR) { var tf = terrAtk(TR[side][L], ty) / terrTake(TR[side][L], ty) * (0.85 + 0.15 * terrMove(TR[side][L], ty)); sc = sc > 0 ? sc * tf : sc / tf; }
+        if (TR) { var tr = terrAt(TR, L, fightY(side, ty, K.advDef, fIdx)), tf = terrAtk(tr, ty) / terrTake(tr, ty) * (0.85 + 0.15 * terrMove(tr, ty)); sc = sc > 0 ? sc * tf : sc / tf; }
         if (sc > bs) { bs = sc; best = L; }
       }
       return best;
@@ -1192,8 +1282,9 @@ var TF = (function () {
 
     function hit(u, f, raw) {
       if (TR) {
-        if (u.lane !== null && u.lane !== undefined) raw *= terrAtk(TR[u.side][u.lane], u.type);
-        if (f.lane !== null) raw *= terrTake(TR[f.side][f.lane], f.type);
+        var ta = u.type === 'sup' ? null : curTerr(u), tf = curTerr(f);
+        if (ta) raw *= terrAtk(ta, u.type);
+        if (tf) raw *= terrTake(tf, f.type);
       }
       if (t < atkUntil[u.side]) raw *= atkMulv[u.side];
       if (t < armUntil[f.side]) raw *= SKILL.armor.mul;
@@ -1347,8 +1438,8 @@ var TF = (function () {
         var from = u.lane, fx = u.lx, nl = Math.round(lane), dur = 0;
         if (fx !== null && fx !== undefined && Math.abs(lane - fx) < 1e-6) return false;
         // 横への移動には時間がかかる(地形が悪いと遅い)。移動中は撃てない
-        if (TR && fx !== null && fx !== undefined) dur = Math.abs(lane - fx) * K.side[u.type] / terrMove(TR[0][nl], u.type);
-        u.lane = nl; u.lx = lane;
+        if (TR && fx !== null && fx !== undefined) dur = K.side[u.type] * sideCost(TR, u.type, fx, lane, fightY(0, u.type, u.adv, PO ? fIdx : 3));
+        u.lane = nl; u.lx = lane; u.trF = -1;
         if (dur > 0) { u.arrT = Math.max(u.arrT, tt + dur); u.next = Math.max(u.next, u.arrT); }
         if (ev) ev.push({ t: tt, k: 'lane', s: u.id, lane: u.lane, lx: lane, from: from, dur: dur });
         return true;
@@ -1518,7 +1609,9 @@ var TF = (function () {
     assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
     POST_KIND: POST_KIND, POST_ORDER: POST_ORDER, SUPPORT: SUPPORT,
-    TERRAIN: TERRAIN, TERRAIN_KEYS: TERRAIN_KEYS, terrAtk: terrAtk, terrTake: terrTake, terrMove: terrMove, laneW: laneW, stageTerrain: stageTerrain, autoLanes: autoLanes,
+    TERRAIN: TERRAIN, TERRAIN_KEYS: TERRAIN_KEYS, terrAtk: terrAtk, terrTake: terrTake, terrMove: terrMove, laneW: laneW,
+    terrAt: terrAt, inBlob: inBlob, blobR: blobR, fightTerr: fightTerr, fightY: fightY, advY: advY, arrivalTime: arrivalTime, marchInfo: marchInfo, flatTerrain: flatTerrain,
+    frontY: frontY, POST_POS: POST_POS, FIRE_Y: FIRE_Y, stageTerrain: stageTerrain, autoLanes: autoLanes,
     ARMS: ARMS, ARM_KINDS: ARM_KINDS, ARM_KIND: ARM_KIND, armLv: armLv, armTier: armTier, armName: armName, armMax: armMax, armIsDev: armIsDev,
     armCost: armCost, armEffect: armEffect, armXMax: armXMax,
     partGrade: partGrade, partStages: partStages, partName: partName, partCount: partCount, partDrop: partDrop, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
@@ -2661,7 +2754,6 @@ if (typeof module !== 'undefined') module.exports = TF;
     st.pending = { s: s, seed: seed, form: prep.form };
     save();
     var rw = prep.info.reward, firstWin = s > st.cleared;
-    prep.rewardM = rw.m * (firstWin ? TF.K.firstMul : 1);
     Battle.play(prep, seed, st.speed, st.auto !== false, function (res) {
       if (!st.pending) return;
       st.pending.win = res.win; st.pending.timeout = res.timeout;
@@ -3087,6 +3179,11 @@ if (typeof module !== 'undefined') module.exports = TF;
     var ZONE = { hw: 26, p: [Yd(96), 146], e: [154, Yd(204)] };
     // 出撃線: 配置した部隊が待つ所(地形の区画の奥)。戦闘が始まると、ここから前線へ進む
     var START = { p: ZONE.p[0] + 10, e: ZONE.e[1] - 10 };
+    // 地形マップの座標(横=列の番号、縦=-1 自軍の出撃線〜0 前線〜1 敵の出撃線)と戦場の座標の変換
+    var HALF = F0 - START.p;
+    function fxW(x) { return LANES[0] + x * LANEW; }
+    function fyW(y) { return F0 + y * HALF; }
+    function terrW(wx, wy) { return TF.terrAt(B.info.terrain, (wx - LANES[0]) / LANEW, (wy - F0) / HALF); }
     // 射撃位置(前線の少し手前)。配置の奥行き adv は、出撃線(0)から射撃位置(1)までのどこに置いたか
     var FIRE = { p: F0 - 10, e: F0 + 10 };
     function advToY(side, adv) { return side === 0 ? START.p + adv * (FIRE.p - START.p) : START.e - adv * (START.e - FIRE.e); }
@@ -3343,7 +3440,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       function occupied(xx, yy) {
         if (Math.abs(xx - CXW) < 160 && yy > Yd(12) && yy < Yd(50)) return true;    // 自軍陣地
         if (Math.abs(xx - CXW) < 160 && yy > Yd(248) && yy < Yd(292)) return true;  // 敵陣地
-        if (xx > LANES[0] - 34 && xx < LANES[LANES.length - 1] + 34 && yy > ZONE.p[0] - 8 && yy < ZONE.e[1] + 8) return true; // 地形の区画は別に描く
+        if (xx > LANES[0] - 40 && xx < LANES[LANES.length - 1] + 40 && yy > fyW(-1.3) && yy < fyW(1.3)) return true; // 戦場の地形は区域どおりに描く
         return false;
       }
       // 林: 両脇に多く、奥と手前にも
@@ -3358,38 +3455,59 @@ if (typeof module !== 'undefined') module.exports = TF;
           props.push({ k: rnd() < (B.biome === 'desert' ? 0.6 : 0.07) ? 'rock' : 'tree', x: tx, y: ty, s: 0.75 + rnd() * 0.6 });
         }
       }
-      // 地形の区画: 列ごとに 平原・森林・市街地・丘陵・湿地(地形効果で有利・不利が変わる)
-      var TRN = B.info.terrain;
-      if (TRN) [['p', ZONE.p], ['e', ZONE.e]].forEach(function (zs) {
-        TRN[zs[0]].forEach(function (tr, L) {
-          var cx0 = LANES[L], cy0 = (zs[1][0] + zs[1][1]) / 2, hw = ZONE.hw, hd = (zs[1][1] - zs[1][0]) / 2, k2;
-          if (tr === 'forest') {
-            g.fillStyle = shade(bio.near, -0.22); g.beginPath(); g.ellipse(cx0, cy0, hw + 2, hd, 0, 0, Math.PI * 2); g.fill();
-            for (k2 = 0; k2 < 30; k2++) { var a = rnd() * Math.PI * 2, rr = 0.55 + rnd() * 0.45; props.push({ k: 'tree', x: cx0 + Math.cos(a) * (hw - 1) * rr, y: cy0 + Math.sin(a) * (hd - 2) * rr, s: 0.75 + rnd() * 0.5 }); }
-          } else if (tr === 'urban') {
-            g.fillStyle = shade(bio.road, 0.18); g.fillRect(cx0 - hw, cy0 - hd + 2, hw * 2, hd * 2 - 4);
-            g.strokeStyle = shade(bio.road, -0.15); g.lineWidth = 1.6; g.beginPath(); g.moveTo(cx0 - hw, cy0); g.lineTo(cx0 + hw, cy0); g.moveTo(cx0, cy0 - hd + 2); g.lineTo(cx0, cy0 + hd - 2); g.stroke();
-            g.beginPath(); g.moveTo(cx0 - hw, cy0 - hd * 0.5); g.lineTo(cx0 + hw, cy0 - hd * 0.5); g.moveTo(cx0 - hw, cy0 + hd * 0.5); g.lineTo(cx0 + hw, cy0 + hd * 0.5); g.stroke();
-            [[-1, -1], [1, -1], [-1, 1], [1, 1], [-1, 0.2], [1, -0.2], [-1, -0.6], [1, 0.6], [-1, 0.65], [1, -0.7]].forEach(function (q) {
-              props.push({ k: 'house', x: cx0 + q[0] * (hw - 6) + (rnd() - 0.5) * 3, y: cy0 + q[1] * (hd - 7) + (rnd() - 0.5) * 3, w: 6 + rnd() * 3, d: 5 + rnd() * 2, h: 3.5 + rnd() * 2.5, roof: bio.roofs[Math.floor(rnd() * 3)], gable: B.biome !== 'desert' });
-            });
-          } else if (tr === 'hill') {
-            [[1.0, 0.1], [0.72, 0.2], [0.45, 0.3]].forEach(function (q) {
-              g.fillStyle = shade(bio.near, q[1]); g.beginPath(); g.ellipse(cx0, cy0, (hw + 4) * q[0], hd * q[0], 0, 0, Math.PI * 2); g.fill();
-              g.strokeStyle = shade(bio.near, -0.25); g.lineWidth = 0.35; g.stroke();
-            });
-            for (k2 = 0; k2 < 5; k2++) props.push({ k: 'rock', x: cx0 + (rnd() - 0.5) * hw * 1.6, y: cy0 + (rnd() < 0.5 ? -1 : 1) * hd * 0.75, s: 0.6 + rnd() * 0.4 });
-          } else if (tr === 'marsh') {
-            g.fillStyle = shade(bio.near, -0.12); g.beginPath(); g.ellipse(cx0, cy0, hw + 2, hd, 0, 0, Math.PI * 2); g.fill();
-            for (k2 = 0; k2 < 18; k2++) {
-              var mx2 = cx0 + (rnd() - 0.5) * hw * 1.7, my2 = cy0 + (rnd() - 0.5) * hd * 1.6;
-              g.fillStyle = bio.pond; g.globalAlpha = 0.75; g.beginPath(); g.ellipse(mx2, my2, 2.5 + rnd() * 4, 1.4 + rnd() * 2, rnd() * 3, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
-              g.strokeStyle = shade(bio.tree2, -0.1); g.lineWidth = 0.4; g.beginPath(); for (var rr2 = 0; rr2 < 3; rr2++) { g.moveTo(mx2 + 3 + rr2, my2); g.lineTo(mx2 + 3.4 + rr2, my2 + 2.2); } g.stroke();
-            }
-          } else {
-            g.fillStyle = bio.patch; g.beginPath(); g.ellipse(cx0, cy0, hw, hd * 0.85, 0, 0, Math.PI * 2); g.fill();
+      // 地形の区域(戦闘の計算とまったく同じ形): 森林・市街地・丘陵・湿地。区域の外は平原。後の区域が上に重なる
+      var TM = B.info.terrain;
+      function blobPath(b, sc) {
+        g.beginPath();
+        for (var a = 0; a <= 72; a++) {
+          var th = a / 72 * Math.PI * 2, R = TF.blobR(b, th) * (sc || 1);
+          var px = fxW(b.x + b.rx * R * Math.cos(th)), py = fyW(b.y + b.ry * R * Math.sin(th));
+          if (a) g.lineTo(px, py); else g.moveTo(px, py);
+        }
+        g.closePath();
+      }
+      // 区域の中で、その地形が見えている(後の区域に覆われていない)点に物を置く
+      function scatter(b, n, fn) {
+        var bx = fxW(b.x), by = fyW(b.y), rxw = b.rx * LANEW * 1.3, ryw = b.ry * HALF * 1.3;
+        for (var i = 0; i < n * 4 && n > 0; i++) {
+          var px = bx + (rnd() * 2 - 1) * rxw, py = by + (rnd() * 2 - 1) * ryw;
+          if (!TF.inBlob(b, (px - LANES[0]) / LANEW, (py - F0) / HALF) || terrW(px, py) !== b.k) continue;
+          fn(px, py); n--;
+        }
+      }
+      if (TM && TM.blobs) TM.blobs.forEach(function (b) {
+        var area = Math.PI * b.rx * LANEW * b.ry * HALF, k2;
+        if (b.k === 'forest') {
+          g.fillStyle = shade(bio.near, -0.2); blobPath(b, 1.03); g.fill();
+          g.fillStyle = shade(bio.near, -0.28); blobPath(b, 0.75); g.fill();
+          scatter(b, Math.round(area / 40), function (px, py) { props.push({ k: 'tree', x: px, y: py, s: 0.7 + rnd() * 0.55 }); });
+        } else if (b.k === 'urban') {
+          g.fillStyle = shade(bio.road, 0.2); blobPath(b); g.fill();
+          g.save(); blobPath(b); g.clip();
+          var gx0 = fxW(b.x - b.rx * 1.4), gx1 = fxW(b.x + b.rx * 1.4), gy0 = fyW(b.y - b.ry * 1.4), gy1 = fyW(b.y + b.ry * 1.4), gx, gy;
+          g.strokeStyle = shade(bio.road, -0.18); g.lineWidth = 1.8; g.beginPath();
+          for (gx = gx0; gx <= gx1; gx += 17) { g.moveTo(gx, gy0); g.lineTo(gx, gy1); }
+          for (gy = gy0; gy <= gy1; gy += 15) { g.moveTo(gx0, gy); g.lineTo(gx1, gy); }
+          g.stroke(); g.restore();
+          for (gx = gx0; gx < gx1; gx += 17) for (gy = gy0; gy < gy1; gy += 15) {
+            var hx = gx + 8.5, hy = gy + 7.5;
+            if (!TF.inBlob(b, (hx - LANES[0]) / LANEW, (hy - F0) / HALF) || terrW(hx, hy) !== 'urban' || rnd() < 0.12) continue;
+            props.push({ k: 'house', x: hx + (rnd() - 0.5) * 2, y: hy + (rnd() - 0.5) * 2, w: 7 + rnd() * 4, d: 5.5 + rnd() * 3, h: 3.5 + rnd() * 3.5, roof: bio.roofs[Math.floor(rnd() * 3)], gable: B.biome !== 'desert' });
           }
-        });
+        } else if (b.k === 'hill') {
+          [[1.0, 0.08], [0.78, 0.15], [0.56, 0.22], [0.34, 0.29]].forEach(function (q) {
+            g.fillStyle = shade(bio.near, q[1]); blobPath(b, q[0]); g.fill();
+            g.strokeStyle = shade(bio.near, -0.22); g.lineWidth = 0.4; g.stroke();
+          });
+          scatter(b, Math.round(area / 500) + 2, function (px, py) { props.push({ k: 'rock', x: px, y: py, s: 0.6 + rnd() * 0.4 }); });
+        } else if (b.k === 'marsh') {
+          g.fillStyle = shade(bio.near, -0.14); blobPath(b, 1.02); g.fill();
+          g.fillStyle = 'rgba(70,90,60,.25)'; blobPath(b, 0.7); g.fill();
+          scatter(b, Math.round(area / 45), function (mx2, my2) {
+            g.fillStyle = bio.pond; g.globalAlpha = 0.75; g.beginPath(); g.ellipse(mx2, my2, 2.5 + rnd() * 4, 1.4 + rnd() * 2, rnd() * 3, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1;
+            g.strokeStyle = shade(bio.tree2, -0.1); g.lineWidth = 0.4; g.beginPath(); for (var rr2 = 0; rr2 < 3; rr2++) { g.moveTo(mx2 + 3 + rr2, my2); g.lineTo(mx2 + 3.4 + rr2, my2 + 2.2); } g.stroke();
+          });
+        }
       });
       // 村(戦場の脇に家が数軒)
       [[-30, 150], [330, 158], [-14, 238], [314, 100], [-50, 60], [350, 250], [-60, 300], [360, 20]].forEach(function (v, vi) {
@@ -3554,9 +3672,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         B.blds.push({ k: 'bld', x: X(h[0]), y: Yd(h[1] + 18), w: h[2], d: h[3], h: h[4], owner: 1, home: 1, fragile: true, hp: 2.0, roofType: h[5] === 'tower' ? 'flat' : undefined, tower: h[5] === 'tower' });
       });
       // 戦場の拠点(旗)。前線のどちら側にあるかで色が変わる
-      B.posts = [[24, 118], [176, 121], [100, 94], [28, 184], [172, 181], [100, 210]].map(function (p) {
-        return { x: X(p[0]), y: Yd(p[1]), owner: p[1] < F0 ? 0 : 1, flipT: -9 };
-      });
+      B.posts = TF.POST_POS.map(function (p) { return { x: fxW(p.x), y: fyW(p.y), owner: p.y < 0 ? 0 : 1, flipT: -9 }; });
       CAM.x = CXW; CAM.y = Yd(128); CAM.z = 0.22; // 最初は戦場全体を引きで見せ、前線へ寄っていく
       if (B.phase === 'deploy') { CAM.y = CAMD.y; CAM.z = ZOOMD; }
       setSpeed(speed);
@@ -3567,7 +3683,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       layout(B.phase === 'deploy');
       $('camReset').classList.add('hidden');
       if (B.phase === 'deploy') startDeploy();
-      B.defs = prep.reserves.p.defs; B.rewardM = prep.rewardM || 0; B.coinShown = 0; B.coins = []; B.lanePref = null;
+      B.defs = prep.reserves.p.defs; B.lanePref = null;
       buildCardBar();
       if (B.phase === 'deploy') $('cardBar').classList.add('hidden');
       else if (st.flags && st.flags.skipDeploy) showHint('配置は省略中(出撃画面の「配置」で戻せます)', 3.5);
@@ -3673,20 +3789,34 @@ if (typeof module !== 'undefined') module.exports = TF;
     function startEnding() {
       B.res = B.eng.result(); B.ending = 1; B.endT = 0; B.drag = null; B.sel = null; B.pan = null; B.pinch = null;
       B.userCam = false; $('camReset').classList.add('hidden');
-      // 勝ったら、撃破した敵部隊のいた場所からコインが出て報酬に集まる
-      if (B.res.win) B.units.forEach(function (u) { if (u.side === 1) spawnCoins({ x: u.wx, y: u.wy, h: 1.5 }, u.boss ? 14 : 8); });
     }
     function fxNow() { return B.introT + B.clock + B.endT; }
-    // 戦闘開始: 地形で進む速さが大きく変わる部隊に、ひとこと出す
+    // 部隊が戦う場所の地形の効果(攻撃・守り)を、部隊の上に出す
+    function terrNote(u) {
+      var e = B.eng.U[u.id], pi = B.eng.postInfo ? B.eng.postInfo() : null;
+      if (!B.info.terrain || e.lx === null || e.lx === undefined) return;
+      var k = TF.fightTerr(B.info.terrain, u.side, u.type, e.lx, e.adv, pi ? pi.front : 3);
+      var a = TF.terrAtk(k, u.type), tk = TF.terrTake(k, u.type), parts = [];
+      if (a !== 1) parts.push('攻' + (a > 1 ? '+' : '') + Math.round((a - 1) * 100) + '%');
+      if (tk !== 1) parts.push(tk < 1 ? '守+' + Math.round((1 - tk) * 100) + '%' : '被ダメ+' + Math.round((tk - 1) * 100) + '%');
+      if (!parts.length) return;
+      // 同じ地形・同じ効果の部隊が続けて着いたら、ひとことは1回だけ
+      var key = k + parts.join(''), nt = B.noteT || (B.noteT = {});
+      if (nt[key] !== undefined && B.clock - nt[key] < 1.5) return;
+      nt[key] = B.clock;
+      text(u.wx, u.wy, TF.TERRAIN[k].name + ' ' + parts.join(' '), a / tk >= 1 ? '#bfffc8' : '#ffb3a8', 12, 40);
+    }
+    // 戦闘開始: 地形で進む速さが大きく変わる部隊に、ひとこと出す(砲兵は陣地の地形)
     function marchNotes() {
       var T = B.info.terrain, said = {};
       if (!T) return;
+      B.units.forEach(function (u) { if (u.side === 0 && !u.dead && u.type === 'art') terrNote(u); });
       B.units.forEach(function (u) {
         if (u.side !== 0 || u.dead || u.type === 'art' || said[laneOfUnit(u)]) return;
-        var tr = T.p[laneOfUnit(u)], m = TF.terrMove(tr, u.type);
-        if (m <= 0.72 || m >= 1.2) said[laneOfUnit(u)] = 1;
-        if (m <= 0.72) text(u.wx, u.wy, TF.TERRAIN[tr].name + 'で減速', '#ffb3a8', 12, 34);
-        else if (m >= 1.2) text(u.wx, u.wy, TF.TERRAIN[tr].name + 'で快速', '#bfffc8', 12, 34);
+        var e = B.eng.U[u.id], mi = TF.marchInfo(T, 0, u.type, e.lx, e.adv), r = mi.time / (mi.base * (1 - e.adv) / (1 - TF.K.advDef));
+        if (r >= 1.25 || r <= 0.85) said[laneOfUnit(u)] = 1;
+        if (r >= 1.25) text(u.wx, u.wy, TF.TERRAIN[mi.slow].name + 'で減速', '#ffb3a8', 12, 34);
+        else if (r <= 0.85) text(u.wx, u.wy, '平原を快速', '#bfffc8', 12, 34);
       });
     }
     function frame(ts) {
@@ -3696,7 +3826,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       update(dt);
       if (!B) return;
       draw();
-      if (B.ending && B.endT > (B.res.win ? 2.8 : 2.6)) { finish(); return; }
+      if (B.ending && B.endT > (B.res.win ? 2.2 : 2.6)) { finish(); return; }
       raf = requestAnimationFrame(frame);
     }
     function finish() {
@@ -3729,12 +3859,9 @@ if (typeof module !== 'undefined') module.exports = TF;
           B.front += d > 0 ? step : -step;
         }
       } else {
-        var t2 = F0 + 50 * DS * (a - e) + (B.buff[0].atk > B.clock ? 5 : 0) - (B.buff[1].atk > B.clock ? 5 : 0);
-        // 占領した拠点の先まで前線が進む(奪われた拠点の手前まで下がる)
-        B.posts.forEach(function (p, i) {
-          if (i >= 3 && p.owner === 0) t2 = Math.max(t2, p.y + 8);
-          if (i < 3 && p.owner === 1) t2 = Math.min(t2, p.y - 8);
-        });
+        // 前線は拠点を占領するたびに進む(戦闘の計算と同じ位置)。兵力の差で少し揺れる
+        var pi = B.eng.postInfo ? B.eng.postInfo() : null;
+        var t2 = fyW(pi ? TF.frontY(pi.front) : 0) + 10 * (a - e) + (B.buff[0].atk > B.clock ? 4 : 0) - (B.buff[1].atk > B.clock ? 4 : 0);
         B.front += (t2 - B.front) * Math.min(1, gdt * 1.4);
       }
       B.wave += cdt * 0.5;
@@ -3763,13 +3890,17 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.phase === 'deploy') { ty = CAMD.y; z0 = ZOOMD; k = Math.min(1, rdt * 3); }
       else if (B.phase === 'intro' && B.introT < 0.9) z0 = 0.22;
       else if (!B.ending) {
-        // 部隊が前線へ進んでいる間は、両軍の真ん中あたりを少し引いて見る
-        // (視点が動き続けると地面の描き直しが増えるので、前進中かどうかの2段階だけ)
-        var far = 0, sx = 0, n = 0;
-        B.units.forEach(function (u) { if (u.dead) return; sx += u.wx; n++; if (u.march) far = Math.max(far, Math.abs(u.wy - B.front)); });
-        if (far > 40) z0 = ZOOM0 * 0.72;
-        // 横は部隊の多い側へ少し寄せる(細かく動かすと地面の描き直しが増えるので30刻み)
-        if (n) tx = CXW + Math.round(Math.max(-60, Math.min(60, sx / n - CXW)) / 30) * 30;
+        // 両軍の部隊が横に全部入るように引く(端の列の部隊が画面の外に出ないように)。
+        // 部隊が前線へ進んでいる間は、もう少し引いて見る。
+        // (視点が動き続けると地面の描き直しが増えるので、拡大率と横の位置はとびとびの値にする)
+        var far = 0, x0 = 1e9, x1 = -1e9;
+        B.units.forEach(function (u) { if (u.dead) return; x0 = Math.min(x0, u.wx); x1 = Math.max(x1, u.wx); if (u.march) far = Math.max(far, Math.abs(u.wy - B.front)); });
+        if (x1 >= x0) {
+          var span = x1 - x0 + 70, zf = Math.floor(Math.max(0.3, Math.min(ZOOM0, 104 / span)) * 25) / 25;
+          z0 = Math.min(ZOOM0, zf);
+          tx = CXW + Math.round(Math.max(-90, Math.min(90, (x0 + x1) / 2 - CXW)) / 15) * 15;
+        }
+        if (far > 40) z0 = Math.min(z0, ZOOM0 * 0.72);
       }
       // 目に見えないほど近づいたら止める(地面の描き直しを減らす)
       CAM.x = Math.abs(tx - CAM.x) < 0.08 ? tx : CAM.x + (tx - CAM.x) * k;
@@ -3827,6 +3958,9 @@ if (typeof module !== 'undefined') module.exports = TF;
         var marchT = !intro && !B.ending && eu.arrT > B.clock ? eu.arrT - B.clock : 0;
         u.march = marchT > 0;
         u.dest = u.march ? { x: tx, y: ty } : null;
+        // 射撃位置に着いたら、その場所の地形の効果をひとこと
+        if (u.side === 0 && u.wasMarch && !u.march && B.phase === 'fight' && !B.ending) terrNote(u);
+        u.wasMarch = u.march;
         var dFin = Math.hypot(tx - u.wx, ty - u.wy);
         if (u.side === 0) {
           ty = Math.max(RY + 13, ty);
@@ -3871,7 +4005,6 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.hint) { B.hint.t += dtReal; if (B.hint.t > B.hint.dur) B.hint = null; }
       updateSkillBar();
       updateCardBar(); updateSupBar();
-      updateCoins(dtReal);
       B.projs.forEach(function (p) {
         if ((p.kind === 'at' && Math.random() < 0.7) || p.kind === 'rocket') {
           var wk = (B.clock - p.t0) / (p.t1 - p.t0);
@@ -4396,52 +4529,6 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.units.forEach(function (u) { if (u.side === side) n += Math.ceil(u.hp / u.maxHp * u.troop); });
       return n;
     }
-    // ---- コイン回収(勝利時、占領した建物から資金のコインが上の表示へ飛ぶ) ----
-    function spawnCoins(b, n) {
-      var p = proj(b.x, b.y);
-      for (var i = 0; i < n; i++) {
-        B.coins.push({ x: p.x + (Math.random() - 0.5) * 20, y: p.y - b.h * p.k, vx: (Math.random() - 0.5) * 160, vy: -120 - Math.random() * 120, t: 0, delay: Math.random() * 0.25, ph: Math.random() * 6 });
-      }
-      B.coinTotal = (B.coinTotal || 0) + n;
-    }
-    function updateCoins(dt) {
-      if (!B.coins.length) return;
-      var tx = W / 2, ty = 76;
-      B.coins = B.coins.filter(function (c) {
-        c.t += dt;
-        if (c.t < c.delay) return true;
-        var a = c.t - c.delay;
-        if (a < 0.45) { c.x += c.vx * dt; c.y += c.vy * dt; c.vy += 420 * dt; }   // 飛び出す
-        else { var k = Math.min(1, dt * 7); c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; } // 回収
-        if (a > 0.45 && Math.hypot(tx - c.x, ty - c.y) < 10) {
-          B.coinGot = (B.coinGot || 0) + 1; B.coinPulse = 1;
-          return false;
-        }
-        return a < 3;
-      });
-      B.coinPulse = Math.max(0, (B.coinPulse || 0) - dt * 4);
-    }
-    function drawCoins() {
-      var all = B.coinTotal || 0;
-      if (!all) return;
-      B.coins.forEach(function (c) {
-        if (c.t < c.delay) return;
-        var w = Math.abs(Math.cos(c.t * 9 + c.ph)) * 7 + 1.5;
-        cx.fillStyle = '#a8791c'; cx.beginPath(); cx.ellipse(c.x, c.y + 1, w, 8, 0, 0, Math.PI * 2); cx.fill();
-        cx.fillStyle = '#f1c453'; cx.beginPath(); cx.ellipse(c.x, c.y, w, 8, 0, 0, Math.PI * 2); cx.fill();
-        cx.fillStyle = 'rgba(255,255,255,.6)'; cx.beginPath(); cx.ellipse(c.x - w * 0.3, c.y - 3, w * 0.25, 2, 0, 0, Math.PI * 2); cx.fill();
-      });
-      var got = Math.min(1, (B.coinGot || 0) / all);
-      var val = Math.round(B.rewardM * got);
-      var sc = 1 + 0.15 * (B.coinPulse || 0);
-      cx.save(); cx.translate(W / 2, 76); cx.scale(sc, sc);
-      cx.fillStyle = 'rgba(10,14,9,.85)'; rr(-62, -14, 124, 28, 14); cx.fill();
-      cx.strokeStyle = '#f1c453'; cx.lineWidth = 1.5; cx.stroke();
-      cx.fillStyle = '#f1c453'; cx.beginPath(); cx.arc(-44, 0, 8, 0, Math.PI * 2); cx.fill();
-      cx.fillStyle = '#fff'; cx.font = '900 15px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-      cx.fillText('+' + fmt(val), 8, 0.5);
-      cx.restore();
-    }
     function drawHud() {
       cx.fillStyle = 'rgba(10,14,9,.8)'; cx.fillRect(0, 0, W, 62);
       cx.fillStyle = '#d8c27e'; cx.font = '800 13px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'left'; cx.textBaseline = 'top';
@@ -4552,7 +4639,6 @@ if (typeof module !== 'undefined') module.exports = TF;
       drawBanner();
       drawHint();
       if (B.ending) drawEnding();
-      drawCoins();
       drawCardGhost();
       drawDeploy();
     }
@@ -4715,10 +4801,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.units.forEach(function (e) {
         if (e.side !== 1 || e.dead) return;
         var el = laneOfUnit(e), d = Math.abs(el - L), w = (t === 'art' ? TF.K.laneAimArt : TF.K.laneAim)[d];
-        sc += w * e.maxHp * (TF.AFF[t][e.type] * TF.terrTake(T.e[el], e.type) - TF.AFF[e.type][t] * TF.terrTake(T.p[L], t) * 0.8);
+        sc += w * e.maxHp * (TF.AFF[t][e.type] * TF.terrTake(TF.fightTerr(T, 1, e.type, el), e.type) - TF.AFF[e.type][t] * TF.terrTake(TF.fightTerr(T, 0, t, L), t) * 0.8);
       });
       var tot = 0; B.units.forEach(function (e) { if (e.side === 1) tot += e.maxHp; });
-      return sc / (tot || 1) + 0.6 * (TF.terrAtk(T.p[L], t) / TF.terrTake(T.p[L], t) - 1) + 0.25 * (TF.terrMove(T.p[L], t) - 1);
+      var own = TF.fightTerr(T, 0, t, L), sp = t === 'art' ? 1 : TF.K.app[t] / TF.terrMove('plain', t) / Math.max(0.05, TF.arrivalTime(T, 0, t, L));
+      return sc / (tot || 1) + 0.6 * (TF.terrAtk(own, t) / TF.terrTake(own, t) - 1) + 0.25 * (sp - 1);
     }
     function deployForm() {
       return B.units.filter(function (u) { return u.side === 0; }).map(function (u) {
@@ -4743,8 +4830,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       var e = B.eng.U[u.id], q = B.prep.p[u.id];
       e.lane = L; e.lx = lx; q.lane = L; q.lx = lx; q.adv = adv;
       frontRows(0);
-      var ap = (1 - adv) / (1 - TF.K.advDef);
-      text(x, y, TF.TERRAIN[B.info.terrain.p[L]].name + (u.type === 'art' ? '' : ap < 0.85 ? '・早く着く' : ap > 1.15 ? '・遅く着く' : ''), '#cfe9ff', 13, 26);
+      var ft = TF.fightTerr(B.info.terrain, 0, u.type, lx, adv), mi = TF.marchInfo(B.info.terrain, 0, u.type, lx, adv), ap = mi.time / mi.base;
+      text(x, y, (u.type === 'art' ? '陣地: ' : '戦う場所: ') + TF.TERRAIN[ft].name + (u.type === 'art' ? '' : ap < 0.85 ? '・早く着く' : ap > 1.2 ? '・遅く着く' : ''), '#cfe9ff', 13, 26);
       deployPredict();
     }
     var predT = 0;
@@ -4762,7 +4849,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     function startDeploy() {
       $('skillBar').classList.add('hidden'); $('cardBar').classList.add('hidden');
       var T = B.info.terrain, seen = {};
-      T.p.concat(T.e).forEach(function (k) { seen[k] = 1; });
+      seen.plain = 1; (T.blobs || []).forEach(function (b) { seen[b.k] = 1; });
       var bar = $('deployBar');
       bar.innerHTML = '<div><span class="tt">部隊の配置</span> 好きな場所へドラッグ(緑=有利・赤=不利・×=進む速さ。前ほど早く撃ち始める)</div>' +
         '<div class="trn">' + TF.TERRAIN_KEYS.filter(function (k) { return seen[k]; }).map(function (k) { return '<button data-act="terrain-info" data-k="' + k + '"><b>' + TF.TERRAIN[k].name + '</b>' + esc(TF.TERRAIN[k].short) + '</button>'; }).join('') + '</div>' +
@@ -4803,31 +4890,43 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.save();
       for (var L = 0; L < LANES.length; L++) {
         if (L > 0) {
-          var xb = (LANES[L - 1] + LANES[L]) / 2, a = proj(xb, ZONE.p[0] - 8), b = proj(xb, ZONE.e[1] + 8);
-          cx.strokeStyle = 'rgba(255,255,255,.28)'; cx.lineWidth = 1; cx.setLineDash([5, 5]);
+          var xb = (LANES[L - 1] + LANES[L]) / 2, a = proj(xb, DEP.y0), b = proj(xb, fyW(1));
+          cx.strokeStyle = 'rgba(255,255,255,.2)'; cx.lineWidth = 1; cx.setLineDash([5, 5]);
           cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.stroke(); cx.setLineDash([]);
         }
         if (drag) {
-          var sc = laneScore(drag.u.type, L), q0 = proj(LANES[L] - LANEW / 2 + 2, ZONE.p[0] - 6), q1 = proj(LANES[L] + LANEW / 2 - 2, F0 - 2);
+          var sc = laneScore(drag.u.type, L), q0 = proj(LANES[L] - LANEW / 2 + 2, DEP.y0), q1 = proj(LANES[L] + LANEW / 2 - 2, F0 - 2);
           cx.fillStyle = sc > 0.15 ? 'rgba(90,255,120,' + (L === dl ? 0.32 : 0.14) + ')' : sc < -0.1 ? 'rgba(255,90,70,' + (L === dl ? 0.32 : 0.14) + ')' : 'rgba(255,255,255,' + (L === dl ? 0.22 : 0.08) + ')';
           cx.fillRect(q0.x, q1.y, q1.x - q0.x, q0.y - q1.y);
         }
-        [['p', ZONE.p[0] + 2, '#9fe6b4'], ['e', ZONE.e[1] - 2, '#ffb3a8']].forEach(function (z) {
-          var c0 = proj(LANES[L], z[1]), nm = TF.TERRAIN[T[z[0]][L]].name;
-          // ドラッグ中は、その兵種がこの列を進む速さも下に出す(砲兵は陣地から撃つので出さない)
-          var sub = null;
-          if (drag && z[0] === 'p' && drag.u.type !== 'art') { var mv = TF.terrMove(T.p[L], drag.u.type); sub = ['×' + (+mv.toFixed(2)), mv >= 1.05 ? '#bfffc8' : mv <= 0.8 ? '#ffb3a8' : '#e8e8e8']; }
-          cx.font = '800 ' + Math.max(10, Math.round(11 * c0.s)) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
-          var tw = cx.measureText(nm).width + 10;
-          cx.fillStyle = 'rgba(10,14,9,.62)'; cx.fillRect(c0.x - tw / 2, c0.y - 9, tw, 18);
-          cx.fillStyle = z[2]; cx.fillText(nm, c0.x, c0.y);
-          if (sub) {
-            cx.font = '800 11px -apple-system,"Hiragino Sans",sans-serif';
-            var mw = cx.measureText(sub[0]).width + 8;
-            cx.fillStyle = 'rgba(10,14,9,.75)'; cx.fillRect(c0.x - mw / 2, c0.y + 10, mw, 15);
-            cx.fillStyle = sub[1]; cx.fillText(sub[0], c0.x, c0.y + 17.5);
-          }
-        });
+      }
+      // 地形の区域の名前(区域の真ん中に。見えている区域だけ)
+      cx.font = '800 11px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      (T && T.blobs || []).forEach(function (b) {
+        if (TF.terrAt(T, b.x, b.y) !== b.k || Math.abs(b.y) > 1.2) return;
+        var c0 = proj(fxW(b.x), fyW(b.y)), nm = TF.TERRAIN[b.k].name;
+        if (c0.x < -20 || c0.x > W + 20 || c0.y < 0 || c0.y > H) return;
+        var tw = cx.measureText(nm).width + 8;
+        cx.fillStyle = 'rgba(10,14,9,.55)'; cx.fillRect(c0.x - tw / 2, c0.y - 8, tw, 16);
+        cx.fillStyle = b.y < 0 ? '#bfe9c8' : '#ffc9bd'; cx.fillText(nm, c0.x, c0.y);
+      });
+      // ドラッグ中: 置く場所から戦う場所までの通り道(地形で色分け: 緑=速い・赤=遅い)と、戦う場所の地形
+      if (drag) {
+        var dw0 = unproj(drag.x, drag.y), dp0 = clampDep(dw0.x, dw0.y), lx0 = xToLx(dp0.x), ty0 = drag.u.type, a0v = yToAdv(dp0.y);
+        var y0 = TF.advY(0, a0v), y1 = TF.fightY(0, ty0, a0v);
+        cx.lineWidth = 4; cx.lineCap = 'round';
+        if (ty0 !== 'art') for (var si = 0; si < 12; si++) {
+          var ya = y0 + (y1 - y0) * si / 12, yb = y0 + (y1 - y0) * (si + 1) / 12, mv = TF.terrMove(TF.terrAt(T, lx0, (ya + yb) / 2), ty0);
+          var pa = proj(dp0.x, fyW(ya)), pb = proj(dp0.x, fyW(yb));
+          cx.strokeStyle = mv >= 1.05 ? 'rgba(110,255,140,.85)' : mv <= 0.8 ? 'rgba(255,110,90,.9)' : 'rgba(255,255,255,.75)';
+          cx.beginPath(); cx.moveTo(pa.x, pa.y); cx.lineTo(pb.x, pb.y); cx.stroke();
+        }
+        var fp = proj(dp0.x, fyW(y1)), ft = TF.terrAt(T, lx0, y1), mi = TF.marchInfo(T, 0, ty0, lx0, a0v);
+        var info = (ty0 === 'art' ? '陣地: ' : '戦う場所: ') + TF.TERRAIN[ft].name + (ty0 === 'art' ? '' : ' ・ 到着 ' + mi.time.toFixed(1) + '秒');
+        cx.font = '800 12px -apple-system,"Hiragino Sans",sans-serif';
+        var iw = cx.measureText(info).width + 12, ix = Math.max(iw / 2 + 4, Math.min(W - iw / 2 - 4, fp.x));
+        cx.fillStyle = 'rgba(10,14,9,.85)'; cx.fillRect(ix - iw / 2, fp.y - 30, iw, 20);
+        cx.fillStyle = '#ffe08a'; cx.fillText(info, ix, fp.y - 20);
       }
       // 配置エリア(前に置くほど早く撃ち始める)
       var a0 = proj(DEP.x0, DEP.y0), a1 = proj(DEP.x1, DEP.y0), a2 = proj(DEP.x1, DEP.y1), a3 = proj(DEP.x0, DEP.y1);
@@ -4857,7 +4956,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (e.lx !== null && Math.abs(lx - e.lx) >= 0.3 && B.eng.setLane(u.id, lx, B.clock)) moved = true;
       u.col = u.homeCol = Math.max(DEP.x0, Math.min(DEP.x1, w.x)); u.free = true; u.jx = 0;
       frontRows(0);
-      text(u.wx, u.wy, moved ? (L !== L0 ? TF.TERRAIN[B.info.terrain.p[L]].name + 'の列へ' : '横へ移動') : stc > 0 ? '前進!' : stc < 0 ? '後退' : '移動', stc > 0 ? '#ffe08a' : '#cfe9ff', 14, 30);
+      var pi2 = B.eng.postInfo ? B.eng.postInfo() : null, ft2 = TF.fightTerr(B.info.terrain, 0, u.type, lx, e.adv, pi2 ? pi2.front : 3);
+      text(u.wx, u.wy, moved ? TF.TERRAIN[ft2].name + 'へ移動' : stc > 0 ? '前進!' : stc < 0 ? '後退' : '移動', stc > 0 ? '#ffe08a' : '#cfe9ff', 14, 30);
       part(w.x, w.y, { life: 0.45, r: 6, c: 'ring' });
     }
     function issueOrder(u, target) {
@@ -5043,13 +5143,13 @@ if (typeof module !== 'undefined') module.exports = TF;
           rockets: B.projs.filter(function (p) { return p.kind === 'rocket'; }).length,
           reserve: B.eng.reserveInfo(B.clock), spawned: B.ev.filter(function (e) { return e.k === 'spawn'; }).map(function (e) { return e.side; }),
           stances: B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return B.eng.U[u.id].stance; }),
-          coins: B.coinGot || 0, coinTotal: B.coinTotal || 0, spHits: B.spHits || 0, front: B.front,
+          spHits: B.spHits || 0, front: B.front,
           postInfo: B.eng.postInfo ? B.eng.postInfo() : null, supCount: B.supCount || [0, 0], air: B.air.length,
           lanes: B.units.map(function (u) { return laneOfUnit(u); }), terrain: B.info.terrain, unitX: B.units.map(function (u) { return u.col; }),
           supEvents: B.ev.filter(function (e) { return e.k === 'sup'; }).map(function (e) { return e.side + ':' + e.kind; }),
           postEvents: B.ev.filter(function (e) { return e.k === 'post'; }).map(function (e) { return e.side + ':' + e.i; }),
           bridgeY: RY, minAllyY: Math.min.apply(null, B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return u.wy; })),
-          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, type: u.type, x: p.x, y: p.y, wx: u.wx, wy: u.wy, arrT: eu.arrT, order: eu.order, alive: eu.alive, stance: eu.stance, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
+          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, type: u.type, x: p.x, y: p.y, wx: u.wx, wy: u.wy, arrT: eu.arrT, lx: eu.lx, adv: eu.adv, order: eu.order, alive: eu.alive, stance: eu.stance, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
       },
       // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標

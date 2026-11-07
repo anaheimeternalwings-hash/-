@@ -305,8 +305,7 @@ check('地形: 森林・市街地は歩兵と対戦車兵を守り、戦車は�
   // 戦闘でも効く: 同じ相手に、平原の戦車は湿地の戦車より大きなダメージを与える
   const mk = (t, lane) => ({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
   function firstDmg(trP, trE, att, def) {
-    const pl = ['plain', 'plain', 'plain', 'plain', 'plain', 'plain'];
-    const b = TF.createBattle([mk(att, 0)], [mk(def, 0)], 5, { record: true, terrain: { p: [trP].concat(pl), e: [trE].concat(pl) } });
+    const b = TF.createBattle([mk(att, 0)], [mk(def, 0)], 5, { record: true, terrain: TF.flatTerrain(trP, trE) });
     b.step(8);
     return b.ev.find(x => x.k === 'atk' && x.s === 0 && !x.miss).dmg;
   }
@@ -330,7 +329,7 @@ check('移動: 地形で進む速さが変わり(戦車は平原で速く湿地�
   assert(TF.terrMove('plain', 'tank') > 1 && TF.terrMove('marsh', 'tank') < 0.6 && TF.terrMove('forest', 'tank') < TF.terrMove('forest', 'inf'));
   TF.TERRAIN_KEYS.forEach(k => TF.TYPES.forEach(t => assert(TF.terrMove(k, t) >= 0.4 && TF.terrMove(k, t) <= 1.4, k + t)));
   const mk = (t, lane) => ({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
-  const T = a => ({ p: [a, 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'], e: ['plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'] });
+  const T = a => TF.flatTerrain(a, 'plain');
   function first(att, tr) {
     const b = TF.createBattle([mk(att, 0)], [mk('inf', 0)], 3, { record: true, terrain: T(tr) });
     b.step(10);
@@ -361,11 +360,10 @@ check('自由配置: 列の間(小数の列)や前後の好きな位置に置け
   const p = TF.prepareBattle(st, [{ type: 'inf', hero: null, lane: 3, lx: 3.3, adv: 0.5 }], 30);
   assert(p.p[0].lane === 3 && p.p[0].lx === 3.3 && p.p[0].adv === 0.5, '出撃の準備で位置が消えた');
   // 前に置くほど早く着く(ふだんの位置ならこれまでどおり)
-  const pl = ['plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'];
   const mk = (adv, lx) => ({ type: 'inf', maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: 0, lx: lx, adv: adv });
-  const arr = adv => TF.createBattle([mk(adv)], [mk()], 3, { terrain: { p: pl, e: pl } }).U[0].arrT;
+  const arr = adv => TF.createBattle([mk(adv)], [mk()], 3, { terrain: TF.flatTerrain() }).U[0].arrT;
   assert(arr(K.advMax) < arr(undefined) && arr(undefined) < arr(K.advMin), '前後の位置で到着が変わらない');
-  assert(Math.abs(arr(undefined) - K.app.inf / TF.terrMove('plain', 'inf')) < 1e-12);
+  assert(Math.abs(arr(undefined) - K.app.inf / TF.terrMove('plain', 'inf')) < 1e-9);
   // 狙い方: 列の間は、となりの列との中間
   assert.strictEqual(TF.laneW(K.laneAim, 1), K.laneAim[1]);
   const mid = TF.laneW(K.laneAim, 0.5);
@@ -379,12 +377,33 @@ check('自由配置: 列の間(小数の列)や前後の好きな位置に置け
   const s0 = share(0), s5 = share(0.5), s1 = share(1);
   assert(s0 < 0.4 && s1 > 0.6 && s5 > s0 + 0.15 && s5 < s1 - 0.15, '列の間で狙い方が中間にならない ' + [s0, s5, s1]);
 });
-check('ステージ: 地形は7列×両軍、敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
+check('地形はマップ上の区域: 同じ列でも前後で地形が違い、戦う場所の地形が効く。拠点を取って前線が進むと戦う場所も進む。通り道の地形で進む速さが変わる', () => {
+  // 敵側の前線近く(列3)だけに森、自軍の通り道(列1)に湿地がある地図
+  const map = { blobs: [
+    { k: 'forest', x: 3, y: 0.3, rx: 0.4, ry: 0.25, a1: 0, a2: 0, p1: 0, p2: 0 },
+    { k: 'marsh', x: 1, y: -0.4, rx: 0.4, ry: 0.2, a1: 0, a2: 0, p1: 0, p2: 0 }] };
+  assert.strictEqual(TF.terrAt(map, 3, 0.3), 'forest'); assert.strictEqual(TF.terrAt(map, 3, -0.3), 'plain'); assert.strictEqual(TF.terrAt(map, 5, 0.3), 'plain');
+  assert.strictEqual(TF.fightTerr(map, 1, 'inf', 3), 'forest', '敵は森で戦わない');
+  assert.strictEqual(TF.fightTerr(map, 0, 'inf', 3), 'plain');
+  assert.strictEqual(TF.fightTerr(map, 0, 'inf', 3, undefined, 5), 'forest', '前線が進んでも自軍が森に入らない');
+  assert(TF.arrivalTime(map, 0, 'tank', 1) > TF.arrivalTime(map, 0, 'tank', 5) * 1.5, '湿地を通っても遅くならない');
+  const mk = (t, lane) => ({ type: t, maxHp: 1e7, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
+  function firstDmg(lane) {
+    const b = TF.createBattle([mk('inf', lane)], [mk('inf', lane)], 5, { record: true, terrain: map });
+    b.step(8);
+    return b.ev.find(x => x.k === 'atk' && x.s === 0 && !x.miss).dmg;
+  }
+  const inForest = firstDmg(3), onPlain = firstDmg(5);
+  assert(inForest < onPlain * 0.8, '森にいる敵が守られない ' + inForest + ' ' + onPlain);
+});
+check('ステージ: 地形マップ(森林・市街地・丘陵・湿地の区域)は毎回同じで両軍の側にある。敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
   assert.strictEqual(K.laneN, 7);
   for (let s = 1; s <= 200; s += 7) {
-    const i = TF.stageInfo(s);
-    assert.strictEqual(i.terrain.p.length, 7); assert.strictEqual(i.terrain.e.length, 7);
-    i.terrain.p.concat(i.terrain.e).forEach(k => assert(TF.TERRAIN[k], k));
+    const i = TF.stageInfo(s), bl = i.terrain.blobs;
+    assert(bl.length >= 6 && bl.length <= 14, 'blobs ' + bl.length);
+    bl.forEach(b => assert(TF.TERRAIN[b.k] && b.k !== 'plain', b.k));
+    assert(bl.some(b => b.y < 0) && bl.some(b => b.y > 0), '片側にしか地形がない');
+    for (let x = 0; x <= 6; x += 1.5) for (let y = -1; y <= 1; y += 0.5) assert(TF.TERRAIN[TF.terrAt(i.terrain, x, y)]);
     i.enemies.forEach(e => assert(e.lane >= 0 && e.lane < 7));
     assert.deepStrictEqual(TF.stageInfo(s).terrain, i.terrain, '同じステージの地形が毎回同じでない');
   }

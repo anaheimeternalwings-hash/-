@@ -271,7 +271,9 @@ function midState(over) {
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d.phase === 'fight' && d.clock > 3; }, null, { timeout: 15000 });
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
     // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる(下のボタンに隠れていない所)
-    async function dragTo(u, rel) {
+    async function dragTo(u0, rel) {
+      await page.waitForTimeout(300);
+      const u = await page.evaluate(id => window.__game.battle.debug().units.find(x => x.id === id), u0.id); // 動いた後の今の位置
       const p = await page.evaluate(([wx, r]) => {
         const d = window.__game.battle.debug(), foes = d.units.filter(f => f.side === 1 && f.alive);
         const cv = document.getElementById('bcv').getBoundingClientRect(), lim = document.getElementById('skillBar').getBoundingClientRect().top - cv.top - 12;
@@ -337,7 +339,11 @@ function midState(over) {
       await page.waitForSelector('#cardBar .rcard.on', { timeout: 20000 });
       const cb = await page.locator('#cardBar .rcard.on >> nth=0').boundingBox();
       const r = await page.evaluate(() => { const b = document.getElementById('bcv').getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; });
-      const x0 = cb.x + cb.width / 2, y0 = cb.y + cb.height / 2, tx = r.x + r.w * 0.2, ty = r.y + r.h * 0.75;
+      // 戦場全体が見えるまで引いてから、左端の列のあたりへ落とす
+      await page.mouse.move(r.x + r.w / 2, r.y + r.h / 2);
+      for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 120);
+      const lp = await page.evaluate(() => window.__game.battle.frontPoint(-10, -40));
+      const x0 = cb.x + cb.width / 2, y0 = cb.y + cb.height / 2, tx = r.x + Math.max(12, lp.x), ty = r.y + lp.y;
       await page.mouse.move(x0, y0);
       await page.mouse.down();
       for (let i = 1; i <= 10; i++) await page.mouse.move(x0 + (tx - x0) * i / 10, y0 + (ty - y0) * i / 10);
@@ -388,7 +394,7 @@ function midState(over) {
     assert(await page.isVisible('#deployBar'), '配置の画面が出ない');
     const txt = await page.textContent('#deployBar');
     let d = await page.evaluate(() => window.__game.battle.debug());
-    assert.strictEqual(d.terrain.p.length, 7); assert.strictEqual(d.terrain.e.length, 7);
+    assert(d.terrain.blobs.length >= 6, '地形の区域がない');
     const names = await page.evaluate(() => Object.keys(window.__game.TF.TERRAIN).map(k => window.__game.TF.TERRAIN[k].name));
     assert(names.some(n => txt.includes(n)), '地形の説明が出ない');
     const allies = d.units.filter(u => u.side === 0);
@@ -432,7 +438,7 @@ function midState(over) {
     const pend = await page.evaluate(() => window.__game.state.pending.form);
     assert.strictEqual(pend[i0].lane, moved, '配置が保存されない');
     assert.strictEqual(pend[i1].lx, f1.lx, '自由配置の位置が保存されない');
-    const ex = await page.evaluate(([type, lane]) => { const G = window.__game, T = G.battle.debug().terrain; return G.TF.K.app[type] / G.TF.terrMove(T.p[lane], type); }, [d.units[i1].type, d.lanes[i1]]);
+    const ex = await page.evaluate(u => { const G = window.__game, T = G.battle.debug().terrain; return G.TF.arrivalTime(T, 0, u.type, u.lx); }, d.units[i1]);
     assert(d.units[i1].arrT < ex - 0.05, '前に置いても早く着かない ' + d.units[i1].arrT + ' ' + ex);
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
@@ -440,7 +446,7 @@ function midState(over) {
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('移動: 戦闘が始まると配置した場所から前線へ進み、地形に応じた時刻に着く。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
+  await test('移動: 戦闘が始まると配置した場所から前線へ進み、通り道の地形に応じた時刻に着く。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
@@ -450,8 +456,8 @@ function midState(over) {
     let d = await page.evaluate(() => window.__game.battle.debug());
     const movers = d.units.filter(u => u.side === 0 && u.type !== 'art');
     assert(movers.length >= 3);
-    // 到着時刻は地形の速さどおり(エンジンの値)
-    const exp = await page.evaluate(ids => { const G = window.__game, T = G.battle.debug().terrain; return ids.map(([type, lane]) => G.TF.K.app[type] / G.TF.terrMove(T.p[lane], type)); }, movers.map(u => [u.type, d.lanes[u.id]]));
+    // 到着時刻は、置いた場所から前線までの通り道の地形どおり
+    const exp = await page.evaluate(us => { const G = window.__game, T = G.battle.debug().terrain; return us.map(u => G.TF.arrivalTime(T, 0, u.type, u.lx, u.adv)); }, movers);
     movers.forEach((u, i) => assert(Math.abs(u.arrT - exp[i]) < 1e-9, '到着時刻が地形どおりでない ' + u.arrT + ' ' + exp[i]));
     assert(movers.every(u => Math.abs(u.wy - d.front) > 50), '配置した場所から始まらない ' + movers.map(u => Math.round(u.wy - d.front)));
     const last = Math.max(...movers.map(u => u.arrT));
@@ -500,16 +506,17 @@ function midState(over) {
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
   }, midState({ cleared: 2, sel: 3, flags: { intro: 1 } })));
 
-  await test('勝つと戦場にコインが散らばり、自動で集まって報酬になる', () => withPage('iPhone 13', async page => {
+  await test('勝っても戦場にコインを集める演出は出ず、すぐに結果になる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
     await page.waitForSelector('#battle:not(.hidden)');
     await page.click('[data-act="skip"]');
-    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.coinTotal > 0; }, null, { timeout: 8000 });
-    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return !d || d.coins >= d.coinTotal; }, null, { timeout: 8000 });
+    const t0 = Date.now();
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
+    assert(Date.now() - t0 < 3500, '結果が出るまで長い ' + (Date.now() - t0));
     assert((await page.textContent('.result h2')).includes('勝利'));
+    assert.strictEqual(await page.evaluate(() => typeof window.__game.battle.debug), 'function');
   }, midState({ cleared: 2, sel: 3 })));
 
   await test('陣取り地図: マスをタップで選択、なぞって移動、未到達は選べない。初クリアで制圧の演出', () => withPage('iPhone 13', async page => {
