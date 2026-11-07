@@ -221,7 +221,35 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 #battle canvas{position:absolute;inset:0;display:block}
 #battle .bctl{flex:none;display:flex;gap:8px;align-items:center;padding:8px 12px calc(var(--sab) + 8px);background:#141a11;border-top:1px solid #2b3426}
 .speed{display:flex;background:#0d110b;border:1px solid #344029;border-radius:12px;overflow:hidden}
-.speed button{width:54px;min-height:44px;font-weight:900;color:var(--dim)}
+.speed button{width:46px;min-height:44px;font-weight:900;color:var(--dim)}
+#bcv{touch-action:none}
+#btnSkip{white-space:nowrap;padding:0 12px}
+@media (max-width:380px){
+  .speed button{width:40px}
+  .autobtn{min-width:54px}
+  .skb{gap:3px;padding:4px 4px 6px}
+  .skb .portrait.xs{width:22px;height:22px}
+  .skb .nm{font-size:10px}
+}
+.autobtn{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:64px;min-height:44px;border-radius:12px;background:#0d110b;border:1px solid #344029;color:var(--dim);font-weight:900;line-height:1.1}
+.autobtn small{font-size:10px}
+.autobtn.on{border-color:var(--gold);color:var(--gold);background:#2b2a14}
+.skillbar{flex:none;display:flex;gap:6px;padding:6px 10px 0;background:#141a11}
+.skb{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:5px;min-height:50px;padding:4px 6px 6px;border-radius:12px;background:#202a1c;border:1px solid #3a4a30;overflow:hidden;text-align:left}
+.skb .portrait{flex:none}
+.skb .tx{min-width:0;line-height:1.2}
+.skb .nm{display:block;font-size:11px;font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skb .st{display:block;font-size:10px;color:var(--sub);white-space:nowrap}
+.skb::after{content:"";position:absolute;left:0;bottom:0;height:4px;width:calc(var(--p,0) * 100%);background:linear-gradient(90deg,#c99a2e,#f1c453)}
+.skb.ready{border-color:var(--gold);background:#3a3415;animation:pulse 1s infinite}
+.skb.ready .st{color:var(--gold);font-weight:900}
+.skb.dead{opacity:.35}
+.modesel{display:flex;align-items:center;gap:8px;margin-top:12px}
+.modesel .lbl{font-size:12px;color:var(--sub);flex:none}
+.seg{display:flex;flex:1;background:#10150e;border:1px solid #34402c;border-radius:12px;overflow:hidden}
+.seg button{flex:1;min-height:40px;font-weight:800;font-size:13px;color:var(--dim)}
+.seg button.on{background:#3a4a2e;color:var(--gold)}
+.farmbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;min-height:38px;border-radius:10px;background:#1f2a1a;border:1px dashed #5a6a46;color:var(--khaki);font-size:13px;font-weight:800}
 .speed button.on{background:#3a4a2e;color:var(--gold)}
 #btnSkip{margin-left:auto}
 
@@ -269,11 +297,13 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
 <div id="battle" class="hidden">
   <div class="bsafe"></div>
   <div class="bcanvas" id="bwrap"><canvas id="bbg"></canvas><canvas id="bcv"></canvas></div>
+  <div class="skillbar hidden" id="skillBar"></div>
   <div class="bctl">
     <div class="speed" id="speedSel">
       <button data-act="speed" data-sp="1">×1</button><button data-act="speed" data-sp="2">×2</button><button data-act="speed" data-sp="4">×4</button>
     </div>
-    <button class="btn sub" id="btnSkip" data-act="skip">スキップ ▶▶</button>
+    <button class="autobtn" id="btnAuto" data-act="auto-toggle"><span>AUTO</span><small id="autoState">ON</small></button>
+    <button class="btn sub" id="btnSkip" data-act="skip">スキップ</button>
   </div>
 </div>
 <div id="toast"></div>
@@ -556,6 +586,15 @@ var TF = (function () {
     }
     return Math.exp((lo + hi) / 2);
   }
+  // ステージの勝利報酬(初回ボーナス抜き)。10ステージごとのボス戦は2倍
+  function stageReward(s) {
+    var boss = s % 10 === 0, rm = Math.pow(s, K.rwP);
+    return {
+      m: Math.round((40 + K.rwM * rm) * (boss ? K.bossMul : 1) / 5) * 5,
+      s: Math.round((25 + K.rwS * rm) * (boss ? K.bossMul : 1) / 5) * 5,
+      exp: Math.round((10 + K.rwExpA * Math.pow(s, K.rwExpP)) * (boss ? 1.5 : 1))
+    };
+  }
   var stageCache = {};
   function stageInfo(s) {
     if (stageCache[s]) return stageCache[s];
@@ -591,12 +630,7 @@ var TF = (function () {
     var enemies = types.map(function (t, i) {
       return makeSquad(t, vars[i] * m, i === bossIdx ? { boss: true, hpMul: K.bossHp, atkMul: K.bossAtk } : {});
     });
-    var rm = Math.pow(s, K.rwP);
-    var reward = {
-      m: Math.round((40 + K.rwM * rm) * (boss ? K.bossMul : 1) / 5) * 5,
-      s: Math.round((25 + K.rwS * rm) * (boss ? K.bossMul : 1) / 5) * 5,
-      exp: Math.round((10 + K.rwExpA * Math.pow(s, K.rwExpP)) * (boss ? 1.5 : 1))
-    };
+    var reward = stageReward(s);
     var place = PLACES[hashInt(s * 31 + 7) % PLACES.length];
     var info = {
       s: s, place: place, theme: boss ? 'ボス戦' : THEMES[theme], main: main, boss: boss,
@@ -652,14 +686,17 @@ var TF = (function () {
   TYPES.forEach(function (t) { var u = UNIT[t]; UNIT_POW[t] = Math.sqrt(u.hp * u.atk / u.cd) / 37.8; });
 
   // ====== 戦闘シミュレーション ======
-  // 次に行動する部隊を順に処理するイベント駆動型。record=true で演出用ログを残す
-  function simulate(pList, eList, seed, record) {
+  // 次に行動する部隊を順に処理するイベント駆動型。
+  // createBattle は少しずつ進められる戦闘で、手動操作(攻撃目標の指示・スキル発動)を受け付ける。
+  // 操作しなければ simulate とまったく同じ結果になる。
+  function createBattle(pList, eList, seed, opt) {
+    opt = opt || {};
     var rnd = rngFrom(seed);
     var U = [], live = [[], []];
     function spawn(q, side, slot) {
       var u = {
         id: U.length, side: side, slot: slot, type: q.type, hp: q.maxHp, maxHp: q.maxHp, atk: q.atk, cd: q.cd,
-        next: 0.3 + rnd() * 0.7 * q.cd, alive: true, hero: q.hero, boss: q.boss, sk: null, skNext: Infinity
+        next: 0.3 + rnd() * 0.7 * q.cd, alive: true, hero: q.hero, boss: q.boss, sk: null, skNext: Infinity, skLast: 0, order: null
       };
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       U.push(u); live[side].push(u);
@@ -668,8 +705,9 @@ var TF = (function () {
     for (i = 0; i < pList.length; i++) spawn(pList[i], 0, i);
     for (i = 0; i < eList.length; i++) spawn(eList[i], 1, i);
     var atkUntil = [-1, -1], atkMulv = [1, 1], armUntil = [-1, -1];
-    var ev = record ? [] : null;
-    var t = 0, winner = -1, maxT = K.maxT, nU = U.length;
+    var ev = opt.record ? [] : null;
+    var t = 0, winner = -1, done = false, maxT = K.maxT, nU = U.length;
+    var auto = opt.auto !== false; // false: 自軍のスキルは手動で発動
 
     function hit(u, f, raw) {
       if (t < atkUntil[u.side]) raw *= atkMulv[u.side];
@@ -687,10 +725,17 @@ var TF = (function () {
     function attack(u) {
       var foes = live[1 - u.side], n = foes.length;
       if (!n) return;
-      var aff = AFF2[u.type], tot = 0, j;
-      for (j = 0; j < n; j++) tot += aff[foes[j].type];
-      var r = rnd() * tot, f = foes[n - 1];
-      for (j = 0; j < n; j++) { r -= aff[foes[j].type]; if (r <= 0) { f = foes[j]; break; } }
+      var f, j;
+      if (u.order !== null && U[u.order].alive) {
+        f = U[u.order]; // 指示された目標を集中攻撃
+      } else {
+        u.order = null;
+        var aff = AFF2[u.type], tot = 0;
+        for (j = 0; j < n; j++) tot += aff[foes[j].type];
+        var r = rnd() * tot;
+        f = foes[n - 1];
+        for (j = 0; j < n; j++) { r -= aff[foes[j].type]; if (r <= 0) { f = foes[j]; break; } }
+      }
       if (rnd() < K.miss) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
       var crit = rnd() < K.crit;
       var h = hit(u, f, u.atk * AFF[u.type][f.type] * (0.9 + rnd() * 0.2) * (crit ? K.critMul : 1));
@@ -707,7 +752,8 @@ var TF = (function () {
       } else if (id === 'snipe') {
         if (!foes.length) return;
         var best = foes[0], aff = AFF[u.type];
-        for (j = 1; j < foes.length; j++) {
+        if (u.order !== null && U[u.order].alive) best = U[u.order]; // 指示した目標を狙撃
+        else for (j = 1; j < foes.length; j++) {
           var f = foes[j];
           if (aff[f.type] > aff[best.type] || (aff[f.type] === aff[best.type] && f.hp < best.hp)) best = f;
         }
@@ -722,24 +768,70 @@ var TF = (function () {
         if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, hits: hits });
       }
     }
-
-    while (true) {
-      var actor = null, bt = Infinity, isSk = false;
-      for (i = 0; i < nU; i++) {
-        var u = U[i];
-        if (!u.alive) continue;
-        if (u.skNext < bt) { bt = u.skNext; actor = u; isSk = true; }
-        if (u.next < bt) { bt = u.next; actor = u; isSk = false; }
+    function manualSkill(u) { return !auto && u.side === 0; }
+    // 時刻 T までの行動をすべて処理する
+    function step(T) {
+      while (!done) {
+        var actor = null, bt = Infinity, isSk = false;
+        for (i = 0; i < nU; i++) {
+          var u = U[i];
+          if (!u.alive) continue;
+          if (u.skNext < bt && !manualSkill(u)) { bt = u.skNext; actor = u; isSk = true; }
+          if (u.next < bt) { bt = u.next; actor = u; isSk = false; }
+        }
+        if (!actor || bt > maxT) { if (T >= maxT) { t = maxT; done = true; } break; }
+        if (bt > T) break;
+        t = bt;
+        if (isSk) { cast(actor); actor.skLast = t; actor.skNext += SKILL[actor.sk].cd; }
+        else { attack(actor); actor.next += actor.cd; }
+        if (!live[1 - actor.side].length) { winner = actor.side; done = true; }
       }
-      if (!actor || bt > maxT) { t = maxT; break; }
-      t = bt;
-      if (isSk) { cast(actor); actor.skNext += SKILL[actor.sk].cd; }
-      else { attack(actor); actor.next += actor.cd; }
-      if (!live[1 - actor.side].length) { winner = actor.side; break; }
     }
-    var hpP = 0, mxP = 0, hpE = 0, mxE = 0;
-    for (i = 0; i < nU; i++) { var x = U[i]; if (x.side === 0) { hpP += x.hp; mxP += x.maxHp; } else { hpE += x.hp; mxE += x.maxHp; } }
-    return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, ev: ev };
+    function result() {
+      var hpP = 0, mxP = 0, hpE = 0, mxE = 0;
+      for (i = 0; i < nU; i++) { var x = U[i]; if (x.side === 0) { hpP += x.hp; mxP += x.maxHp; } else { hpE += x.hp; mxE += x.maxHp; } }
+      return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, ev: ev };
+    }
+    return {
+      U: U, ev: ev, step: step, result: result,
+      time: function () { return t; },
+      isDone: function () { return done; },
+      isAuto: function () { return auto; },
+      // 自動/手動の切替。自動に戻すと、たまっているスキルはすぐ発動する
+      setAuto: function (on, now) {
+        auto = !!on;
+        if (auto) U.forEach(function (u) { if (u.side === 0 && u.sk && u.skNext < now) u.skNext = Math.max(t, now); });
+      },
+      // 攻撃目標の指示(target=null で自由攻撃に戻す)
+      order: function (id, target) {
+        var u = U[id];
+        if (!u || !u.alive || u.side !== 0) return false;
+        if (target === null || target === undefined) { u.order = null; return true; }
+        var f = U[target];
+        if (!f || !f.alive || f.side === u.side) return false;
+        u.order = target;
+        return true;
+      },
+      // 手動でスキル発動(たまっているときだけ)
+      cast: function (id, now) {
+        var u = U[id];
+        if (done || auto || !u || !u.alive || u.side !== 0 || !u.sk) return false;
+        var tt = Math.max(t, now);
+        if (tt < u.skNext) return false;
+        step(tt);
+        if (done || !u.alive) return false;
+        t = tt;
+        cast(u);
+        u.skLast = t; u.skNext = t + SKILL[u.sk].cd;
+        if (!live[1].length) { winner = 0; done = true; }
+        return true;
+      }
+    };
+  }
+  function simulate(pList, eList, seed, record) {
+    var b = createBattle(pList, eList, seed, { record: record });
+    b.step(Infinity);
+    return b.result();
   }
 
   function scoreOf(r) { return r.win ? 1 + r.pHp : -r.eHp; }
@@ -847,8 +939,8 @@ var TF = (function () {
     doUpgrade: doUpgrade, prodRate: prodRate, capHours: capHours, settle: settle, storedInfo: storedInfo, collect: collect,
     freeSlots: freeSlots, typeUnlocked: typeUnlocked, unlockedTypes: unlockedTypes, unitMult: unitMult, labMult: labMult,
     heroMult: heroMult, squadMult: squadMult, squadStats: squadStats, makeSquad: makeSquad, expNeed: expNeed, addHeroExp: addHeroExp,
-    enemyCount: enemyCount, enemyTotal: enemyTotal, stageInfo: stageInfo, normalizeForm: normalizeForm, formSquads: formSquads,
-    assignHeroes: assignHeroes, simulate: simulate, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
+    enemyCount: enemyCount, enemyTotal: enemyTotal, stageInfo: stageInfo, stageReward: stageReward, normalizeForm: normalizeForm, formSquads: formSquads,
+    assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
     clearCache: function () { stageCache = {}; }
   };
@@ -999,6 +1091,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     if ([1, 2, 4].indexOf(s.speed) < 0) s.speed = 1;
     if (['base', 'army', 'sortie'].indexOf(s.tab) < 0) s.tab = 'base';
     s.flags = o.flags || {};
+    s.auto = o.auto !== false;
     s.lastSeen = +o.lastSeen || now();
     return s;
   }
@@ -1296,10 +1389,14 @@ if (typeof module !== 'undefined') module.exports = TF;
     var pct = Math.round(wr.winRate * 100);
     var rw = info.reward, first = !cleared;
     html += '<div class="winbox card"><div class="wr"><svg class="c" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" fill="none" stroke="#11160f" stroke-width="4"/>' + (pct > 0 ? '<circle cx="18" cy="18" r="15.5" fill="none" stroke="' + wi[1] + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + (pct * 0.974).toFixed(1) + ' 100" transform="rotate(-90 18 18)"/>' : '') + '</svg><div><div class="v num" style="color:' + wi[1] + '">' + pct + '%</div><div class="l" style="color:' + wi[1] + '">' + wi[0] + '</div></div></div>' +
-      '<div class="grow rewards"><div class="small">予想勝率(100回の模擬戦より)</div><div style="font-weight:800">勝利報酬' + (first ? ' <span class="pill gold">初回×' + TF.K.firstMul + '</span>' : '') + '</div>' +
+      '<div class="grow rewards"><div class="small">予想勝率(自動戦闘で100回模擬戦)</div><div style="font-weight:800">勝利報酬' + (first ? ' <span class="pill gold">初回×' + TF.K.firstMul + '</span>' : '') + '</div>' +
       '<div class="row"><span class="cost">' + icoMoney() + fmt(rw.m * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoSteel() + fmt(rw.s * (first ? TF.K.firstMul : 1)) + '</span></div>' +
       '<div class="small">指揮官EXP +' + fmt(rw.exp) + '(敗北時は半分)</div></div></div>';
-    html += '<button class="btn wide big" style="margin-top:12px" data-act="sortie">出撃!</button>';
+    var auto = st.auto !== false;
+    html += '<div class="modesel"><span class="lbl">戦闘</span><div class="seg"><button data-act="mode" data-m="auto" class="' + (auto ? 'on' : '') + '">自動</button><button data-act="mode" data-m="manual" class="' + (auto ? '' : 'on') + '">手動(指示・スキル)</button></div></div>';
+    if (!auto) html += '<div class="small" style="margin-top:6px">手動: 戦闘中に自軍の部隊から敵へドラッグすると集中攻撃。指揮官スキルは下のボタンで自分で発動します(押さないと発動しません)。予想勝率は自動戦闘の場合です。</div>';
+    html += '<button class="btn wide big" style="margin-top:10px" data-act="sortie">出撃!</button>';
+    if (st.cleared >= 1) html += '<button class="farmbtn" data-act="farm-find">💰 稼ぎにおすすめのステージを探す</button>';
     if (pct < 40) html += '<div class="tips">' + esc(adviceLine(info)) + '</div>';
     $('scr-sortie').innerHTML = html;
   }
@@ -1362,15 +1459,24 @@ if (typeof module !== 'undefined') module.exports = TF;
     var s = st.sel;
     var prep = TF.prepareBattle(st, st.form, s);
     var seed = (Math.random() * 2147483647) | 0;
-    var res = TF.simulate(prep.p, prep.e, seed, true);
     st.form = prep.form;
-    st.pending = { s: s, win: res.win, timeout: res.timeout, form: prep.form };
+    // 結果は戦闘が終わってから決まる(手動の指示で変わるため)。途中で閉じたら残りは自動で決着
+    st.pending = { s: s, seed: seed, form: prep.form };
     save();
-    Battle.play(prep, res, st.speed, finishBattle);
+    Battle.play(prep, seed, st.speed, st.auto !== false, function (res) {
+      if (!st.pending) return;
+      st.pending.win = res.win; st.pending.timeout = res.timeout;
+      finishBattle();
+    });
   }
   function finishBattle() {
     var p = st.pending;
     if (!p) return;
+    if (p.win === undefined) {
+      var prep = TF.prepareBattle(st, p.form, p.s);
+      var r = TF.simulate(prep.p, prep.e, p.seed | 0, false);
+      p.win = r.win; p.timeout = r.timeout; p.resumed = true;
+    }
     var wasCleared = st.cleared;
     var sum = TF.applyResult(st, p.s, p.win, p.form);
     st.pending = null;
@@ -1395,13 +1501,17 @@ if (typeof module !== 'undefined') module.exports = TF;
           (x.after > x.before ? '<span class="up">Lv' + x.before + '→' + x.after + '!</span>' : '<span class="small">Lv' + x.after + '</span>') + '</div>';
       }).join('') + '</div>';
     }
+    if (p.resumed) html += '<div class="small" style="text-align:center;margin-bottom:6px">(戦闘の途中で閉じたため、残りは自動で戦いました)</div>';
     if (!p.win) {
-      var farm = bestFarm();
       var info = TF.stageInfo(p.s);
-      html += '<div class="card small" style="margin-top:8px;line-height:1.6">' + esc(adviceLine(info)) +
-        (farm ? '<br>稼ぐなら <b style="color:var(--gold)">ステージ' + farm.s + '</b>(予想勝率' + Math.round(farm.wr * 100) + '%)がおすすめ。' : '') + '</div>';
-      html += '<div class="btns"><div class="row"><button class="btn sub" data-act="r-form">編成を見直す</button><button class="btn sub" data-act="r-base">基地で強化</button></div>' +
-        (farm ? '<button class="btn wide" data-act="r-farm" data-s="' + farm.s + '">ステージ' + farm.s + 'で稼ぐ</button>' : '') + '</div>';
+      html += '<div class="card small" style="margin-top:8px;line-height:1.6">' + esc(adviceLine(info)) + '<div id="farmBox" style="margin-top:6px">' + (st.cleared >= 1 ? '稼ぎにおすすめのステージを探しています…' : '') + '</div></div>';
+      html += '<div class="btns"><div class="row"><button class="btn sub" data-act="r-form">編成を見直す</button><button class="btn sub" data-act="r-base">基地で強化</button></div><div id="farmBtn"></div></div>';
+      if (st.cleared >= 1) setTimeout(function () {
+        var farm = bestFarm(), box = $('farmBox'), bt = $('farmBtn');
+        if (!farm || !box) return;
+        box.innerHTML = farmText(farm);
+        bt.innerHTML = '<button class="btn wide" data-act="r-farm" data-s="' + farm.s + '">ステージ' + farm.s + 'で稼ぐ</button>';
+      }, 60);
     } else {
       html += '<div class="btns">' + (sum.first ? '<button class="btn wide big" data-act="r-next">次のステージへ</button>' : '<button class="btn wide big" data-act="r-retry">もう一度出撃</button>') +
         '<div class="row"><button class="btn sub" data-act="r-form">出撃画面へ</button><button class="btn sub" data-act="r-base">基地へ</button></div></div>';
@@ -1431,27 +1541,71 @@ if (typeof module !== 'undefined') module.exports = TF;
       '<div class="btns"><button class="btn wide" data-act="hero-ok">了解!</button></div></div>');
     return true;
   }
-  // 稼ぎにおすすめのステージ: 直近5ステージから「勝率×報酬」が最大のもの。
-  // どれも勝ちにくいときは、勝てるステージが見つかるまでさかのぼる。
+  // 稼ぎにおすすめのステージ:
+  // 「勝てる」= おまかせ編成で予想勝率80%以上 のステージのうち、
+  // 1戦あたりの稼ぎ(予想勝率×報酬)がいちばん多いもの。ボス戦は報酬2倍なので、少し前のボス戦が選ばれることもある。
+  var FARM_OK = 0.8, farmCache = null;
   function bestFarm() {
     if (st.cleared < 1) return null;
-    var best = null;
-    function tryStage(s) {
-      var f = TF.autoFormation(st, s, 8);
-      var wr = TF.predict(st, f, s, 30).winRate;
-      var rw = TF.stageInfo(s).reward;
-      var v = wr * (rw.m + rw.s * 1.6);
-      if (!best || v > best.v) best = { s: s, wr: wr, v: v, f: f };
-      return wr;
+    var key = st.cleared + '|' + JSON.stringify(st.bld, function (k, v) { return k === 'stored' || k === 't' ? undefined : v; }) + '|' + JSON.stringify(st.heroes);
+    if (farmCache && farmCache.key === key) return farmCache.v;
+    var C = st.cleared, best = null, top = null, n = 0, done = {}, list = [];
+    function value(rw) { return rw.m + rw.s * 1.6; }
+    function consider(s) {
+      if (s < 1 || s > C || done[s]) return null;
+      var rw = TF.stageReward(s);
+      if (best && value(rw) <= best.inc) return null; // 全勝しても今の候補を超えられない
+      done[s] = true; n++;
+      var f = TF.autoFormation(st, s, 6);
+      var wr = TF.predict(st, f, s, 40).winRate;
+      var e = { s: s, wr: wr, inc: wr * value(rw), m: rw.m, st: rw.s };
+      list.push(e);
+      if (!top || wr > top.wr || (wr === top.wr && e.inc > top.inc)) top = e;
+      if (wr >= FARM_OK && (!best || e.inc > best.inc)) best = e;
+      return e;
     }
-    for (var s = Math.max(1, st.cleared - 4); s <= st.cleared; s++) tryStage(s);
-    var back = 8;
-    while (best.wr < 0.5 && st.cleared - back >= 1) {
-      if (tryStage(st.cleared - back) >= 0.7) break;
-      back = Math.ceil(back * 1.6);
+    var s, lo = Math.max(1, C - 11);
+    for (s = C; s >= lo; s--) consider(s);
+    if (!best) {
+      // 直近で勝てるところがなければ、間隔を広げながらさかのぼり、見つかったら手前も調べる
+      var fail = lo, back = 16;
+      while (!best && C - back >= 1 && n < 26) {
+        var e = consider(C - back);
+        if (e && e.wr < FARM_OK) fail = C - back;
+        back = Math.ceil(back * 1.5);
+      }
+      if (!best) consider(1);
+      if (best) for (s = fail - 1; s > best.s && n < 34; s--) consider(s);
     }
-    if (best.wr < 0.5) tryStage(1);
-    return best;
+    if (best) {
+      // さらに前でも、報酬が今の候補を上回り得るステージ(とくにボス戦)だけ調べる
+      for (s = Math.min(lo, best.s) - 1; s >= 1 && n < 42; s--) {
+        var nb = Math.floor(s / 10) * 10;
+        var bossLeft = nb >= 10 && value(TF.stageReward(nb)) > best.inc;
+        if (s % 10 !== 0 && value(TF.stageReward(s)) <= best.inc && !bossLeft) break;
+        consider(s);
+      }
+    }
+    // 候補を、出撃画面と同じ計算(おまかせ編成・100回の模擬戦)で確かめてから決める
+    function precise(e) {
+      e.wr = TF.predict(st, TF.autoFormation(st, e.s), e.s, 100).winRate;
+      e.inc = e.wr * value(TF.stageReward(e.s));
+      return e;
+    }
+    var v = null;
+    var cands = list.filter(function (e) { return e.wr >= FARM_OK; }).sort(function (a, b) { return b.inc - a.inc; });
+    for (var i = 0; i < cands.length && i < 3; i++) {
+      if (precise(cands[i]).wr >= FARM_OK) { v = cands[i]; break; }
+    }
+    if (!v && top) v = precise(top);
+    if (v) { v.ok = v.wr >= FARM_OK; v.evals = n; }
+    farmCache = { key: key, v: v };
+    return v;
+  }
+  function farmText(f) {
+    var pct = Math.round(f.wr * 100);
+    if (!f.ok) return '勝率80%以上のステージがまだありません。いちばん勝ちやすいのは <b style="color:var(--gold)">ステージ' + f.s + '</b>(予想勝率' + pct + '%)。施設を強化しよう。';
+    return '稼ぐなら <b style="color:var(--gold)">ステージ' + f.s + '</b> がおすすめ(予想勝率' + pct + '%)。<br>1戦で ' + icoMoneyInline() + fmt(f.m) + ' ' + icoSteelInline() + fmt(f.st) + '(勝率込みの平均 ' + icoMoneyInline() + fmt(f.m * f.wr) + ')';
   }
 
   // ====== おかえり ======
@@ -1551,6 +1705,23 @@ if (typeof module !== 'undefined') module.exports = TF;
       save(); renderSortie(); toast('おまかせ編成しました');
     },
     sortie: function () { startSortie(); },
+    mode: function (el) { st.auto = el.dataset.m === 'auto'; save(); renderSortie(); },
+    'auto-toggle': function () { var v = Battle.toggleAuto(); if (v !== null) { st.auto = v; save(); } },
+    skill: function (el) { Battle.castSkill(+el.dataset.u); },
+    'farm-find': function (el) {
+      el.textContent = '探しています…';
+      el.disabled = true;
+      setTimeout(function () {
+        var f = bestFarm();
+        if (!f) { renderSortie(); return; }
+        st.sel = f.s;
+        st.form = TF.autoFormation(st, f.s);
+        save(); renderSortie();
+        openModal('<div class="result"><h2 class="win" style="font-size:24px">稼ぎにおすすめ</h2><div class="card small" style="line-height:1.7;margin-top:10px">' + farmText(f) +
+          '<br>ステージ' + f.s + 'を選び、おまかせ編成にしました。</div><div class="btns"><button class="btn wide" data-act="modal-close">OK</button></div></div>');
+      }, 30);
+    },
+    'modal-close': function () { closeModal(); },
     speed: function (el) { st.speed = +el.dataset.sp; Battle.setSpeed(st.speed); save(); },
     skip: function () { Battle.skip(); },
     'r-next': function () { closeModal(); if (!showHeroJoin()) { st.sel = st.cleared + 1; show('sortie'); } },
@@ -1830,12 +2001,15 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
 
     // ---- 開始 ----
-    function play(prep, res, speed, cb) {
+    function play(prep, seed, speed, auto, cb) {
       wrap = $('bwrap'); cv = $('bcv'); cx = cv.getContext('2d'); bgCanvas = $('bbg');
       $('battle').classList.remove('hidden');
       bgReady = false;
+      bindInput();
+      var eng = TF.createBattle(prep.p, prep.e, seed, { record: true, auto: auto });
       B = {
-        units: [], ev: res.ev, ei: 0, clock: 0, res: res, info: prep.info, speed: speed, cb: cb,
+        eng: eng, auto: auto, sel: null, drag: null, hint: null,
+        units: [], ev: eng.ev, ei: 0, clock: 0, res: null, info: prep.info, speed: speed, cb: cb,
         biome: biomeOf(prep.info.place), seed: prep.info.s * 131,
         projs: [], imps: [], parts: [], texts: [], marks: [], pillars: [], beams: [], sights: [], domes: [],
         banner: null, shake: 0, buff: [{ atk: -1, arm: -1 }, { atk: -1, arm: -1 }],
@@ -1849,8 +2023,11 @@ if (typeof module !== 'undefined') module.exports = TF;
         { x: 82, y: 141, w: 11, d: 8, h: 4.5, owner: 1, home: 1, roof: 'gable' }
       ];
       setSpeed(speed);
+      buildSkillBar();
+      setAutoUI();
       resize();
       layout();
+      if (!auto) showHint('部隊から敵へドラッグで集中攻撃!スキルは下のボタンで発動', 5);
       lastTs = 0;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(frame);
@@ -1904,17 +2081,19 @@ if (typeof module !== 'undefined') module.exports = TF;
     function skip() {
       if (!B || B.ending) return;
       B.phase = 'fight';
+      B.eng.setAuto(true, B.clock);
+      B.eng.step(Infinity); // 残りは自動で決着
       while (B.ei < B.ev.length) applyEventInstant(B.ev[B.ei++]);
       B.imps.forEach(function (im) { im.quiet = true; applyImpact(im); });
       B.imps = []; B.projs = []; B.beams = []; B.sights = [];
-      B.clock = Math.max(B.clock, B.res.time);
+      B.clock = Math.max(B.clock, B.eng.time());
       startEnding();
     }
     function applyEventInstant(ev) {
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
       else if (ev.hits) ev.hits.forEach(function (h) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); });
     }
-    function startEnding() { B.ending = 1; B.endT = 0; }
+    function startEnding() { B.res = B.eng.result(); B.ending = 1; B.endT = 0; B.drag = null; B.sel = null; }
     function fxNow() { return B.introT + B.clock + B.endT; }
     function frame(ts) {
       if (!B) return;
@@ -1927,10 +2106,10 @@ if (typeof module !== 'undefined') module.exports = TF;
       raf = requestAnimationFrame(frame);
     }
     function finish() {
-      var cb = B.cb;
+      var cb = B.cb, res = B.res;
       B = null;
       $('battle').classList.add('hidden');
-      cb();
+      cb(res);
     }
 
     // ---- 前線 ----
@@ -1981,11 +2160,12 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (B.introT > 1.7) B.phase = 'fight';
       } else if (!B.ending) {
         B.clock += gdt;
-        while (B.ei < B.ev.length && B.ev[B.ei].t <= B.clock) fire(B.ev[B.ei++]);
+        B.eng.step(B.clock);
+        while (B.ei < B.ev.length) fire(B.ev[B.ei++]);
         for (var i = B.imps.length - 1; i >= 0; i--) {
           if (B.imps[i].at <= B.clock) { applyImpact(B.imps[i]); B.imps.splice(i, 1); }
         }
-        if (B.ei >= B.ev.length && !B.imps.length && B.clock >= B.res.time + 0.5) startEnding();
+        if (B.eng.isDone() && !B.imps.length && B.clock >= B.eng.time() + 0.5) startEnding();
       } else {
         B.endT += dtReal;
       }
@@ -2012,6 +2192,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.texts = B.texts.filter(function (t) { t.life -= dtReal; t.y -= 30 * dtReal; return t.life > 0; });
       B.shake = Math.max(0, B.shake - dtReal * 30);
       if (B.banner) { B.banner.t += dtReal; if (B.banner.t > 1.2) B.banner = null; }
+      if (B.hint) { B.hint.t += dtReal; if (B.hint.t > B.hint.dur) B.hint = null; }
+      updateSkillBar();
       B.projs.forEach(function (p) {
         if (p.kind === 'at' && Math.random() < 0.7) {
           var q = projPos(p, B.clock);
@@ -2237,9 +2419,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       if (u.hero) {
         var hx = p.x + r * 2.0, hy = y - r, hr = r * 0.78;
-        var sk = TF.SKILL[TF.HERO[u.hero].skill];
-        var prog = u.lastCast === null ? B.clock / sk.first : (B.clock - u.lastCast) / sk.cd;
-        prog = Math.max(0, Math.min(1, prog));
+        var prog = skillProg(u.id);
         cx.fillStyle = '#f1c453'; cx.beginPath(); cx.arc(hx, hy, hr, 0, Math.PI * 2); cx.fill();
         cx.strokeStyle = 'rgba(0,0,0,.5)'; cx.lineWidth = 2.4; cx.beginPath(); cx.arc(hx, hy, hr + 2.2, 0, Math.PI * 2); cx.stroke();
         cx.strokeStyle = prog >= 1 ? '#fff' : '#ffe58a'; cx.beginPath(); cx.arc(hx, hy, hr + 2.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * prog); cx.stroke();
@@ -2405,6 +2585,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.strokeStyle = 'rgba(255,80,60,' + a + ')'; cx.lineWidth = 2;
         cx.beginPath(); cx.moveTo(bm.a.x, bm.a.y - 6); cx.lineTo(bm.b.x, bm.b.y - 6); cx.stroke();
       });
+      drawOrders();
       drawParts();
       order.slice().forEach(drawLabel);
       B.texts.forEach(function (t) {
@@ -2417,10 +2598,185 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.restore();
       drawHud();
       drawBanner();
+      drawHint();
       if (B.ending) drawEnding();
     }
+    // ---- 手動操作 ----
+    function skillProg(id) {
+      var eu = B.eng.U[id];
+      if (!eu.sk) return 0;
+      if (B.clock >= eu.skNext) return 1;
+      return Math.max(0, Math.min(1, (B.clock - eu.skLast) / Math.max(0.01, eu.skNext - eu.skLast)));
+    }
+    function showHint(msg, dur) { if (B) B.hint = { msg: msg, t: 0, dur: dur || 2.2 }; }
+    function buildSkillBar() {
+      var bar = $('skillBar');
+      var hs = B.units.filter(function (u) { return u.side === 0 && u.hero; });
+      bar.classList.toggle('hidden', !hs.length);
+      bar.innerHTML = hs.map(function (u) {
+        var hd = TF.HERO[u.hero];
+        return '<button class="skb" data-act="skill" data-u="' + u.id + '" id="skb' + u.id + '"><div class="portrait xs">' + heroSvg(u.hero) + '</div>' +
+          '<span class="tx"><span class="nm">' + ({ charge: '突撃', armor: '装甲', snipe: '必中', barrage: '一斉' })[hd.skill] + '</span><span class="st" id="skst' + u.id + '">準備中</span></span></button>';
+      }).join('');
+      B.skCache = {};
+    }
+    function updateSkillBar() {
+      B.units.forEach(function (u) {
+        if (u.side !== 0 || !u.hero) return;
+        var el = $('skb' + u.id);
+        if (!el) return;
+        var eu = B.eng.U[u.id], p = skillProg(u.id), dead = !eu.alive;
+        var ready = !dead && p >= 1 && !B.auto && !B.ending;
+        var st = dead ? '戦闘不能' : B.auto ? (p >= 1 ? '発動!' : '自動') : ready ? 'タップ!' : '充填中';
+        var key = Math.round(p * 50) + st + ready;
+        if (B.skCache[u.id] === key) return;
+        B.skCache[u.id] = key;
+        el.style.setProperty('--p', p.toFixed(2));
+        el.classList.toggle('ready', ready);
+        el.classList.toggle('dead', dead);
+        $('skst' + u.id).textContent = st;
+      });
+    }
+    function setAutoUI() {
+      $('btnAuto').classList.toggle('on', B.auto);
+      $('autoState').textContent = B.auto ? 'ON' : 'OFF';
+      if (B.skCache) B.skCache = {};
+    }
+    function toggleAuto() {
+      if (!B || B.ending) return null;
+      B.auto = !B.auto;
+      B.eng.setAuto(B.auto, B.clock);
+      B.sel = null; B.drag = null;
+      if (B.auto) {
+        B.units.forEach(function (u) { if (u.side === 0) B.eng.order(u.id, null); });
+        showHint('自動戦闘に切り替えました', 1.6);
+      } else {
+        showHint('手動: 部隊から敵へドラッグで集中攻撃!スキルは下のボタン', 3.5);
+      }
+      setAutoUI();
+      return B.auto;
+    }
+    function castSkill(id) {
+      if (!B || B.ending) return;
+      if (B.auto) { showHint('AUTOをOFFにすると、好きなタイミングで発動できます'); return; }
+      if (B.phase !== 'fight') { showHint('まだ展開中です'); return; }
+      if (!B.eng.cast(id, B.clock)) showHint(B.eng.U[id].alive ? 'スキルの充填中です' : 'この部隊は戦闘不能です');
+    }
+    function localPt(e) { var r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+    function pickSquad(pt, side) {
+      var best = null, bd = 1e9;
+      B.units.forEach(function (u) {
+        if (u.side !== side || u.dead) return;
+        var c = proj(u.wx, u.wy), lp = proj(u.wx, u.wy + u.farOy * u.big);
+        var ly = lp.y - FIGH[u.type] * lp.k * u.big - 12;
+        var R = Math.max(32, 9 * c.k * u.big);
+        var d = Math.min(Math.hypot(pt.x - c.x, (pt.y - (c.y - 6)) * 1.3), Math.hypot(pt.x - lp.x, pt.y - ly));
+        if (d < R && d < bd) { bd = d; best = u; }
+      });
+      return best;
+    }
+    function issueOrder(u, target) {
+      if (B.eng.order(u.id, target.id)) {
+        var p = proj(u.wx, u.wy), q = proj(target.wx, target.wy);
+        text(p.x, p.y - 30 * p.s, '攻撃指示!', '#9cffb0', 14);
+        B.parts.push({ x: q.x, y: q.y, vx: 0, vy: 0, life: 0.4, max: 0.4, r: 24 * q.s + 8, c: 'ring' });
+      }
+    }
+    function onDown(e) {
+      if (!B || B.ending) return;
+      var pt = localPt(e), u = pickSquad(pt, 0);
+      if (B.auto) { if (u || pickSquad(pt, 1)) showHint('AUTOをOFFにすると、攻撃目標を指示できます'); return; }
+      if (u) {
+        B.drag = { u: u, x0: pt.x, y0: pt.y, x: pt.x, y: pt.y, moved: false, hover: null };
+        try { cv.setPointerCapture(e.pointerId); } catch (er) { }
+        e.preventDefault();
+        return;
+      }
+      var en = pickSquad(pt, 1);
+      if (en && B.sel && !B.sel.dead) { issueOrder(B.sel, en); B.sel = null; }
+      else if (en) showHint('先に自軍の部隊をタップ(またはドラッグ)してください');
+      else B.sel = null;
+    }
+    function onMove(e) {
+      if (!B || !B.drag) return;
+      var pt = localPt(e), d = B.drag;
+      d.x = pt.x; d.y = pt.y;
+      if (Math.hypot(pt.x - d.x0, pt.y - d.y0) > 12) d.moved = true;
+      d.hover = d.moved ? pickSquad(pt, 1) : null;
+      e.preventDefault();
+    }
+    function onUp() {
+      if (!B || !B.drag) return;
+      var d = B.drag;
+      B.drag = null;
+      if (d.u.dead) return;
+      if (!d.moved) { B.sel = B.sel === d.u ? null : d.u; if (B.sel) showHint('攻撃する敵部隊をタップ', 1.8); return; }
+      if (d.hover) issueOrder(d.u, d.hover);
+      else if (B.eng.order(d.u.id, null)) { var p = proj(d.u.wx, d.u.wy); text(p.x, p.y - 30 * p.s, '自由に攻撃', '#e6e6d6', 13); }
+    }
+    function bindInput() {
+      var c = $('bcv');
+      if (c.__bound) return;
+      c.__bound = true;
+      c.addEventListener('pointerdown', function (e) { if (B) { cv = c; onDown(e); } });
+      c.addEventListener('pointermove', onMove);
+      c.addEventListener('pointerup', onUp);
+      c.addEventListener('pointercancel', function () { if (B) B.drag = null; });
+    }
+    function arrow(x0, y0, x1, y1, color, width, dash) {
+      var ang = Math.atan2(y1 - y0, x1 - x0), L = Math.hypot(x1 - x0, y1 - y0);
+      if (L < 4) return;
+      var mx = (x0 + x1) / 2, my = (y0 + y1) / 2 - Math.min(40, L * 0.18);
+      cx.save();
+      cx.strokeStyle = color; cx.lineWidth = width; cx.lineCap = 'round';
+      if (dash) cx.setLineDash(dash);
+      cx.beginPath(); cx.moveTo(x0, y0); cx.quadraticCurveTo(mx, my, x1, y1); cx.stroke();
+      cx.setLineDash([]);
+      var a2 = Math.atan2(y1 - my, x1 - mx), hl = Math.max(9, width * 2.6);
+      cx.fillStyle = color;
+      cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x1 - Math.cos(a2 - 0.45) * hl, y1 - Math.sin(a2 - 0.45) * hl); cx.lineTo(x1 - Math.cos(a2 + 0.45) * hl, y1 - Math.sin(a2 + 0.45) * hl); cx.closePath(); cx.fill();
+      cx.restore();
+    }
+    function drawOrders() {
+      B.units.forEach(function (u) {
+        if (u.side !== 0 || u.dead) return;
+        var eu = B.eng.U[u.id];
+        if (eu.order === null || !B.eng.U[eu.order].alive) return;
+        var tg = B.units[eu.order], a = proj(u.wx, u.wy), b = proj(tg.wx, tg.wy);
+        arrow(a.x, a.y - 4, b.x, b.y + 4, 'rgba(110,255,140,.75)', 2.5, [7, 6]);
+        cx.strokeStyle = 'rgba(110,255,140,.9)'; cx.lineWidth = 2;
+        var r = 10 * b.s + 6;
+        cx.beginPath(); cx.arc(b.x, b.y - 4, r, 0, Math.PI * 2); cx.moveTo(b.x - r - 4, b.y - 4); cx.lineTo(b.x + r + 4, b.y - 4); cx.stroke();
+      });
+      if (B.sel && !B.sel.dead) {
+        var p = proj(B.sel.wx, B.sel.wy), w = 11 * p.k * B.sel.big;
+        cx.strokeStyle = 'rgba(255,255,255,' + (0.6 + 0.35 * Math.sin(B.clock * 8 + B.introT * 8)) + ')'; cx.lineWidth = 2.5;
+        cx.beginPath(); cx.ellipse(p.x, p.y, w * 1.15, w * 0.45, 0, 0, Math.PI * 2); cx.stroke();
+      }
+      if (B.drag && B.drag.moved) {
+        var d = B.drag, s0 = proj(d.u.wx, d.u.wy);
+        if (d.hover) {
+          var h = proj(d.hover.wx, d.hover.wy), hw = 11 * h.k * d.hover.big;
+          cx.strokeStyle = '#ff5a4e'; cx.lineWidth = 3;
+          cx.beginPath(); cx.ellipse(h.x, h.y, hw * 1.2, hw * 0.5, 0, 0, Math.PI * 2); cx.stroke();
+        }
+        arrow(s0.x, s0.y - 4, d.x, d.y, 'rgba(90,255,120,.95)', 6);
+      }
+    }
+    function drawHint() {
+      var h = B.hint; if (!h) return;
+      var a = Math.min(1, h.t / 0.2, (h.dur - h.t) / 0.3);
+      cx.save(); cx.globalAlpha = Math.max(0, a);
+      cx.font = '800 13px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      var w = Math.min(W - 24, cx.measureText(h.msg).width + 28), y = 82;
+      cx.fillStyle = 'rgba(10,14,9,.85)'; rr(W / 2 - w / 2, y - 16, w, 32, 10); cx.fill();
+      cx.strokeStyle = 'rgba(241,196,83,.6)'; cx.lineWidth = 1; cx.stroke();
+      cx.fillStyle = '#fff'; cx.fillText(h.msg, W / 2, y + 0.5, w - 16);
+      cx.restore();
+    }
     window.addEventListener('resize', function () { if (B) resize(); });
-    return { play: play, setSpeed: setSpeed, skip: skip, active: function () { return !!B; } };
+    return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, active: function () { return !!B; },
+      debug: function () { return B ? { auto: B.auto, phase: B.phase, clock: B.clock, units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, order: eu.order, alive: eu.alive, skNext: eu.sk ? eu.skNext : null }; }), skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length } : null; } };
   })();
 
   // ====== アプリのアイコン(ホーム画面用PNGを生成) ======
@@ -2467,7 +2823,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     save();
   }
-  window.__game = { get state() { return st; }, TF: TF, save: save, render: render };
+  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, bestFarm: function () { farmCache = null; return bestFarm(); } };
   boot();
 })();
 </script>

@@ -119,7 +119,7 @@ function midState(over) {
     await page.click('[data-act="sortie"]');
     await page.waitForSelector('#battle:not(.hidden)');
     const pend = (await state(page)).pending;
-    assert(pend && pend.s === 1);
+    assert(pend && pend.s === 1 && typeof pend.seed === 'number');
     await page.close();
     page = await ctx.newPage();
     await page.goto(URL);
@@ -127,7 +127,8 @@ function midState(over) {
     const st = await state(page);
     assert.strictEqual(st.pending, null);
     assert.strictEqual(st.stats.battles, 1);
-    if (pend.win) assert(st.money > m0 && st.cleared === 1);
+    assert((await page.textContent('#modal')).includes('残りは自動で戦いました'));
+    if (st.cleared === 1) assert(st.money > m0);
     await page.close();
     page = await ctx.newPage();
     await page.goto(URL);
@@ -166,7 +167,11 @@ function midState(over) {
     assert(!(await page.textContent('.result h2')).includes('勝利'));
     const txt = await page.textContent('#modal');
     assert(txt.includes('兵は失われていません'));
-    assert(/ステージ\d+で稼ぐ/.test(txt), 'おすすめが出ない');
+    await page.waitForSelector('[data-act="r-farm"]', { timeout: 10000 });
+    const farmS = +(await page.getAttribute('[data-act="r-farm"]', 'data-s'));
+    const farmWr = await page.evaluate(s => { const G = window.__game; return G.TF.predict(G.state, G.TF.autoFormation(G.state, s), s, 100).winRate; }, farmS);
+    assert(farmWr >= 0.8, `おすすめのステージ${farmS}の予想勝率が${farmWr}`);
+    assert(txt.includes('兵は失われていません'));
     const after = await state(page);
     assert.strictEqual(after.money, before.money);
     assert.strictEqual(after.steel, before.steel);
@@ -220,6 +225,53 @@ function midState(over) {
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 30000 });
     assert.strictEqual((await state(page)).pending, null);
   }, midState({ cleared: 2, sel: 3 })));
+
+  await test('手動モード: ドラッグで攻撃指示、ボタンでスキル発動、AUTOで自動に切替', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="mode"][data-m="manual"]');
+    assert.strictEqual((await state(page)).auto, false);
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForSelector('#battle:not(.hidden)');
+    assert(!(await page.isVisible('#btnAuto.on')), 'AUTOがONのまま');
+    await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
+    // 自軍の部隊から敵の部隊へドラッグ
+    const dbg = await page.evaluate(() => window.__game.battle.debug());
+    const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
+    const a = dbg.units.find(u => u.side === 0 && u.alive), e = dbg.units.filter(u => u.side === 1 && u.alive).pop();
+    await page.mouse.move(box.x + a.x, box.y + a.y - 6);
+    await page.mouse.down();
+    for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + a.x + (e.x - a.x) * i / 6, box.y + a.y - 6 + (e.y - a.y) * i / 6);
+    await page.mouse.up();
+    const d2 = await page.evaluate(() => window.__game.battle.debug());
+    assert.strictEqual(d2.units.find(u => u.id === a.id).order, e.id, '攻撃指示が入っていない');
+    // 手動ではスキルは勝手に発動しない。たまったらボタンで発動
+    await page.waitForFunction(() => {
+      const d = window.__game.battle.debug();
+      return d && d.units.some(u => u.side === 0 && u.alive && u.skNext !== null && d.clock >= u.skNext);
+    }, null, { timeout: 20000 });
+    assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).skills, 0, '手動なのにスキルが自動発動した');
+    await page.waitForSelector('#skillBar .skb.ready:not(.dead)');
+    await page.evaluate(() => { const b = document.querySelector('#skillBar .skb.ready:not(.dead)'); b.click(); });
+    assert.strictEqual((await page.evaluate(() => { const d = window.__game.battle.debug(); return d.skills; })), 1, 'ボタンでスキルが発動しない');
+    // AUTOに切り替えると設定も保存される
+    await page.click('[data-act="auto-toggle"]');
+    assert((await page.evaluate(() => window.__game.battle.debug().auto)) === true);
+    assert.strictEqual((await state(page)).auto, true);
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result');
+  }, midState({ cleared: 24, sel: 25, auto: true })));
+
+  await test('出撃画面の「稼ぎにおすすめ」: 勝率80%以上のステージを選んで編成する', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="farm-find"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 10000 });
+    assert((await page.textContent('#modal')).includes('稼ぐなら'));
+    const st = await state(page);
+    assert(st.sel <= st.cleared);
+    const wr = await page.evaluate(s => { const G = window.__game; return G.TF.predict(G.state, G.state.form, s, 100).winRate; }, st.sel);
+    assert(wr >= 0.8, `予想勝率 ${wr}`);
+  }, midState({ cleared: 40, sel: 41 })));
 
   await test('部隊の編成(兵種・指揮官の変更、おまかせ編成、予想勝率)', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');

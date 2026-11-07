@@ -135,6 +135,46 @@ check('同じステージの敵編成・同じシードの戦闘は毎回同じ(
   const e = TF.stageInfo(37).enemies;
   assert.deepStrictEqual(TF.simulate(e, e, 9, true), TF.simulate(e, e, 9, true));
 });
+check('戦闘を少しずつ進めても、操作しなければ一括計算(予想勝率と同じ計算)と完全に同じ結果', () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    const e = TF.stageInfo(30 + seed % 20).enemies;
+    const p = TF.stageInfo(28 + seed % 20).enemies.map((q, i) => Object.assign({}, q, { hero: i < 4 ? ['oni', 'tetsu', 'taka', 'rai'][i] : null }));
+    const full = JSON.stringify(TF.simulate(p, e, seed, true));
+    const b = TF.createBattle(p, e, seed, { record: true });
+    for (let t = 0.016; !b.isDone(); t += 0.033) b.step(t);
+    assert.strictEqual(JSON.stringify(b.result()), full, 'seed ' + seed);
+  }
+});
+check('手動: 攻撃指示した部隊は、目標が倒れるまでその目標だけを撃つ', () => {
+  const e = TF.stageInfo(40).enemies;
+  const p = TF.stageInfo(40).enemies.map(q => Object.assign({}, q, { hero: null }));
+  const b = TF.createBattle(p, e, 7, { record: true, auto: false });
+  const target = p.length + e.length - 1;
+  assert(b.order(0, target));
+  b.step(Infinity);
+  const shots = b.ev.filter(x => x.k === 'atk' && x.s === 0);
+  const killAt = (b.ev.find(x => (x.d === target && x.kill) || (x.hits && x.hits.some(h => h.d === target && h.kill))) || { t: 1e9 }).t;
+  assert(shots.length > 0);
+  shots.filter(x => x.t <= killAt).forEach(x => assert.strictEqual(x.d, target));
+  assert(!b.order(0, 0), '味方を目標にできてしまう');
+});
+check('手動: 自軍のスキルは押すまで発動せず、たまってから押すと発動する', () => {
+  const e = TF.stageInfo(60).enemies;
+  const p = TF.stageInfo(60).enemies.map((q, i) => Object.assign({}, q, { hero: i === 0 ? 'rai' : null }));
+  const b = TF.createBattle(p, e, 3, { record: true, auto: false });
+  b.step(2);
+  assert(!b.cast(0, 2), '充填前に発動できてしまう');
+  b.step(20);
+  assert.strictEqual(b.ev.filter(x => x.k === 'skill' && x.s === 0).length, 0, '手動なのに自動で発動した');
+  if (!b.isDone() && b.U[0].alive) {
+    assert(b.cast(0, 20));
+    assert.strictEqual(b.ev.filter(x => x.k === 'skill' && x.s === 0).length, 1);
+  }
+  // 敵の指揮官スキルは手動モードでも自動で発動する(敵は操作できない)
+  const b2 = TF.createBattle(e, p.map((q, i) => Object.assign({}, q, { hero: i === 0 ? 'oni' : null, maxHp: q.maxHp * (i === 0 ? 4 : 1) })), 3, { record: true, auto: false });
+  b2.step(Infinity);
+  assert(b2.ev.some(x => x.k === 'skill' && b2.U[x.s].side === 1));
+});
 check('おまかせ編成は枠数どおりで、指揮官が重複しない', () => {
   const st = TF.newState(0);
   st.bld = { hq: { lv: 9, slot: 4 }, barracks: { lv: 5, slot: 0 }, atpost: { lv: 5, slot: 1 }, factory: { lv: 5, slot: 2 }, artpost: { lv: 5, slot: 3 } };
