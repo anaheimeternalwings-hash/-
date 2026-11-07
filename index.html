@@ -298,6 +298,21 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .arm .kico{width:42px;height:42px;flex:none;border-radius:12px;display:grid;place-items:center;background:#161d13;border:1px solid #34402c}
 .arm .kico svg{width:26px;height:26px}
 .arm .kico.w{color:#ff9a5c} .arm .kico.a{color:#8fd0ff} .arm .kico.x{color:#d9a6ff}
+.arm .wico{position:relative;width:98px;height:56px;flex:none;border-radius:12px;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,#2a3324,#141a11);border:1px solid #34402c}
+.arm .wico svg.aart{width:92px;height:46px}
+.arm .wico.none svg.aart{opacity:.28;filter:grayscale(1)}
+.arm .wico .nd{position:absolute;left:0;right:0;bottom:3px;text-align:center;font-size:10px;font-weight:800;color:var(--dim)}
+.arm .wico .kb{position:absolute;left:-5px;top:-5px;width:20px;height:20px;border-radius:50%;background:#161d13;border:1px solid #34402c;display:grid;place-items:center}
+.arm .wico .kb svg{width:12px;height:12px}
+.arm .wico .kb.w{color:#ff9a5c} .arm .wico .kb.a{color:#8fd0ff} .arm .wico .kb.x{color:#d9a6ff}
+.arm .nm{font-size:15px;line-height:1.25}
+.devart .ring.w2{width:230px;height:122px;border-radius:61px}
+.devart .ring.w2>svg.aart{width:200px;height:100px}
+.morph{display:flex;align-items:center;justify-content:center;gap:10px;margin:2px 0 8px}
+.morph .uicon{width:58px;height:58px}
+.morph .uicon svg{width:48px;height:48px}
+.morph .ar{font-size:20px;color:var(--gold);font-weight:900}
+.morph .uicon.new{border-color:var(--gold);box-shadow:0 0 14px rgba(241,196,83,.45)}
 .arm .kind{font-size:11px;color:var(--dim);font-weight:800;letter-spacing:.08em}
 .arm .nm{font-size:16px;font-weight:900}
 .arm .nm.none{color:var(--dim)}
@@ -1285,6 +1300,260 @@ if (typeof module !== 'undefined') module.exports = TF;
   }
   var ALLY_C = '#8ee6cf', ENEMY_C = '#ff9a86';
 
+  // ====== 兵器の絵(実在の兵器を横から見たシルエット) ======
+  // 64×32 の座標で描く。小火器・弾薬は実物の色、車両・火砲は色(pal)を差し替えて兵種アイコンにも使う
+  var ArmArt = (function () {
+    var M = { st: '#4a5057', st2: '#6b737b', st3: '#9aa3ab', bk: '#23272b', bk2: '#3a3f44', wd: '#87552a', wd2: '#b07a3e',
+      od: '#5b6436', od2: '#7a8648', od3: '#3f4626', tn: '#b49866', tn2: '#d6bf8e', gn: '#4d6a3a', gn2: '#6c8c52',
+      br: '#c9a03a', br2: '#e8c766', gl: '#8fdcff', rd: '#b8432f', yl: '#e0c040', gy: '#7d8288', gy2: '#a7adb2', dg: '#53585d' };
+    function r(x, y, w, h, f, rx) { return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '"' + (rx ? ' rx="' + rx + '"' : '') + ' fill="' + f + '"/>'; }
+    function p(d, f) { return '<path d="' + d + '" fill="' + f + '"/>'; }
+    function c(x, y, rr, f) { return '<circle cx="' + x + '" cy="' + y + '" r="' + rr + '" fill="' + f + '"/>'; }
+    function e(x, y, rx, ry, f) { return '<ellipse cx="' + x + '" cy="' + y + '" rx="' + rx + '" ry="' + ry + '" fill="' + f + '"/>'; }
+    function ln(d, s, w) { return '<path d="' + d + '" fill="none" stroke="' + s + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/>'; }
+    function g(tr, body) { return '<g transform="' + tr + '">' + body + '</g>'; }
+    function pal(m) { return { m: m, d: shade(m, -0.32), l: shade(m, 0.22), x: shade(m, -0.6) }; }
+    function shadow(y, w) { return e(32, y, w || 28, 2, 'rgba(0,0,0,.28)'); }
+    function wheels(xs, y, rr, P) { return xs.map(function (x) { return c(x, y, rr, P.x) + c(x, y, rr * 0.62, P.d) + c(x, y, rr * 0.22, P.x); }).join(''); }
+    function track(x0, x1, y0, y1, P) { return r(x0, y0, x1 - x0, y1 - y0, P.x, (y1 - y0) / 2); }
+
+    // ---- 小火器 ----
+    function rifle(o) {
+      var f = o.furn, s = '';
+      if (o.stock === 'long') s += p('M2 15.2 L9 13.2 L20 12.6 L' + o.wEnd + ' 12.6 L' + o.wEnd + ' 16.2 L22 16.4 L15 18.8 L4 21.2 Z', M.wd) + p('M2 15.2 L9 13.2 L20 12.6 L' + o.wEnd + ' 12.6 L' + o.wEnd + ' 13.6 L20 13.6 L9 14.2 Z', M.wd2);
+      else if (o.stock === 'wood') s += p('M2 14.5 L18 12.6 L18 17.2 L12 18.6 L3 21 Z', M.wd) + p('M2 14.5 L18 12.6 L18 13.6 L3 15.6 Z', M.wd2);
+      else if (o.stock === 'fixed') s += p('M2 13.2 L18 12.8 L18 16.8 L3 19.8 Z', f);
+      else if (o.stock === 'tele') s += r(9, 13.4, 10, 2.2, M.bk) + p('M2 12.4 L11 12.4 L11 17.4 L5 19.6 L2 19.6 Z', f);
+      else if (o.stock === 'skel') s += ln('M14 13 L3 13 L3 19 L14 16', M.bk2, 1.2);
+      // 機関部
+      s += r(17, 11.4, o.rcv || 14, 5, o.rcvC || M.st);
+      if (o.bolt) s += ln('M23 15.4 L23 18.6', M.st2, 1.1) + c(23, 19, 1.1, M.st2);
+      // 銃身
+      s += r(30, 12.9, o.len - 30, 1.6, M.bk);
+      if (o.gas) s += r(31, 11.2, o.gas - 31, 1.3, M.st2);
+      if (o.hg) s += r(o.hg[0], 11.7, o.hg[1] - o.hg[0], 4.4, o.hgC || f, 1.1);
+      if (o.rails) for (var i = o.hg[0] + 1; i < o.hg[1] - 1; i += 2.2) s += r(i, 11.2, 1.2, 0.8, M.bk2);
+      if (o.band) s += r(o.band, 12.2, 1.4, 4, M.st2);
+      if (o.fs) s += p('M' + (o.fs - 1) + ' 12.9 L' + o.fs + ' 9.6 L' + (o.fs + 1) + ' 12.9 Z', M.bk);
+      s += r(o.len - 1.6, 12.5, 1.8, 2.4, M.bk2);
+      // 握把・弾倉
+      if (o.grip) s += p('M23.5 16.3 L27 16.3 L25.8 22.2 L22.4 22.2 Z', o.gripC || f);
+      s += ln('M24.5 16.4 C24.5 19 28 19 28.5 16.4', M.bk2, 0.7);
+      if (o.mag === 'curve') s += p('M27.6 16.3 L31.4 16.3 C31.8 19.6 33.2 22.6 35 24.6 L31.4 26.4 C29.6 23.8 28.2 20.4 27.6 16.3 Z', o.magC || M.st);
+      else if (o.mag === 'straight') s += p('M27.4 16.3 L31.2 16.3 L30.8 24.4 L27.2 24.4 Z', o.magC || M.bk);
+      else if (o.mag === 'slight') s += p('M27.4 16.3 L31.2 16.3 C31.3 19.6 31.8 22.4 32.6 24.6 L28.9 25.2 C28 22.6 27.6 19.6 27.4 16.3 Z', o.magC || M.bk);
+      else if (o.mag === 'stg') s += p('M26.8 16.3 L30.6 16.3 C30.8 21 31.6 25.4 32.8 28.6 L29 29.4 C27.8 25.6 27.1 21 26.8 16.3 Z', M.st);
+      if (o.handle) s += p('M18 11.4 L19.2 7.8 L28.6 7.8 L29.4 11.4 L27.6 11.4 L27.2 9.6 L20.6 9.6 L20 11.4 Z', f);
+      if (o.optic) s += r(17, 10.4, 15, 1.1, M.bk) + r(19.6, 6.4, 9, 3.6, M.bk2, 1.2) + r(27.8, 6.9, 1.6, 2.6, M.gl);
+      if (o.rsight) s += r(19, 9.8, 2.6, 1.8, M.st2);
+      return s;
+    }
+    var SMALL = {
+      // 歩兵の武器
+      'inf.w.1': function () { return rifle({ stock: 'long', wEnd: 50, rcv: 13, len: 62, bolt: 1, band: 42, fs: 60, rsight: 1 }); },
+      'inf.w.2': function () { return rifle({ stock: 'long', wEnd: 46, rcv: 14, len: 58, band: 38, fs: 56, rsight: 1, gas: 52 }); },
+      'inf.w.3': function () { return rifle({ stock: 'wood', rcv: 20, rcvC: M.st, len: 54, hg: [36, 44], hgC: M.st2, grip: 1, gripC: M.wd, mag: 'stg', fs: 50 }); },
+      'inf.w.4': function () { return rifle({ stock: 'wood', rcv: 15, len: 52, hg: [32, 41], hgC: M.wd, gas: 44, grip: 1, gripC: M.wd, mag: 'curve', fs: 49 }); },
+      'inf.w.5': function () { return rifle({ stock: 'fixed', furn: M.bk2, rcv: 15, len: 55, hg: [32, 44], grip: 1, mag: 'slight', handle: 1, fs: 49 }); },
+      'inf.w.6': function () { return rifle({ stock: 'tele', furn: M.bk2, rcv: 15, len: 52, hg: [32, 46], rails: 1, grip: 1, mag: 'slight', magC: M.tn, optic: 1 }); },
+      'inf.w.7': function () { return rifle({ stock: 'tele', furn: '#4b5233', rcv: 15, len: 52, hg: [32, 46], hgC: '#4b5233', rails: 1, grip: 1, gripC: '#4b5233', mag: 'straight', optic: 1 }); },
+      // 歩兵の特殊(対戦車)
+      'inf.x.1': function () { return e(32, 17, 13, 8, M.tn) + e(32, 17, 9, 5, M.tn2) + [[20, 17], [44, 17], [32, 10], [32, 24]].map(function (q) { return r(q[0] - 3, q[1] - 2, 6, 4, M.bk2, 1); }).join('') + r(30, 4, 4, 5, M.st) + c(32, 4, 1.4, M.rd); },
+      'inf.x.2': function () { return r(4, 12, 56, 5, M.od, 2.5) + r(2, 11.4, 4, 6.2, M.od3, 1) + r(14, 16.6, 9, 3.4, M.wd) + r(27, 16.6, 3, 6, M.od3) + r(36, 16.6, 3, 5, M.od3) + r(44, 9.4, 1.2, 3, M.st) + r(20, 9, 1.2, 3.2, M.st) + r(56, 11.6, 4, 5.8, M.od3, 1); },
+      'inf.x.3': function () { return r(6, 14.6, 34, 2.6, M.od3) + p('M38 11 C45 9.6 52 11.4 55 16 C52 20.6 45 22.4 38 21 Z', M.od) + p('M38 11 C45 9.6 52 11.4 55 16 L38 16 Z', M.od2) + r(28, 10, 1.4, 4.8, M.od2) + r(26, 17.2, 2.4, 4, M.wd); },
+      'inf.x.4': function () { return p('M6 13.6 L1.5 11.8 L1.5 18.2 L6 16.4 Z', M.st) + r(6, 13.6, 38, 2.8, M.st) + r(17, 12.8, 11, 4.4, M.wd, 1) + r(19, 16.8, 2.4, 5, M.wd) + r(30, 16.4, 2.4, 5, M.bk2) + r(22, 8.4, 6, 4, M.bk2, 1) + r(27.6, 9, 1.2, 2.6, M.gl) + p('M44 13 L50 10.6 L57 13 L63 15 L57 17 L50 19.4 L44 17 Z', M.od) + p('M44 13 L50 10.6 L57 13 L63 15 L44 15 Z', M.od2); },
+      'inf.x.5': function () { return r(4, 11, 54, 8, '#56703f', 2) + r(4, 11, 54, 2.2, '#6d8a52', 1) + r(2, 10.4, 3, 9.2, M.bk2, 1) + r(57, 10.4, 3, 9.2, M.bk2, 1) + r(22, 8, 3, 3, M.bk2) + r(38, 8.6, 2, 2.4, M.bk2) + r(26, 19, 3, 5, M.bk2) + r(12, 19, 8, 2.4, M.bk2); },
+      'inf.x.6': function () { return r(4, 13, 52, 7.4, '#717a55', 3) + r(4, 13, 52, 2, '#868f68', 1) + r(1.5, 12.4, 3.6, 8.6, M.bk2, 1.5) + r(54.6, 12.4, 3.6, 8.6, M.bk2, 1.5) + r(22, 4, 16, 9, '#5c6048', 1.5) + r(16, 6, 6, 4.4, M.bk) + r(38, 6.4, 3, 3.4, M.gl) + r(26, 2.4, 6, 1.8, M.bk2) + r(26, 13, 3, 3, M.bk2); },
+      // 対戦車兵の武器
+      'at.w.1': function () { return p('M2 14 L12 12.6 L12 17.6 L4 20 Z', M.wd) + r(12, 11.6, 14, 5, M.st) + r(19, 4.6, 5, 7, M.st2) + r(26, 12.7, 32, 2.2, M.bk) + r(57, 11.6, 5, 4.4, M.st2) + r(20, 16.6, 3, 4.6, M.wd) + ln('M44 15 L41 26 M44 15 L48 26', M.st2, 1.1); },
+      'at.w.2': function () { return r(4, 13, 52, 5.6, M.od, 2.5) + r(30, 3.4, 12, 10, M.od2, 1) + r(33.5, 5.4, 4, 3, '#2b3b44') + r(16, 18.4, 3, 5.6, M.od3) + r(30, 18.4, 3, 4.4, M.od3) + r(2, 12.4, 4, 6.8, M.od3, 1.5) + r(54.6, 12.4, 3, 6.8, M.od3, 1); },
+      'at.w.3': function () { return p('M8 10.6 L3 8.4 L3 17.6 L8 15.4 Z', M.od3) + r(8, 10.6, 52, 3.6, M.od, 1) + r(8, 9.6, 12, 5.6, M.od3, 1) + r(14, 6.8, 40, 1.4, M.st) + r(52, 6.2, 2, 2.6, M.st) + ln('M30 15 L22 28 M30 15 L30 28 M30 15 L40 28', M.st2, 1.3) + r(27, 14, 6, 3, M.st2); },
+      'at.w.4': function () { return p('M6 11 L1 9 L1 20 L6 18 Z', M.bk2) + r(6, 11, 46, 7, '#3f4a3a', 2) + r(6, 11, 46, 1.8, '#56634f', 1) + r(22, 6.4, 7, 4.8, M.bk2, 1) + r(28.6, 7, 1.2, 3.2, M.gl) + r(18, 18, 3, 5.6, M.bk2) + r(34, 18, 3, 5, M.bk2) + r(10, 18, 6, 2.6, M.bk2); },
+      'at.w.5': function () { return r(10, 8.6, 44, 6, M.od, 1.5) + r(52, 8, 3, 7.2, M.od3, 1) + r(8, 8, 3, 7.2, M.od3, 1) + r(22, 15, 11, 6, M.od3, 1) + r(32.6, 16, 1.4, 3, M.gl) + r(25, 21, 5, 2, M.st) + ln('M27.5 23 L16 29.5 M27.5 23 L27.5 29.5 M27.5 23 L39 29.5', M.st2, 1.3); },
+      'at.w.6': function () { return r(10, 9.6, 46, 5, '#617241', 1.2) + r(54, 9, 3, 6.2, '#46532c', 1) + r(17, 14.8, 10, 6.4, '#46532c', 1) + r(26.6, 15.8, 1.4, 3, M.gl) + r(20, 21, 4, 2.4, M.st) + ln('M22 23.4 L12 29.5 M22 23.4 L22 29.5 M22 23.4 L32 29.5', M.st2, 1.2); },
+      'at.w.7': function () { return r(2, 16, 26, 7, M.od, 1) + r(28, 12, 22, 11, M.od, 1.5) + r(44, 13.6, 5, 5, '#2b3b44') + r(4, 6, 22, 9, M.od2, 1) + [8, 13, 18].map(function (x) { return c(x + 1, 10.5, 2, M.bk2); }).join('') + wheels([12, 42], 25, 4.2, pal('#4a4d40')) + r(26, 13.6, 2.6, 3, M.od3); },
+      // 対戦車兵の特殊(対人)
+      'at.x.1': function () { return ln('M15 13 L4 12.6 L3 18.4 L15 16.4', M.bk2, 1.2) + r(14, 11.8, 20, 3.4, M.bk) + r(34, 12.6, 14, 1.6, M.bk) + r(46.4, 12, 2, 2.8, M.bk2) + p('M25 15.2 L28.6 15.2 L28.2 28 L25.2 28 Z', M.bk2) + p('M18.5 15.2 L21.6 15.2 L20.4 21 L17.4 21 Z', M.bk2); },
+      'at.x.2': function () { return p('M2 14 L14 12 L14 18 L4 20.4 Z', M.st2) + r(14, 11.4, 20, 5.4, M.st) + r(34, 12.8, 20, 1.8, M.bk) + p('M54 12 L60 11.2 L60 15.4 L54 14.6 Z', M.st2) + p('M22 11.4 C23 7 25.6 3.6 29 2 L32 3.6 C29.4 5.6 27.8 8.4 27.4 11.4 Z', M.st2) + r(20, 16.8, 3, 5, M.wd) + ln('M50 14.6 L47 24 M50 14.6 L53 24', M.st, 1.1); },
+      'at.x.3': function () { return r(12, 10.4, 16, 7, M.st) + r(28, 11, 26, 4.2, M.st2) + [31, 35, 39, 43, 47, 51].map(function (x) { return c(x, 13.1, 0.9, M.bk); }).join('') + r(54, 12.2, 8, 1.8, M.bk) + r(16, 17.4, 8, 6, M.od) + ln('M14 17.4 C10 20 10 23 13 25', M.br, 1.2) + ln('M26 17.4 L12 29.5 M26 17.4 L27 29.5 M26 17.4 L42 29.5', M.st2, 1.3); },
+      'at.x.4': function () { return p('M2 13.2 L14 12.4 L14 17.2 L3 19.4 Z', M.bk2) + r(14, 11.4, 16, 5.4, M.st) + r(30, 12.6, 28, 2.2, M.bk) + r(32, 15, 14, 1.6, M.st2) + r(58, 12.2, 3, 3, M.bk2) + r(19, 8.6, 6, 2.8, M.st2) + ln('M18 16.8 C16 20 18 23 21 24', M.br, 1.2) + ln('M48 15 L45 24 M48 15 L51 24', M.st, 1.1); },
+      'at.x.5': function () { return p('M2 13 L14 12.4 L14 17.2 L3 19.6 Z', M.bk2) + r(14, 11, 16, 5.6, M.bk2) + r(14, 10, 16, 1.2, M.bk) + r(30, 12.6, 26, 2, M.bk) + r(56, 12.2, 3, 2.8, M.bk2) + r(16, 16.6, 9, 7.4, '#5f6b3e', 1) + r(26, 16.6, 2.6, 5, M.bk2) + r(19, 6.6, 8, 3, M.bk2) + ln('M48 14.6 L45 24 M48 14.6 L51 24', M.st, 1.1); },
+      'at.x.6': function () { return r(16, 8.6, 24, 10, '#4a5232', 1.2) + r(40, 10.6, 16, 5, M.bk) + [43, 47, 51].map(function (x) { return r(x, 11.4, 1.6, 3.4, M.st2); }).join('') + ln('M16 11 L10 9 M16 16 L10 18', M.st2, 1.4) + [4, 8, 12].map(function (x) { return c(x, 22, 1.8, M.br) + c(x, 22, 0.8, M.od3); }).join('') + ln('M28 18.6 L18 29.5 M28 18.6 L28 29.5 M28 18.6 L40 29.5', M.st2, 1.3); },
+      // 戦車の特殊(対人)
+      'tank.x.1': function () { return e(14, 15, 7, 7, M.dg) + e(14, 15, 4.6, 4.6, M.gy) + r(14, 12.4, 22, 5.2, M.st) + r(36, 12, 22, 6, M.dg, 1) + r(58, 13.6, 4, 2.8, M.bk); },
+      'tank.x.2': function () { return r(10, 10, 18, 8, M.st) + r(4, 11, 6, 6, M.st2) + ln('M4 11 L2 9 M4 17 L2 19', M.st2, 1.4) + r(28, 10.8, 9, 5, M.st2) + [30, 32.6, 35].map(function (x) { return c(x, 13.3, 0.8, M.bk); }).join('') + r(37, 12.3, 24, 2.2, M.bk) + r(58, 11.8, 3, 3.2, M.bk2) + r(14, 18, 9, 6, M.od) + ln('M20 18 L12 29 M20 18 L30 29', M.st2, 1.2); },
+      'tank.x.3': function () { return r(12, 11, 18, 6, M.st) + r(30, 12.6, 24, 2.2, M.bk) + r(32, 14.8, 12, 1.4, M.st2) + r(54, 12.2, 4, 3, M.bk2) + r(14, 17, 14, 4, M.od) + r(18, 21, 6, 6, M.od3) + ln('M10 14 L6 14', M.st2, 1.6); },
+      'tank.x.4': function () { return r(4, 10, 28, 12, M.br) + r(4, 10, 28, 2.4, M.br2) + r(2, 9, 2.6, 14, M.br) + r(32, 10.4, 26, 11.2, '#5d6268') + r(32, 10.4, 26, 2, '#7a8087') + r(58, 10.4, 2.4, 11.2, '#3b3f44') + r(42, 10.4, 2, 11.2, M.bk) + [36, 40, 47, 51, 55].map(function (x) { return c(x, 16, 0.9, '#9aa0a6'); }).join(''); },
+      'tank.x.5': function () { return r(4, 10, 26, 12, M.br) + r(4, 10, 26, 2.4, M.br2) + r(2, 9, 2.6, 14, M.br) + p('M30 10.6 L48 10.6 L56 14.6 L56 17.4 L48 21.4 L30 21.4 Z', M.bk2) + r(36, 10.6, 2, 10.8, M.yl) + ln('M56 16 L63 16', M.st2, 1.2); },
+      'tank.x.6': function () { return r(8, 22, 40, 6, '#5d6b45', 1) + r(26, 14, 16, 8, '#4a5638', 1) + r(30, 12, 26, 2.4, M.bk) + r(52, 11.4, 3, 3.6, M.bk2) + r(12, 6, 13, 12, '#4a5638', 1.5) + c(18.5, 12, 3.4, M.bk) + c(18.5, 12, 2, M.gl) + r(34, 8, 8, 4, M.od3); },
+      // 砲兵の特殊(対装甲の砲弾)
+      'art.x.1': function () { return shell({ body: '#5a6342', band: M.yl, nose: 'ogive', base: 1 }) + [[22, 12], [28, 12], [34, 12], [25, 18], [31, 18]].map(function (q) { return c(q[0], q[1], 1.6, '#3e4630'); }).join(''); },
+      'art.x.2': function () { return shell({ body: '#5f6747', band: M.yl, nose: 'seeker', fins: 1 }); },
+      'art.x.3': function () { return shell({ body: '#58613f', band: M.yl, nose: 'ogive', len: 40 }) + ln('M52 6 C56 3 60 3 62 6', M.tn2, 1) + r(54, 7, 6, 4, M.dg, 1) + ln('M55 6 L57 2 L59 6', M.tn2, 0.6); },
+      'art.x.4': function () { return shell({ body: '#636b52', band: M.yl, nose: 'ogive', len: 38 }) + r(48, 4.6, 10, 5, M.dg, 1.5) + ln('M48 7 L44 3 M58 7 L62 3', M.st2, 1) + r(48, 21.4, 10, 5, M.dg, 1.5) + ln('M48 24 L44 28 M58 24 L62 28', M.st2, 1); },
+      'art.x.5': function () { return shell({ body: '#5b6450', band: M.yl, nose: 'ogive', len: 40 }) + ln('M54 13 L58 6 L62 13', M.tn2, 0.7) + p('M53 6 C55 2 61 2 63 6 Z', M.tn) + r(55.5, 13, 5, 6, M.dg, 1); },
+      'art.x.6': function () { return shell({ body: '#5c6744', band: M.yl, nose: 'excal', fins: 1, canard: 1, len: 52 }); }
+    };
+    function shell(o) {
+      var L = o.len || 46, x0 = 4, x1 = x0 + L, s = '';
+      s += r(x0, 10, L - 12, 12, o.body, 1) + r(x0, 10, L - 12, 2.4, shade(o.body, 0.18));
+      s += r(x0 + 6, 9.4, 3, 13.2, M.br) + r(x0 + 2, 9.6, 2, 12.8, shade(o.body, -0.2));
+      if (o.band) s += r(x1 - 22, 10, 2.4, 12, o.band);
+      if (o.nose === 'ogive') s += p('M' + (x1 - 12) + ' 10 C' + (x1 - 4) + ' 10.6 ' + x1 + ' 14 ' + (x1 + 2) + ' 16 C' + x1 + ' 18 ' + (x1 - 4) + ' 21.4 ' + (x1 - 12) + ' 22 Z', o.body) + r(x1, 15, 3, 2, M.br);
+      if (o.nose === 'seeker') s += p('M' + (x1 - 12) + ' 10 C' + (x1 - 4) + ' 10.6 ' + x1 + ' 13 ' + x1 + ' 16 C' + x1 + ' 19 ' + (x1 - 4) + ' 21.4 ' + (x1 - 12) + ' 22 Z', o.body) + c(x1 - 1, 16, 3, M.gl) + c(x1 - 1.6, 15, 1, '#fff');
+      if (o.nose === 'excal') s += p('M' + (x1 - 12) + ' 10.6 C' + (x1 - 2) + ' 11 ' + (x1 + 4) + ' 14 ' + (x1 + 6) + ' 16 C' + (x1 + 4) + ' 18 ' + (x1 - 2) + ' 21 ' + (x1 - 12) + ' 21.4 Z', o.body);
+      if (o.fins) s += p('M' + x0 + ' 10 L' + (x0 - 2) + ' 5 L' + (x0 + 6) + ' 10 Z', M.dg) + p('M' + x0 + ' 22 L' + (x0 - 2) + ' 27 L' + (x0 + 6) + ' 22 Z', M.dg);
+      if (o.canard) s += p('M' + (x1 - 8) + ' 11 L' + (x1 - 6) + ' 6 L' + (x1 - 3) + ' 12 Z', M.dg) + p('M' + (x1 - 8) + ' 21 L' + (x1 - 6) + ' 26 L' + (x1 - 3) + ' 20 Z', M.dg);
+      return s;
+    }
+
+    // ---- 戦車(兵種アイコン・戦車の武器) ----
+    var TANKS = [
+      { pm: '#5b6436', hull: 'M6 22 L6 14.6 L14 12.6 L44 12.6 L53 17 L55 22 Z', tur: 'M21 12.8 C21 7.8 25 5.6 31.4 5.6 C37.6 5.6 41.4 7.8 41.8 12.8 Z', gun: [41.6, 8.4, 12.6, 2.2], wh: 'bogie', cup: 4 },
+      { pm: '#b39b5e', hull: 'M5 22 L5 13.8 L51 13.8 L55.6 16.6 L55.6 22 Z', tur: 'M17 13.8 L18 7.6 L42 7.6 L44.6 9.6 L44.6 13.8 Z', gun: [44.4, 9.4, 17.6, 2.2], brake: 1, wh: 'tiger', cup: 5.8 },
+      { pm: '#5a6139', hull: 'M4 22 L5 16 L50 16 L58 19 L58 22 Z', tur: 'M18 16 C18.6 11.2 23 9 31 9 L41 9.6 C44.4 10.6 46 12.8 46 16 Z', gun: [45.6, 10.6, 17.6, 1.9], evac: 52, wh: 'road', cup: 7.4 },
+      { pm: '#4b5a3a', hull: 'M4 22 L5 16 L52 16 L59 19 L59 22 Z', tur: 'M15.6 16 L17.6 10 L44 10 L48.4 12 L48.4 16 Z', gun: [48.2, 11.6, 15.2, 2], evac: 54, wh: 'road', skirt: 1, cup: 8.2 },
+      { pm: '#4f5d3c', hull: 'M4 22 L5 16 L52 16 L59 19 L59 22 Z', tur: 'M15.6 16 L17.6 10 L40 10 L50.6 13.6 L46 16 Z', gun: [48, 12, 16.4, 1.9], evac: 56.2, wh: 'road', skirt: 1, cup: 8.2 },
+      { pm: '#66705d', hull: 'M4 22 L5 16 L52 16 L60 19 L60 22 Z', tur: 'M14 16 L17 10.6 L42 10.4 L52.6 13.6 L50 16 Z', gun: [50.4, 11.7, 13.6, 2.7], evac: 57, wh: 'road', skirt: 1, rws: 1, cup: 8.6 }
+    ];
+    function tankArt(i, P) {
+      var T = TANKS[Math.max(0, Math.min(TANKS.length - 1, i))], s = shadow(29.4, 29);
+      s += track(4, 58, 21.4, 29, P);
+      if (T.wh === 'bogie') s += [12, 18.4, 27, 33.4, 42, 48.4].map(function (x) { return c(x, 25.6, 2.8, P.d) + c(x, 25.6, 1, P.x); }).join('') + [15.2, 30.2, 45.2].map(function (x) { return r(x - 3.6, 22.4, 7.2, 2.4, P.x); }).join('');
+      else if (T.wh === 'tiger') s += [9, 14, 19, 24, 29, 34, 39, 44, 49].map(function (x, k) { return c(x, k % 2 ? 25.2 : 25.8, 2.9, k % 2 ? P.m : P.d) + c(x, k % 2 ? 25.2 : 25.8, 0.9, P.x); }).join('');
+      else s += wheels([10, 17, 24, 31, 38, 45, 52], 25.6, 2.5, P);
+      s += p(T.hull, P.m) + p(T.hull.replace(/L(\d+(\.\d+)?) 22 Z$/, 'L$1 17 Z'), P.l);
+      if (T.skirt) s += r(6, 16.8, 47, 5.4, P.d) + [16, 26, 36, 46].map(function (x) { return r(x, 16.8, 0.6, 5.4, P.x); }).join('');
+      s += p(T.tur, P.m) + r(T.gun[0] - 1.2, T.gun[1] - 1.1, 3, T.gun[3] + 2.2, P.d);
+      s += r(T.gun[0], T.gun[1], T.gun[2], T.gun[3], P.d);
+      if (T.brake) s += r(T.gun[0] + T.gun[2] - 2.4, T.gun[1] - 0.8, 3, T.gun[3] + 1.6, P.x);
+      if (T.evac) s += r(T.evac, T.gun[1] - 0.5, 3, T.gun[3] + 1, P.x);
+      s += r(T.rws ? 33 : 27, T.cup, 6, 2.4, P.d, 0.8);
+      if (T.rws) s += r(22, 6.4, 6, 3.6, P.x, 0.8) + r(28, 7.4, 6, 1, P.x) + r(24, 10, 2, 1, P.x);
+      return s;
+    }
+    // ---- 戦車の防護(装甲の種類) ----
+    var TARMOR = {
+      1: function () { return p('M8 12 L44 8 L58 14 L22 18 Z', '#9aa1a8') + p('M8 12 L22 18 L22 26 L8 20 Z', '#6b737b') + p('M22 18 L58 14 L58 22 L22 26 Z', '#7f878f') + ln('M26 20 L54 16.6 M26 22.6 L54 19.2', '#5a6168', 0.6) + ln('M30 11.6 L46 10.2 M24 13.4 L50 11.2', '#bfc6cc', 0.6); },
+      2: function () { var P = pal('#56603a'); return track(4, 56, 22, 29, P) + wheels([11, 19, 27, 35, 43, 50], 25.6, 2.8, P) + p('M5 22 L5 15 L14 12 L40 12 L56 19 L56 22 Z', P.m) + p('M40 12 L56 19 L52 19 L38 13.6 Z', '#e0c040') + p('M18 12 L20 6.6 L36 6.6 L40 12 Z', P.d) + r(39, 8.4, 14, 1.8, P.x) + ln('M44 22 A7 7 0 0 0 49.6 15.6', '#fff', 0.7); },
+      3: function () { var P = pal('#7d7350'); return track(4, 56, 22, 29, P) + wheels([10, 17, 24, 31, 38, 45, 51], 25.6, 2.4, P) + p('M5 22 L5 14 L50 14 L55 17 L55 22 Z', P.m) + p('M18 14 L19 8 L40 8 L42 14 Z', P.m) + r(42, 9.6, 14, 1.8, P.x) + r(6, 15.4, 46, 7.4, P.l) + [17.5, 29, 40.5].map(function (x) { return r(x, 15.4, 0.6, 7.4, P.d); }).join('') + r(16, 7.4, 28, 6.6, P.l) + [26, 35].map(function (x) { return r(x, 7.4, 0.6, 6.6, P.d); }).join(''); },
+      4: function () { var s = ''; s += r(6, 6, 52, 4, '#7f878f') + r(6, 22, 52, 4, '#7f878f'); for (var x = 7; x < 57; x += 6.2) s += p('M' + x + ' 11 L' + (x + 3) + ' 10 L' + (x + 6) + ' 11 L' + (x + 6) + ' 16 L' + (x + 3) + ' 17 L' + x + ' 16 Z', '#d9d3c2') + p('M' + x + ' 16 L' + (x + 3) + ' 17 L' + (x + 6) + ' 16 L' + (x + 6) + ' 21 L' + (x + 3) + ' 22 L' + x + ' 21 Z', '#c3bba5'); return s + r(6, 10, 52, 0.8, '#5a6168') + r(6, 21.2, 52, 0.8, '#5a6168'); },
+      5: function () { var P = pal('#5b6644'), s = track(4, 58, 22, 29, P) + wheels([10, 17, 24, 31, 38, 45, 52], 25.6, 2.5, P) + p('M4 22 L5 16 L52 16 L59 19 L59 22 Z', P.m) + p('M14 16 C15 10.6 21 8.6 30 8.6 C38 8.6 44 10.6 45 16 Z', P.m) + r(44, 11.6, 18, 2, P.x); for (var i = 0; i < 6; i++) s += r(30 + i * 2.6, 9.6 + i * 0.5, 2.3, 2.4, '#6f7b55') + r(30 + i * 2.6, 12.4 + i * 0.2, 2.3, 2.4, '#6f7b55'); for (i = 0; i < 7; i++) s += r(44 + i * 2.2, 16.4 + i * 0.4, 2, 2.2, '#6f7b55'); return s; },
+      6: function () { var P = pal('#7b7a63'); return track(4, 58, 22, 29, P) + wheels([10, 17, 24, 31, 38, 45, 52], 25.6, 2.5, P) + p('M4 22 L5 16 L52 16 L59 19 L59 22 Z', P.m) + p('M14 16 L17 9.6 L44 9.6 L50 13 L48 16 Z', P.m) + r(48, 11.4, 15, 2.1, P.x) + r(20, 10.6, 8, 4.4, '#3b4046', 0.6) + r(21, 11.4, 6, 2.8, '#59626b') + c(36, 9.4, 2.2, P.x) + ln('M8 6 A14 14 0 0 1 32 2', '#8fdcff', 0.8) + ln('M12 8 A10 10 0 0 1 28 4.6', '#8fdcff', 0.8); }
+    };
+
+    // ---- 装甲車(対戦車兵の防護) ----
+    function apc(i, P) {
+      var s = shadow(29.4, 28);
+      if (i === 1) return s + track(26, 58, 21, 29, P) + wheels([31, 38, 45, 52], 25.4, 2.6, P) + wheels([12], 25, 4.2, P) + p('M4 22 L4 15 L10 13 L22 13 L24 11 L58 11 L58 22 Z', P.m) + r(24, 11, 34, 2, P.l) + p('M10 13 L12 7.6 L20 7.6 L22 13 Z', P.d) + r(13, 8.6, 6, 3.2, '#2b3b44') + r(40, 7, 1.6, 4, P.x) + r(40, 6.6, 9, 1.6, P.x);
+      if (i === 2) return s + track(5, 57, 21, 29, P) + wheels([11, 20, 29, 38, 47], 25.4, 3, P) + p('M5 22 L5 9 L44 9 L56 16 L56 22 Z', P.m) + p('M5 9 L44 9 L56 16 L52 16 L42 10.6 L5 10.6 Z', P.l) + r(34, 5.6, 6, 3.4, P.d) + r(40, 6.6, 9, 1.2, P.x);
+      if (i === 3) return s + track(5, 57, 21, 29, P) + wheels([11, 20, 29, 38, 47], 25.4, 3, P) + p('M5 22 L5 11 L46 11 L56 17 L56 22 Z', P.m) + r(5, 11, 41, 1.8, P.l) + c(38, 9.4, 3, P.d) + r(40, 8.4, 10, 1.2, P.x) + r(16, 8.6, 6, 2.4, P.d);
+      if (i === 4 || i === 5 || i === 6) {
+        var top = i === 6 ? 'M4 21.6 L4 12 L40 11 L56 15 L60 21.6 Z' : i === 5 ? 'M4 21.6 L4 11 L44 11 L58 16 L58 21.6 Z' : 'M4 21.6 L4 10.4 L48 10.4 L57 15 L57 21.6 Z';
+        s += p(top, P.m) + r(4, 11.2, 40, 1.6, P.l) + wheels([12, 21, 36, 45], 24.6, 4, P);
+        if (i === 4) s += r(30, 6.6, 8, 4, P.d) + r(38, 7.4, 8, 2, P.x);
+        if (i === 5) s += r(22, 7, 8, 4, P.d) + r(30, 8, 8, 1.4, P.x) + r(6, 13, 30, 0.6, P.d) + r(6, 16, 30, 0.6, P.d);
+        if (i === 6) s += r(20, 7.6, 12, 3.6, P.d, 1) + r(32, 8.6, 12, 1.6, P.x);
+        return s;
+      }
+      return s;
+    }
+    // ---- 自走砲(砲兵の防護) ----
+    function spg(i, P) {
+      var s = shadow(29.4, 29);
+      if (i === 6) return s + p('M4 22 L4 11 L18 11 L18 14 L58 14 L58 22 Z', P.m) + p('M40 14 L44 8 L54 8 L56 14 Z', P.d) + r(43, 9, 10, 3, '#2b3b44') + wheels([12, 21, 30, 46], 24.6, 4, P) + r(8, 7, 14, 6, P.d) + r(20, 6.4, 30, 2.2, P.x) + r(48, 5.6, 4, 3.8, P.x);
+      s += track(4, 58, 21.4, 29, P) + wheels(i === 1 ? [11, 17.4, 26, 32.4, 41, 47.4] : [10, 17, 24, 31, 38, 45, 52], 25.6, 2.6, P);
+      if (i === 1) return s + p('M5 22 L5 13 L14 11 L44 11 L54 17 L56 22 Z', P.m) + r(30, 6, 9, 5, P.d) + c(34.5, 6, 3, P.x) + c(34.5, 6, 2, P.d) + r(40, 10, 16, 2.4, P.x);
+      var tu = i === 2 ? 'M20 16 L20 7.4 L42 7.4 L44 10 L44 16 Z' : i === 3 ? 'M16 16 L16 8 L40 8 L44 11 L44 16 Z' : i === 4 ? 'M14 16 L15 6.6 L42 6.6 L46 9.6 L46 16 Z' : 'M12 16 L13 5.6 L44 5.6 L48 9 L48 16 Z';
+      var gl = i === 2 ? 14 : i === 3 ? 14 : i === 4 ? 16 : 16;
+      s += p('M4 22 L5 16 L52 16 L59 19 L59 22 Z', P.m) + p(tu, P.m) + r(tu.indexOf('48 9') > 0 ? 48 : 44, 9.6, gl, 2.2, P.x) + r(4, 16, 48, 1.4, P.l);
+      if (i === 5) s += r(59.6, 9, 3.2, 3.2, P.x);
+      return s;
+    }
+    // ---- 火砲(砲兵の武器・兵種アイコン) ----
+    function artGun(i, P) {
+      var s = shadow(29.4, 27);
+      if (i >= 6) {
+        if (i === 6) return s + track(4, 56, 21.4, 29, P) + wheels([10, 17, 24, 31, 38, 45, 51], 25.6, 2.5, P) + p('M4 22 L4 16 L46 16 L56 19 L56 22 Z', P.m) + p('M40 16 L44 10 L54 10 L56 16 Z', P.d) + g('rotate(-14 30 16)', r(6, 6, 32, 10, P.l, 1) + r(6, 6, 32, 2, P.m) + [10, 15, 20, 25, 30, 35].map(function (x) { return c(x, 11, 1.6, P.x); }).join(''));
+        return s + p('M30 22 L30 13 L46 13 L46 10 L56 10 L60 16 L60 22 Z', P.m) + r(48, 11, 8, 4, '#2b3b44') + wheels([16, 36, 52], 24.6, 4, P) + p('M4 22 L4 16 L30 16 L30 22 Z', P.d) + g('rotate(-16 18 16)', r(4, 6, 26, 10, P.l, 1) + r(4, 6, 26, 2, P.m) + [8, 13, 18, 23].map(function (x) { return c(x, 11, 1.8, P.x); }).join(''));
+      }
+      var len = [0, 26, 32, 38, 40, 42][i], ang = [0, -14, -12, -12, -10, -10][i], wr = [0, 5, 6, 6.2, 4.6, 3.6][i], wx = 28;
+      s += ln('M28 19 L4 27.4', P.x, i === 5 ? 1.6 : 2.4);
+      if (i === 4 || i === 5) s += ln('M28 19 L8 25.6', P.d, 1.6);
+      s += g('rotate(' + ang + ' 28 16)', r(22, 13.6, len, 3.6, P.d) + r(18, 12.8, 12, 5.6, P.m, 1) + (i >= 4 ? r(22 + len - 3, 12.8, 4, 5.2, P.x) : '') + (i === 3 ? r(22 + len - 2, 13.2, 2.6, 4.4, P.x) : ''));
+      if (i === 1 || i === 3) s += r(30, 6.6, 3, 12, P.l) ;
+      if (i === 2) s += r(30, 9, 2.4, 9, P.l);
+      if (i === 5) s += ln('M16 21 L40 21 M20 21 L28 15 L36 21', P.l, 1.2);
+      s += c(wx, 24.6 - (wr - 4.6), wr, P.x) + c(wx, 24.6 - (wr - 4.6), wr * 0.55, P.d) + c(wx, 24.6 - (wr - 4.6), wr * 0.18, P.x);
+      if (i === 4) s += r(6, 16, 8, 6, P.d) + c(10, 24, 2.4, P.x);
+      return s;
+    }
+    // ---- 兵士(兵種アイコン) ----
+    function soldier(P, aTier, kneel) {
+      var s = '', head = '#e8c4a0', helmet = aTier >= 3 ? P.d : P.d;
+      if (kneel) {
+        s += p('M20 46 L22 36 L34 36 L36 40 L44 40 L44 46 L38 46 L36 44 L30 44 L28 46 Z', P.d) + p('M20 37 L21 22 C21 19 23 18 27 18 L33 18 C37 18 38.6 20 38.6 23 L38.6 37 Z', P.m);
+      } else {
+        s += p('M18 60 L20 40 L26 40 L27 60 Z M37 60 L36 40 L42 40 L44 60 Z', P.d) + p('M17 42 L17 24 C17 21 19.6 19 23 19 L39 19 C42.4 19 45 21 45 24 L45 42 Z', P.m);
+      }
+      var hx = kneel ? 30 : 31, hy = kneel ? 13 : 14;
+      if (aTier >= 2 && !kneel) s += r(19.6, 22, 22.8, 17, P.x, 3) + (aTier >= 4 ? [23, 28, 33].map(function (x) { return r(x, 30, 4, 6, P.d, 1); }).join('') : r(21, 26, 20, 1.2, P.d) + r(21, 31, 20, 1.2, P.d));
+      s += c(hx, hy + 1, 5.6, head);
+      if (aTier <= 2) s += p('M' + (hx - 8) + ' ' + (hy - 0.4) + ' C' + (hx - 7) + ' ' + (hy - 9) + ' ' + (hx + 7) + ' ' + (hy - 9) + ' ' + (hx + 8) + ' ' + (hy - 0.4) + ' L' + (hx + 9) + ' ' + (hy + 0.6) + ' L' + (hx - 9) + ' ' + (hy + 0.6) + ' Z', helmet);
+      else s += p('M' + (hx - 7) + ' ' + (hy + 3) + ' L' + (hx - 7.4) + ' ' + (hy - 1) + ' C' + (hx - 6.4) + ' ' + (hy - 8.6) + ' ' + (hx + 6.4) + ' ' + (hy - 8.6) + ' ' + (hx + 7.4) + ' ' + (hy - 1) + ' L' + (hx + 6.6) + ' ' + (hy + 0.6) + ' Z', helmet);
+      if (aTier >= 5) s += r(hx - 1.6, hy - 8.4, 3.2, 2.6, P.x) + r(hx + 2, hy - 5.6, 5.4, 2.4, '#2b3b44', 1);
+      return s;
+    }
+
+    var DRAW = {
+      inf: { w: function (n) { return SMALL['inf.w.' + n](); }, a: function (n) { return infArmor(n); }, x: function (n) { return SMALL['inf.x.' + n](); } },
+      at: { w: function (n) { return SMALL['at.w.' + n](); }, a: function (n) { return apc(n, pal(['#6b6f45', '#7a8058', '#5f6b3e', '#55613a', '#5c6148', '#5d6a48'][n - 1])); }, x: function (n) { return SMALL['at.x.' + n](); } },
+      tank: { w: function (n) { return tankArt(n - 1, pal(TANKS[n - 1].pm)); }, a: function (n) { return TARMOR[n](); }, x: function (n) { return SMALL['tank.x.' + n](); } },
+      art: { w: function (n) { return artGun(n, pal(['#5b6436', '#7d7350', '#59603a', '#56603d', '#7d7a5a', '#5a6339', '#5f6a46'][n - 1])); }, a: function (n) { return spg(n, pal(['#5b6436', '#5a6139', '#55603a', '#4f5d3c', '#5c6448', '#5b6847'][n - 1])); }, x: function (n) { return SMALL['art.x.' + n](); } }
+    };
+    function infArmor(n) {
+      if (n === 1) return e(32, 26, 18, 2.4, 'rgba(0,0,0,.25)') + p('M12 22 C12 8 22 4 32 4 C42 4 52 8 52 22 L56 23 L56 25 L8 25 L8 23 Z', '#5b6436') + p('M18 12 C22 7 28 6 32 6 C36 6 40 7 44 10 C40 8.6 36 8 32 8 C26 8 21 9.4 18 12 Z', '#7a8648') + ln('M16 25 C18 30 24 30 26 25', '#3f4626', 1.2);
+      var col = ['', '', '#5f6a3b', '#4f6a3e', '#6b6f4e', '#b19e74', '#566a44'][n], col2 = shade(col, -0.25);
+      var s = p('M14 4 L24 4 C25 8 28 10 32 10 C36 10 39 8 40 4 L50 4 L52 12 L52 30 L12 30 L12 12 Z', col);
+      if (n === 2) for (var y = 13; y < 30; y += 3.4) s += r(13, y, 38, 1.2, col2);
+      if (n === 3) s += [[18, 15, '#3b4a2a'], [30, 22, '#6e5a3a'], [42, 14, '#2e3a22'], [22, 25, '#2e3a22'], [44, 25, '#6e5a3a']].map(function (q) { return e(q[0], q[1], 5, 3, q[2]); }).join('') + p('M14 4 L24 4 C25 8 28 10 32 10 C36 10 39 8 40 4 L50 4 L50 8 C44 8 40 12 32 12 C24 12 20 8 14 8 Z', col2);
+      if (n >= 4) { for (var yy = 14; yy < 29; yy += 3) s += r(16, yy, 32, 1, col2); s += r(22, 16, 7, 9, col2, 1) + r(35, 16, 7, 9, col2, 1); }
+      if (n === 5) s += r(12, 14, 4, 14, col2) + r(48, 14, 4, 14, col2) + ln('M18 30 L18 33', '#c03030', 1.4);
+      if (n === 6) s += [[18, 20, '#3e4f2d'], [40, 24, '#6b5638'], [30, 13, '#2e3a22']].map(function (q) { return e(q[0], q[1], 4, 2.6, q[2]); }).join('');
+      return s;
+    }
+    function wide(body, vb) { return '<svg viewBox="' + (vb || '0 0 64 32') + '" class="aart">' + body + '</svg>'; }
+    // 武装のアイコン(実物の色)。tier 0 は未開発(最初の新型を薄く表示)
+    function icon(t, k, tier) {
+      var list = TF.ARMS[t][k], n = Math.max(1, Math.min(list.length, tier || 1));
+      if (t === 'inf' && k === 'a') return wide(DRAW[t][k](n), '0 0 64 34');
+      return wide(DRAW[t][k](n));
+    }
+    // 兵種アイコン(チームの色)。開発した武器・防護で見た目が変わる
+    function unit(t, color, w, a, cls) {
+      var P = pal(color), s, vb = '0 0 64 64';
+      w = Math.max(1, w || 1); a = a || 0;
+      if (t === 'tank') { s = tankArt(Math.min(TANKS.length, w) - 1, P); vb = '0 -14 64 52'; }
+      else if (t === 'art') { s = artGun(Math.min(7, w), P); vb = '0 -14 64 52'; }
+      else if (t === 'inf') {
+        s = soldier(P, Math.max(1, a), false) + g('translate(-2 18) rotate(-30 32 16)', SMALL['inf.w.' + Math.min(7, w)]());
+      } else {
+        var ww = Math.min(7, w);
+        if (ww === 7) { s = SMALL['at.w.7'](); vb = '0 -14 64 52'; }
+        else if (ww === 3 || ww >= 5) s = soldier(P, Math.max(1, a > 0 ? 3 : 1), true) + g('translate(6 26) scale(.9)', SMALL['at.w.' + ww]());
+        else s = soldier(P, Math.max(1, a > 0 ? 3 : 1), true) + g('translate(-2 8) rotate(-12 32 16) scale(1)', SMALL['at.w.' + ww]());
+      }
+      return '<svg viewBox="' + vb + '" class="' + (cls || '') + '">' + s + '</svg>';
+    }
+    return { icon: icon, unit: unit, pal: pal };
+  })();
+
+  // 兵種アイコン: 味方は開発した武装で、敵はステージの年代で見た目が変わる
+  function armTierOf(t, k) { return TF.armTier(TF.armLv(st, t, k)); }
+  function allySvg(t, cls) { return ArmArt.unit(t, ALLY_C, armTierOf(t, 'w'), armTierOf(t, 'a'), cls); }
+  function eraTier(s) { return 1 + Math.floor(Math.max(0, s - 1) / 25); }
+  function enemySvg(t, s, cls) { var n = eraTier(s); return ArmArt.unit(t, ENEMY_C, n, n, cls); }
+
   var BART = {
     hq: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><rect x="9" y="29" width="46" height="26" rx="2" fill="#7b8752"/><rect x="7" y="26" width="50" height="5" rx="1" fill="#55603a"/><rect x="20" y="15" width="24" height="12" fill="#8c9862"/><rect x="18" y="12" width="28" height="4" rx="1" fill="#55603a"/><g fill="#ffd166"><rect x="13" y="34" width="7" height="6" rx="1"/><rect x="44" y="34" width="7" height="6" rx="1"/><rect x="24" y="18" width="5" height="5"/><rect x="35" y="18" width="5" height="5"/></g><rect x="27" y="40" width="10" height="15" fill="#3a3021"/><path d="M32 30.5l1.8 3.7 4 .5-3 2.8.8 4-3.6-2-3.6 2 .8-4-3-2.8 4-.5z" fill="#f1c453"/><rect x="43" y="1" width="1.8" height="12" fill="#cfd3c4"/><path d="M44.8 1.8h11l-3 3.3 3 3.3h-11z" fill="#d64545"/><path d="M25 12 22 3" stroke="#b9bfa8" stroke-width="1.4"/><circle cx="22" cy="3" r="1.6" fill="#ef6b5b"/>',
     supply: '<ellipse cx="32" cy="57" rx="26" ry="5" fill="#000" opacity=".25"/><g stroke="#6e4b1c" stroke-width="1.5"><rect x="6" y="36" width="20" height="19" fill="#b98a45"/><rect x="27" y="36" width="20" height="19" fill="#c5964f"/><rect x="16" y="17" width="20" height="19" fill="#d0a35c"/></g><g stroke="#7d5622" stroke-width="1.3"><path d="M6 36l20 19M26 36 6 55M27 36l20 19M47 36 27 55"/></g><path d="M18.5 26.5h15" stroke="#7d5622" stroke-width="2"/><circle cx="26" cy="26.5" r="5" fill="#f1c453" stroke="#a8791c" stroke-width="1.5"/><rect x="49" y="40" width="10" height="15" rx="2" fill="#5f6f45"/><rect x="49" y="44" width="10" height="2" fill="#3e4a2c"/><rect x="49" y="50" width="10" height="2" fill="#3e4a2c"/>',
@@ -1514,7 +1783,7 @@ if (typeof module !== 'undefined') module.exports = TF;
   function unitCardHtml(t) {
     var q = TF.squadStats(st, t, null);
     var on = TF.typeUnlocked(st, t);
-    return '<div class="card urow" style="margin-top:8px"><div class="uicon' + (on ? '' : ' off') + '">' + unitSvg(t, ALLY_C) + '</div><div class="grow">' +
+    return '<div class="card urow" style="margin-top:8px"><div class="uicon' + (on ? '' : ' off') + '">' + allySvg(t) + '</div><div class="grow">' +
       '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">兵舎系Lv' + TF.lv(st, TF.TYPE_BLD[t]) + '</span>' : '<span class="pill red">未解放</span>') + '</div>' +
       (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div>' : '') +
       '<div class="aff"><span class="s">強い: ' + names(STRONG[t]) + '</span> / <span class="w">弱い: ' + names(WEAK[t]) + '</span></div></div></div>';
@@ -1581,7 +1850,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var html = '<h2 class="sec" style="margin-top:4px">兵種</h2><div class="ulist">';
     TF.TYPES.forEach(function (t) {
       var on = TF.typeUnlocked(st, t), q = TF.squadStats(st, t, null), b = TF.TYPE_BLD[t];
-      html += '<div class="card urow"><div class="uicon' + (on ? '' : ' off') + '">' + unitSvg(t, ALLY_C) + '</div><div class="grow">' +
+      html += '<div class="card urow"><div class="uicon' + (on ? '' : ' off') + '">' + allySvg(t) + '</div><div class="grow">' +
         '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">' + TF.BLD[b].name + ' Lv' + TF.lv(st, b) + '</span>' : '<span class="pill red">' + TF.BLD[b].name + 'で解放</span>') + '</div>' +
         (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div>' : '') +
         (on ? '<div class="small" style="margin-top:2px">武装: ' + TF.ARM_KINDS.map(function (k) { var l = TF.armLv(st, t, k); return l ? TF.armName(t, k, l) + ' Lv' + l : '<span style="opacity:.6">' + TF.ARM_KIND[k].name + 'なし</span>'; }).join(' ・ ') + '</div>' : '') +
@@ -1659,11 +1928,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       var on = TF.typeUnlocked(st, x), tot = 0;
       TF.ARM_KINDS.forEach(function (k) { tot += TF.armLv(st, x, k); });
       var can = on && TF.ARM_KINDS.some(function (k) { return TF.canArm(st, x, k).ok; });
-      return '<button data-act="arm-type" data-t="' + x + '"' + (x === t ? ' class="on"' : '') + (on ? '' : ' disabled') + '>' + unitSvg(x, on ? ALLY_C : '#6b7466') +
+      return '<button data-act="arm-type" data-t="' + x + '"' + (x === t ? ' class="on"' : '') + (on ? '' : ' disabled') + '>' + (on ? allySvg(x) : unitSvg(x, '#6b7466')) +
         '<span>' + SHORT[x] + '</span><span class="lvs">' + (on ? '武装Lv' + tot : '未解放') + '</span><i class="dot' + (can ? ' on' : '') + '"></i></button>';
     }).join('') + '</div>';
     var o = TF.armOpt(st, t), q = TF.squadStats(st, t, null);
-    html += '<div class="card armsum"><div class="big">' + unitSvg(t, ALLY_C) + '</div><div class="grow"><div style="font-weight:900;font-size:16px">' + TF.UNIT[t].name + 'の武装</div>' +
+    html += '<div class="card armsum"><div class="big">' + allySvg(t) + '</div><div class="grow"><div style="font-weight:900;font-size:16px">' + TF.UNIT[t].name + 'の武装</div>' +
       '<div class="st"><span>攻撃力 <b>×' + o.atkMul.toFixed(2) + '</b></span><span>耐久 <b>×' + o.hpMul.toFixed(2) + '</b></span><span>' + names(TF.ARMS[t].vs) + 'へ <b>×' + (o.vs ? o.vs[TF.ARMS[t].vs[0]] : 1).toFixed(2) + '</b></span></div>' +
       '<div class="st"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div></div></div>';
     html += '<div class="armlist">';
@@ -1672,7 +1941,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var inTier = l === 0 ? 0 : ((l - 1) % TF.K.armPer) + 1, pips = '';
       for (var i = 1; i <= TF.K.armPer; i++) pips += '<i' + (i <= inTier ? ' class="on"' : '') + '></i>';
       var nextName = TF.armName(t, k, l + 1);
-      html += '<div class="card arm" id="arm-' + t + '-' + k + '"><div class="top"><div class="kico ' + k + '">' + KICO[k] + '</div><div class="grow">' +
+      html += '<div class="card arm" id="arm-' + t + '-' + k + '"><div class="top"><div class="wico' + (l ? '' : ' none') + '">' + ArmArt.icon(t, k, Math.max(1, TF.armTier(l))) + '<span class="kb ' + k + '">' + KICO[k] + '</span>' + (l ? '' : '<span class="nd">未開発</span>') + '</div><div class="grow">' +
         '<div class="kind">' + TF.ARM_KIND[k].name + (k === 'x' ? '(' + names(TF.ARMS[t].vs) + 'に強くなる)' : '') + '</div>' +
         '<div class="row"><span class="nm' + (l ? '' : ' none') + '">' + (l ? esc(TF.armName(t, k, l)) : '未開発') + '</span>' + (l ? '<span class="pill gold">Lv' + l + '</span>' : '') + '</div>' +
         (l ? '<div class="pips">' + pips + '</div>' : '') +
@@ -1686,10 +1955,16 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (st.flags.armNew) { delete st.flags.armNew; save(); renderTop(); }
   }
   function showDevDone(t, k, r) {
+    // 部隊の見た目が変わるなら、前と後を並べて見せる
+    var wT = armTierOf(t, 'w'), aT = armTierOf(t, 'a');
+    var before = ArmArt.unit(t, ALLY_C, k === 'w' ? TF.armTier(r.lv - 1) : wT, k === 'a' ? TF.armTier(r.lv - 1) : aT);
+    var after = ArmArt.unit(t, ALLY_C, wT, aT);
+    var morph = before !== after ? '<div class="morph"><div class="uicon">' + before + '</div><span class="ar">▶</span><div class="uicon new">' + after + '</div></div><div class="small" style="text-align:center;margin-top:-4px;margin-bottom:6px">' + TF.UNIT[t].name + 'の見た目も新しくなりました</div>' : '';
     openModal('<div class="result"><div class="sub" style="color:#d9b8ff;font-weight:900;letter-spacing:.2em;margin-bottom:0">新型兵器 開発成功!</div>' +
-      '<div class="devart"><div class="ring">' + unitSvg(t, ALLY_C) + '<span class="kb ' + k + '">' + KICO[k] + '</span></div></div>' +
+      '<div class="devart"><div class="ring w2">' + ArmArt.icon(t, k, TF.armTier(r.lv)) + '<span class="kb ' + k + '">' + KICO[k] + '</span></div></div>' +
       '<h2 class="win" style="font-size:' + (r.name.length > 11 ? 20 : r.name.length > 8 ? 24 : 28) + 'px;letter-spacing:.02em">' + esc(r.name) + '</h2><div class="sub">' + TF.UNIT[t].name + 'の' + TF.ARM_KIND[k].name + ' ・ Lv' + r.lv + '</div>' +
       '<div class="rlist"><div class="rline"><span style="color:#d9b8ff">' + KICO[k].replace('<svg ', '<svg style="width:22px;height:22px" ') + '</span><span class="grow">' + armEffText(t, k, r.lv - 1).replace(/ [^ ]*$/, '') + '</span><span class="small">' + armEffText(t, k, r.lv - 1).replace(/^.* /, '') + ' → </span><b class="up">' + armEffText(t, k, r.lv).replace(/^.* /, '') + '</b></div></div>' +
+      morph +
       '<div class="btns"><button class="btn wide" data-act="modal-close">配備する!</button></div></div>');
   }
 
@@ -1729,7 +2004,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     // 敵
     html += '<div class="side enemy"><div class="hd"><span class="grow">敵部隊' + (info.boss ? ' <span class="pill gold">ボス: ' + esc(info.bossName) + '</span>' : '') + '</span><span class="pw">戦力 ' + fmt(info.power) + '</span></div><div class="slots">';
     info.enemies.forEach(function (e) {
-      html += '<div class="slot' + (e.boss ? ' bossc' : '') + '">' + (e.boss ? '<span class="boss">BOSS</span>' : '') + unitSvg(e.type, ENEMY_C, 'ic') + '<div class="t">' + TF.UNIT[e.type].name + '</div><div class="p num">戦力 ' + fmt(e.power) + '</div><div class="wk">弱点: ' + names(counters(e.type)) + '</div></div>';
+      html += '<div class="slot' + (e.boss ? ' bossc' : '') + '">' + (e.boss ? '<span class="boss">BOSS</span>' : '') + enemySvg(e.type, s, 'ic') + '<div class="t">' + TF.UNIT[e.type].name + '</div><div class="p num">戦力 ' + fmt(e.power) + '</div><div class="wk">弱点: ' + names(counters(e.type)) + '</div></div>';
     });
     html += '</div></div>';
     // 自軍
@@ -1744,7 +2019,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       var f = st.form[i], q = squads[i], mk = matchupMark(f.type, info.enemies);
       var hd = f.hero ? TF.HERO[f.hero] : null;
-      html += '<button class="slot" data-act="slot" data-i="' + i + '"><span class="mk ' + mk[0] + '">' + mk[1] + '</span>' + unitSvg(f.type, ALLY_C, 'ic') + '<div class="t">' + TF.UNIT[f.type].name + '</div><div class="p num">戦力 ' + fmt(q.power) + '</div>' +
+      html += '<button class="slot" data-act="slot" data-i="' + i + '"><span class="mk ' + mk[0] + '">' + mk[1] + '</span>' + allySvg(f.type, 'ic') + '<div class="t">' + TF.UNIT[f.type].name + '</div><div class="p num">戦力 ' + fmt(q.power) + '</div>' +
         (hd ? '<div class="hr"><div class="portrait xs">' + heroSvg(f.hero) + '</div><span>' + hd.name.split(' ')[0] + (hd.fav === f.type ? '★' : '') + '</span></div>' : '<div class="hr none">指揮官なし</div>') + '</button>';
     }
     html += '</div><div class="small" style="margin-top:6px">枠をタップで兵種・指揮官を変更。◎○は敵との相性、★は得意兵種。</div></div>';
@@ -1786,7 +2061,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var q = TF.squadStats(st, t, f.hero);
       var mk = matchupMark(t, info.enemies);
       html += '<button class="slot" style="min-height:96px;background:' + (f.type === t ? '#2f5a4e' : '#1b2a25') + ';border:2px solid ' + (f.type === t ? 'var(--ally)' : '#2f5248') + ';border-radius:12px" data-act="set-type" data-i="' + i + '" data-t="' + t + '"' + (on ? '' : ' disabled') + '>' +
-        (on ? '<span class="mk ' + mk[0] + '">' + mk[1] + '</span>' : '') + unitSvg(t, on ? ALLY_C : '#667', 'ic') + '<div class="t">' + TF.UNIT[t].name + '</div>' +
+        (on ? '<span class="mk ' + mk[0] + '">' + mk[1] + '</span>' : '') + (on ? allySvg(t, 'ic') : unitSvg(t, '#667', 'ic')) + '<div class="t">' + TF.UNIT[t].name + '</div>' +
         '<div class="p">' + (on ? '戦力 ' + fmt(q.power) : TF.BLD[TF.TYPE_BLD[t]].name + 'が必要') + '</div></button>';
     });
     html += '</div><h2 class="sec">指揮官</h2><div class="blist">';
@@ -2432,7 +2707,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         return { c: c, w: wu, h: hu };
       }
       function ell(g, x, y, rx, ry) { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); }
-      function soldier(g, T, at, side) {
+      function soldier(g, T, at, side, tier) {
         g.fillStyle = 'rgba(0,0,0,.28)'; ell(g, 0, -0.12, 0.85, 0.3);
         g.fillStyle = T.dark; g.fillRect(-0.45, -1.1, 0.34, 1.05); g.fillRect(0.11, -1.1, 0.34, 1.05);
         g.fillStyle = T.main; g.fillRect(-0.6, -2.1, 1.2, 1.1);
@@ -2441,45 +2716,70 @@ if (typeof module !== 'undefined') module.exports = TF;
         g.fillStyle = T.dark; g.beginPath(); g.arc(0, -2.45, 0.46, Math.PI, 0); g.fill(); g.fillRect(-0.52, -2.5, 1.04, 0.14);
         if (at) {
           g.save(); g.translate(0.1, -2.15); g.rotate(-0.32);
-          g.fillStyle = '#4a4f45'; g.fillRect(-1.1, -0.17, 2.3, 0.34);
-          g.fillStyle = T.light; g.fillRect(1.1, -0.2, 0.3, 0.4);
+          var tl = 2.1 + 0.12 * tier, tw = tier >= 4 ? 0.46 : 0.34;
+          g.fillStyle = tier >= 4 ? '#3f4a3a' : '#4a4f45'; g.fillRect(-1.1, -tw / 2, tl, tw);
+          g.fillStyle = tier === 2 ? '#6b7a4a' : T.light; g.fillRect(-1.1 + tl - 0.2, -0.22, 0.32, 0.44);
+          if (tier === 2) { g.fillStyle = '#6b7a4a'; g.fillRect(0.1, -0.75, 0.12, 1.5); }
+          if (tier >= 5) { g.fillStyle = '#2b3329'; g.fillRect(0.2, 0.17, 0.5, 0.35); }
           g.restore();
         } else {
           g.strokeStyle = '#2b2b26'; g.lineWidth = 0.16;
           g.beginPath(); g.moveTo(0.48, -1.7); g.lineTo(0.75, -2.75); g.stroke();
         }
       }
-      function tank(g, T, side) {
+      function tank(g, T, side, tier) {
         g.fillStyle = 'rgba(0,0,0,.28)'; ell(g, 0, -0.35, 2.9, 0.9);
         g.fillStyle = '#2d302a'; g.fillRect(-2.7, -3.7, 1.0, 3.5); g.fillRect(1.7, -3.7, 1.0, 3.5);
         g.fillStyle = T.dark; g.fillRect(-1.85, -3.9, 3.7, 3.7);
         g.fillStyle = T.main; g.fillRect(-1.75, -3.95, 3.5, 2.6);
         g.fillStyle = T.light; g.fillRect(-1.75, -3.95, 3.5, 0.45);
-        if (side === 0) { g.fillStyle = '#2d302a'; g.fillRect(-0.2, -4.4, 0.4, 2.2); }
-        g.fillStyle = T.dark; ell(g, 0, -2.45, 1.15, 0.95);
-        g.fillStyle = T.main; ell(g, 0, -2.6, 0.95, 0.75);
-        g.fillStyle = T.light; ell(g, -0.25, -2.8, 0.35, 0.25);
-        if (side === 1) { g.fillStyle = '#2d302a'; g.fillRect(-0.22, -2.4, 0.44, 2.4); g.fillStyle = '#111'; g.fillRect(-0.24, -0.15, 0.48, 0.2); }
+        // 砲身の長さ・太さと砲塔の形は、開発した主砲で変わる(1: 丸い砲塔の短砲身 … 6: くさび形の大口径砲)
+        var bl = 1.7 + 0.32 * tier, bw = tier >= 6 ? 0.5 : tier === 2 ? 0.44 : 0.38, boxy = tier === 2 || tier >= 4;
+        if (side === 0) { g.fillStyle = '#2d302a'; g.fillRect(-bw / 2, -2.2 - bl, bw, bl); if (tier === 2) g.fillRect(-0.32, -2.3 - bl, 0.64, 0.34); if (tier >= 3) { g.fillStyle = '#23261f'; g.fillRect(-bw / 2 - 0.06, -2.2 - bl * 0.6, bw + 0.12, 0.3); } }
+        if (boxy) {
+          g.fillStyle = T.dark; g.fillRect(-1.25, -3.35, 2.5, 1.85);
+          g.fillStyle = T.main; g.fillRect(-1.1, -3.5, 2.2, 1.6);
+          if (tier >= 5) { g.beginPath(); g.moveTo(-1.1, -1.9); g.lineTo(0, -1.3); g.lineTo(1.1, -1.9); g.fill(); }
+          g.fillStyle = T.light; g.fillRect(-1.1, -3.5, 2.2, 0.32);
+          if (tier >= 6) { g.fillStyle = '#2d302a'; g.fillRect(0.35, -3.95, 0.5, 0.45); }
+        } else {
+          g.fillStyle = T.dark; ell(g, 0, -2.45, 1.15, 0.95);
+          g.fillStyle = T.main; ell(g, 0, -2.6, 0.95, 0.75);
+          g.fillStyle = T.light; ell(g, -0.25, -2.8, 0.35, 0.25);
+        }
+        if (side === 1) { g.fillStyle = '#2d302a'; g.fillRect(-bw / 2, -2.4, bw, 2.4); g.fillStyle = '#111'; g.fillRect(-bw / 2 - 0.02, -0.15, bw + 0.04, 0.2); }
       }
-      function gun(g, T, side) {
+      function gun(g, T, side, tier) {
         g.fillStyle = 'rgba(0,0,0,.28)'; ell(g, 0, -0.35, 3.0, 0.8);
+        if (tier >= 6) {
+          // 多連装ロケット(M270 / ハイマース): 車体の上に発射機の箱
+          g.fillStyle = '#2d302a'; g.fillRect(-2.3, -1.2, 4.6, 1.0);
+          g.fillStyle = T.dark; g.fillRect(-2.1, -2.0, 4.2, 1.2);
+          g.fillStyle = T.main; g.fillRect(-1.7, -3.6, 3.4, 1.8);
+          g.fillStyle = T.light; g.fillRect(-1.7, -3.6, 3.4, 0.34);
+          g.fillStyle = '#23261f';
+          for (var ry = 0; ry < 2; ry++) for (var rx = 0; rx < 3; rx++) { g.beginPath(); g.arc(-1.1 + rx * 1.1, (side === 0 ? -3.0 : -2.3) + ry * 0.55, 0.2, 0, Math.PI * 2); g.fill(); }
+          return;
+        }
         g.strokeStyle = '#3a3a33'; g.lineWidth = 0.35;
         g.beginPath(); g.moveTo(-0.5, -1.1); g.lineTo(-2.4, -0.2); g.moveTo(0.5, -1.1); g.lineTo(2.4, -0.2); g.stroke();
         g.fillStyle = '#2d302a'; ell(g, -1.75, -1.0, 0.75, 0.9); ell(g, 1.75, -1.0, 0.75, 0.9);
         g.fillStyle = '#777'; ell(g, -1.75, -1.0, 0.25, 0.3); ell(g, 1.75, -1.0, 0.25, 0.3);
         g.save(); g.translate(0, -2.0); g.rotate(side === 0 ? -0.55 : 0.55);
-        g.fillStyle = '#34372f'; g.fillRect(-0.28, -2.6, 0.56, 2.8);
+        var gl = 2.3 + 0.28 * tier; g.fillStyle = '#34372f'; g.fillRect(-0.28, -gl + 0.2, 0.56, gl); if (tier >= 4) g.fillRect(-0.4, -gl + 0.1, 0.8, 0.4);
         g.restore();
         g.fillStyle = T.main; g.fillRect(-1.3, -2.6, 2.6, 1.5);
         g.fillStyle = T.light; g.fillRect(-1.3, -2.6, 2.6, 0.35);
       }
+      // 味方は開発した武器、敵はステージの年代で見た目が変わる
+      function tierOf(side, t) { return side === 0 ? Math.max(1, armTierOf(t, 'w')) : eraTier(B ? B.info.s : 1); }
       SPR = [0, 1].map(function (side) {
         var T = TEAM[side];
         return {
-          inf: sp(FIGW.inf, FIGH.inf, function (g) { soldier(g, T, false, side); }),
-          at: sp(FIGW.at, FIGH.at, function (g) { soldier(g, T, true, side); }),
-          tank: sp(FIGW.tank, FIGH.tank, function (g) { tank(g, T, side); }),
-          art: sp(FIGW.art, FIGH.art, function (g) { gun(g, T, side); }),
+          inf: sp(FIGW.inf, FIGH.inf, function (g) { soldier(g, T, false, side, tierOf(side, 'inf')); }),
+          at: sp(FIGW.at, FIGH.at, function (g) { soldier(g, T, true, side, Math.min(6, tierOf(side, 'at'))); }),
+          tank: sp(FIGW.tank, FIGH.tank + 1.6, function (g) { tank(g, T, side, Math.min(6, tierOf(side, 'tank'))); }),
+          art: sp(FIGW.art, FIGH.art, function (g) { gun(g, T, side, Math.min(7, tierOf(side, 'art'))); }),
           fallen: sp(2.6, 0.9, function (g) {
             g.globalAlpha = 0.8; g.fillStyle = 'rgba(0,0,0,.2)'; ell(g, 0, -0.3, 1.2, 0.3);
             g.fillStyle = T.dark; g.fillRect(-1.0, -0.6, 1.6, 0.5); g.beginPath(); g.arc(0.85, -0.38, 0.32, 0, Math.PI * 2); g.fill();
@@ -2746,6 +3046,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         banner: null, shake: 0, buff: [{ atk: -1, arm: -1 }, { atk: -1, arm: -1 }],
         phase: 'intro', introT: 0, ending: 0, endT: 0, front: F0, colOff: [0, 0, 0], wave: 0, camTY: F0 + 14
       };
+      SPR = null; // 武装の見た目を反映し直す
       prep.p.forEach(function (q, i) { B.units.push(mkSquad(q, 0, i, B.units.length)); });
       prep.e.forEach(function (q, i) { B.units.push(mkSquad(q, 1, i, B.units.length)); });
       B.blds = [
@@ -3618,7 +3919,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       bar.classList.toggle('hidden', !types.length);
       bar.innerHTML = '<div class="pts"><span>増援</span><b id="rpPts">0</b><i><em id="rpBar" style="width:0%"></em></i></div>' +
         types.map(function (t) {
-          return '<div class="rcard off" data-type="' + t + '" id="rc-' + t + '">' + unitSvg(t, ALLY_C) + '<span class="nm">' + TF.UNIT[t].name + '</span><span class="cs">' + TF.K.resCost + '</span></div>';
+          return '<div class="rcard off" data-type="' + t + '" id="rc-' + t + '">' + allySvg(t) + '<span class="nm">' + TF.UNIT[t].name + '</span><span class="cs">' + TF.K.resCost + '</span></div>';
         }).join('');
       B.rcCache = '';
     }
@@ -3660,7 +3961,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       cardDrag.x = e.clientX; cardDrag.y = e.clientY;
       if (!cardDrag.moved && Math.hypot(e.clientX - cardDrag.x0, e.clientY - cardDrag.y0) > 10) {
         cardDrag.moved = true;
-        var g = document.createElement('div'); g.className = 'cardghost'; g.innerHTML = unitSvg(cardDrag.type, ALLY_C);
+        var g = document.createElement('div'); g.className = 'cardghost'; g.innerHTML = allySvg(cardDrag.type);
         document.body.appendChild(g); cardDrag.ghost = g;
       }
       if (cardDrag.ghost) { cardDrag.ghost.style.left = e.clientX + 'px'; cardDrag.ghost.style.top = e.clientY + 'px'; }

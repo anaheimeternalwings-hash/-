@@ -435,10 +435,23 @@ function midState(over) {
       const atk1 = (await page.evaluate(() => window.__game.TF.squadStats(window.__game.state, 'tank', null).atk));
       assert(atk1 > atk0 * 1.09, '攻撃力が上がらない');
       assert((await page.textContent('#arm-tank-w')).includes('Lv2'));
+      // 武器の絵は実物の兵器。5レベルごとの新型開発で、武器の絵と戦車のアイコンが変わる
+      assert(await page.isVisible('#arm-tank-w .wico svg'), '武器の絵がない');
+      await page.evaluate(() => { window.__game.state.bp = 100; });
+      const icon0 = await page.innerHTML('#arm-tank-w .wico'), unit0 = await page.innerHTML('.armsum .big');
+      for (let i = 0; i < 3; i++) await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+      assert.strictEqual(await page.innerHTML('.armsum .big'), unit0, '強化だけで見た目が変わった');
+      await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+      await page.waitForSelector('#modalWrap:not(.hidden) .morph');
+      assert((await page.textContent('#modalWrap')).includes('見た目も新しく'));
+      await page.click('[data-act="modal-close"]');
+      assert.strictEqual((await state(page)).arms.tank.w, 6);
+      assert.notStrictEqual(await page.innerHTML('#arm-tank-w .wico'), icon0, '武器の絵が変わらない');
+      assert.notStrictEqual(await page.innerHTML('.armsum .big'), unit0, '戦車のアイコンが変わらない');
       await noHorizontalScroll(page);
       // 部隊タブにも武装が表示される
       await page.click('[data-act="tab"][data-tab="army"]');
-      assert((await page.textContent('#scr-army')).includes(await page.evaluate(() => window.__game.TF.armName('tank', 'w', 2))));
+      assert((await page.textContent('#scr-army')).includes(await page.evaluate(() => window.__game.TF.armName('tank', 'w', 6))));
     }, Object.assign(midState({ money: 1e6, steel: 1e6 }), { bp: undefined }));
     // 勝てば設計図が増え、特殊武装は苦手な敵に「特効!」
     await withPage('iPhone 13', async page => {
