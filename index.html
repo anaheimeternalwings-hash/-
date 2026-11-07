@@ -2540,7 +2540,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     },
     'part-go': function (el) {
       var g = +el.dataset.g, list = TF.partStages(g), s0 = list.filter(function (x) { return x <= st.cleared; }).pop();
-      if (!s0) { toast(partWhere(g) + 'はまだ先です(ステージ' + list[0] + 'まで進もう)'); s0 = Math.min(st.cleared + 1, list[0]); }
+      if (!s0) {
+        s0 = Math.min(st.cleared + 1, list[0]);
+        toast(s0 === list[0] ? 'ステージ' + s0 + 'のボスを倒すと' + TF.partName(g) + 'が手に入ります(初クリアで' + TF.K.partFirst + '個)' : partWhere(g) + 'はまだ先です(ステージ' + list[0] + 'まで進もう)');
+      }
       st.sel = s0; save(); show('sortie');
     },
     'arm-type': function (el) { st.flags.armSel = el.dataset.t; save(); renderArms(); },
