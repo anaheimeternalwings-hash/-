@@ -290,6 +290,10 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .pchip .gr{font-weight:900}
 .pchip.zero{opacity:.45}
 .cost.partc{color:#d9c2ff;font-weight:800}
+button.cost.mat{background:none;border:0;padding:0 0 1px;font:inherit;color:inherit;border-bottom:1px dashed currentColor;cursor:pointer}
+button.cost.mat.partc{color:#d9c2ff}
+button.cost.mat.short{color:var(--bad)}
+.pchip .st{font-size:10px;color:#bfa8f0;margin-left:2px}
 .cost.partc.short{color:var(--bad)}
 .rline.rare{background:linear-gradient(90deg,#3a2a66,#1a2116);box-shadow:0 0 0 1px #8f6ae0 inset;animation:rareglow 1.4s ease-in-out infinite alternate}
 @keyframes rareglow{from{box-shadow:0 0 0 1px #8f6ae0 inset}to{box-shadow:0 0 0 1px #c9b0ff inset,0 0 14px rgba(180,140,255,.5)}}
@@ -2103,7 +2107,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         '<div class="row"><span class="nm' + (l ? '' : ' none') + '">' + (l ? esc(TF.armName(t, k, l)) : '未開発') + '</span>' + (l ? '<span class="pill gold">Lv' + l + '</span>' : '') + '</div>' +
         (l ? '<div class="pips">' + pips + '</div>' : '') +
         '<div class="eff">' + (l ? armEffText(t, k, l) : TF.ARM_KIND[k].name + 'なし') + ' → <b>' + armEffText(t, k, l + 1).replace(/^.* /, '') + '</b>' + (dev && l ? ' <span class="pill blue">新型: ' + esc(nextName) + '</span>' : '') + '</div></div></div>';
-      html += '<div class="act"><div class="costs">' + (c.part ? '<span class="cost partc' + (TF.partCount(st, c.part) < 1 ? ' short' : '') + '">' + icoPart() + TF.partName(c.part).replace('試作部品', '部品') + ' ' + TF.partCount(st, c.part) + '/1</span>' : '') + (c.bp ? '<span class="cost' + ((st.bp || 0) < c.bp ? ' short' : '') + '">' + icoBp() + fmt(c.bp) + '</span>' : '') + costHtml(c) + '</div>' +
+      html += '<div class="act"><div class="costs">' + (c.part ? '<button class="cost partc mat' + (TF.partCount(st, c.part) < 1 ? ' short' : '') + '" data-act="part-go" data-g="' + c.part + '">' + icoPart() + TF.partName(c.part).replace('試作部品', '部品') + ' ' + TF.partCount(st, c.part) + '/1</button>' : '') + (c.bp ? '<button class="cost mat' + ((st.bp || 0) < c.bp ? ' short' : '') + '" data-act="bp-go">' + icoBp() + fmt(c.bp) + '</button>' : '') + costHtml(c) + '</div>' +
         '<button class="btn ' + (dev ? 'dev' : 'green') + '" data-act="arm-up" data-t="' + t + '" data-k="' + k + '"' + (chk.ok ? '' : ' disabled') + '>' + (l === 0 ? '配備' : dev ? '開発' : '強化') + '</button></div>' +
         (chk.ok ? '' : '<div class="why">' + esc(chk.reason) + (chk.cap ? '(武装のレベル上限は 研究所Lv×' + TF.K.armLab + ')' : '') +
           (chk.needPart ? '<br><span class="small">' + partWhere(chk.needPart) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は' + Math.round(TF.K.partRate * 100) + '%)</span> <button class="pill" data-act="part-go" data-g="' + chk.needPart + '">ボス戦へ ▶</button>' : '') + '</div>') + '</div>';
@@ -2118,10 +2122,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     var reach = TF.partGrade(Math.max(10, Math.ceil((st.cleared + 1) / 10) * 10)), top = 1;
     Object.keys(st.parts || {}).forEach(function (g) { top = Math.max(top, +g); });
     TF.unlockedTypes(st).forEach(function (t) { TF.ARM_KINDS.forEach(function (k) { var c = TF.armCost(t, k, TF.armLv(st, t, k)); if (c.part && c.part <= reach) top = Math.max(top, c.part); }); });
-    var h = '<div class="card partsbar"><div class="pt">' + icoPart() + '<b>試作部品</b><span class="small">新型の開発に1個。その等級のボス戦で手に入る</span></div><div class="pl">';
+    var h = '<div class="card partsbar"><div class="pt">' + icoPart() + '<b>試作部品</b><span class="small">新型の開発に1個。タップすると、ドロップするボス戦のステージへ移動します</span></div><div class="pl">';
     for (var g = 1; g <= top; g++) {
       var n = TF.partCount(st, g);
-      h += '<button class="pchip' + (n ? '' : ' zero') + '" data-act="part-info" data-g="' + g + '"><span class="gr">' + TF.partName(g).replace('試作部品', '') + '</span><b class="num">×' + n + '</b></button>';
+      h += '<button class="pchip' + (n ? '' : ' zero') + '" data-act="part-go" data-g="' + g + '"><span class="gr">' + TF.partName(g).replace('試作部品', '') + '</span><b class="num">×' + n + '</b><span class="st">ST' + TF.partStages(g)[0] + ' ▶</span></button>';
     }
     return h + '</div></div>';
   }
@@ -2541,7 +2545,7 @@ if (typeof module !== 'undefined') module.exports = TF;
   var FARM_OK = 0.8, farmCache = null;
   function bestFarm() {
     if (st.cleared < 1) return null;
-    var key = st.cleared + '|' + JSON.stringify(st.bld, function (k, v) { return k === 'stored' || k === 't' ? undefined : v; }) + '|' + JSON.stringify(st.heroes);
+    var key = st.cleared + '|' + JSON.stringify(st.bld, function (k, v) { return k === 'stored' || k === 't' ? undefined : v; }) + '|' + JSON.stringify(st.heroes) + '|' + JSON.stringify(st.arms);
     if (farmCache && farmCache.key === key) return farmCache.v;
     var C = st.cleared, best = null, top = null, n = 0, done = {}, list = [];
     function value(rw) { return rw.m + rw.s * 1.6; }
@@ -2643,13 +2647,25 @@ if (typeof module !== 'undefined') module.exports = TF;
       var g = +el.dataset.g;
       toast(TF.partName(g) + ': ' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は勝利の' + Math.round(TF.K.partRate * 100) + '%)');
     },
+    // 素材(試作部品)をタップ → ドロップするボス戦のステージへ
     'part-go': function (el) {
       var g = +el.dataset.g, list = TF.partStages(g), s0 = list.filter(function (x) { return x <= st.cleared; }).pop();
       if (!s0) {
         s0 = Math.min(st.cleared + 1, list[0]);
         toast(s0 === list[0] ? 'ステージ' + s0 + 'のボスを倒すと' + TF.partName(g) + 'が手に入ります(初クリアで' + TF.K.partFirst + '個)' : partWhere(g) + 'はまだ先です(ステージ' + list[0] + 'まで進もう)');
-      }
+      } else toast('ステージ' + s0 + 'のボス戦で' + TF.partName(g) + 'がドロップします(勝つたびに' + Math.round(TF.K.partRate * 100) + '%)');
       st.sel = s0; save(); show('sortie');
+    },
+    // 素材(設計図)をタップ → 勝てて稼げるステージへ(設計図は先のステージ・ボス戦ほど多い)
+    'bp-go': function () {
+      if (st.cleared < 1) { st.sel = 1; save(); show('sortie'); return; }
+      toast('設計図を集めやすいステージを探しています…');
+      setTimeout(function () {
+        var f = bestFarm();
+        if (!f) return;
+        st.sel = f.s; save(); show('sortie');
+        toast('設計図はステージ' + f.s + 'で集めよう(予想勝率' + Math.round(f.wr * 100) + '%・1勝で設計図' + TF.stageReward(f.s).bp + ')');
+      }, 30);
     },
     'arm-type': function (el) { st.flags.armSel = el.dataset.t; save(); renderArms(); },
     'arm-up': function (el) {

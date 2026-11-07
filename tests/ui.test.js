@@ -458,6 +458,17 @@ function midState(over) {
       const atk1 = (await page.evaluate(() => window.__game.TF.squadStats(window.__game.state, 'tank', null).atk));
       assert(atk1 > atk0 * 1.09, '攻撃力が上がらない');
       assert((await page.textContent('#arm-tank-w')).includes('Lv2'));
+      // 設計図の必要数をタップすると、設計図を集めやすい(勝てて稼げる)ステージへ飛ぶ
+      const anyBp = await page.$('.arm .costs [data-act="bp-go"]');
+      assert(anyBp, '設計図の必要数が表示されていない');
+      {
+        await anyBp.click();
+        await page.waitForFunction(() => window.__game.state.tab === 'sortie', null, { timeout: 15000 });
+        const sb = await state(page);
+        assert(sb.sel >= 1 && sb.sel <= sb.cleared, '設計図のステージに飛べない ' + sb.sel);
+        await page.click('[data-act="tab"][data-tab="arms"]');
+        await page.click('[data-act="arm-type"][data-t="tank"]');
+      }
       // 武器の絵は実物の兵器。5レベルごとの新型開発で、武器の絵と戦車のアイコンが変わる
       assert(await page.isVisible('#arm-tank-w .wico svg'), '武器の絵がない');
       await page.evaluate(() => { window.__game.state.bp = 100; });
@@ -502,8 +513,20 @@ function midState(over) {
     assert(!(await page.isEnabled('[data-act="arm-up"][data-t="tank"][data-k="w"]')), '部品なしで開発ボタンが押せる');
     assert((await page.textContent('#arm-tank-w')).includes('試作部品Ⅰが不足'));
     assert((await page.textContent('.partsbar')).includes('Ⅰ'));
-    await page.click('#arm-tank-w [data-act="part-go"]');
+    // 素材をタップすると、ドロップするステージへ飛ぶ: 上の部品一覧・カードの必要素材・「ボス戦へ」
+    await page.click('.partsbar [data-act="part-go"][data-g="1"]');
     let s = await state(page);
+    assert.strictEqual(s.sel, 10, '部品一覧からボス戦に飛べない');
+    assert.strictEqual(s.tab, 'sortie');
+    await page.evaluate(() => { window.__game.state.sel = 3; });
+    await page.click('[data-act="tab"][data-tab="arms"]');
+    await page.click('#arm-tank-w .costs [data-act="part-go"]');
+    s = await state(page);
+    assert.strictEqual(s.sel, 10, 'カードの必要素材からボス戦に飛べない');
+    await page.evaluate(() => { window.__game.state.sel = 3; });
+    await page.click('[data-act="tab"][data-tab="arms"]');
+    await page.click('#arm-tank-w .why [data-act="part-go"]');
+    s = await state(page);
     assert.strictEqual(s.sel, 10, 'ボス戦に案内されない');
     assert.strictEqual(s.tab, 'sortie');
     assert((await page.textContent('.winbox')).includes('試作部品Ⅰ'), '出撃画面に部品の報酬が出ない');
