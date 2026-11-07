@@ -421,7 +421,7 @@ function midState(over) {
       const bp0 = s.bp;
       await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
       await page.waitForSelector('#modalWrap:not(.hidden) .devart');
-      assert((await page.textContent('#modalWrap')).includes('開発成功'));
+      assert((await page.textContent('#modalWrap')).includes('配備完了'), '最初の型の配備画面が出ない');
       await page.click('[data-act="modal-close"]');
       s = await state(page);
       assert.strictEqual(s.arms.tank.w, 1);
@@ -446,6 +446,7 @@ function midState(over) {
       assert((await page.textContent('#modalWrap')).includes('見た目も新しく'));
       await page.click('[data-act="modal-close"]');
       assert.strictEqual((await state(page)).arms.tank.w, 6);
+      assert.strictEqual((await state(page)).parts[1] || 0, (await page.evaluate(() => window.__game.TF.K.partFirst)) - 1, '試作部品Ⅰが使われていない');
       assert.notStrictEqual(await page.innerHTML('#arm-tank-w .wico'), icon0, '武器の絵が変わらない');
       assert.notStrictEqual(await page.innerHTML('.armsum .big'), unit0, '戦車のアイコンが変わらない');
       await noHorizontalScroll(page);
@@ -471,6 +472,36 @@ function midState(over) {
     }, midState({ cleared: 35, sel: 36, bp: 0, speed: 2, arms: { tank: { w: 10, a: 10, x: 10 } },
       bld: { hq: { lv: 8, slot: 4 }, barracks: { lv: 14, slot: 1 }, atpost: { lv: 12, slot: 3 }, factory: { lv: 16, slot: 5 }, artpost: { lv: 10, slot: 7 }, lab: { lv: 8, slot: 8 } } }));
   });
+
+  await test('試作部品: 新型の開発に必要。足りなければ「ボス戦へ」で案内され、ボス戦の初クリアで手に入る', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="arms"]');
+    await page.click('[data-act="arm-type"][data-t="tank"]');
+    assert(!(await page.isEnabled('[data-act="arm-up"][data-t="tank"][data-k="w"]')), '部品なしで開発ボタンが押せる');
+    assert((await page.textContent('#arm-tank-w')).includes('試作部品Ⅰが不足'));
+    assert((await page.textContent('.partsbar')).includes('Ⅰ'));
+    await page.click('#arm-tank-w [data-act="part-go"]');
+    let s = await state(page);
+    assert.strictEqual(s.sel, 10, 'ボス戦に案内されない');
+    assert.strictEqual(s.tab, 'sortie');
+    assert((await page.textContent('.winbox')).includes('試作部品Ⅰ'), '出撃画面に部品の報酬が出ない');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await finishBattle(page);
+    assert((await page.textContent('.result h2')).includes('勝利'));
+    assert((await page.textContent('.result')).includes('試作部品Ⅰ'), '結果に部品が出ない');
+    const first = await page.evaluate(() => window.__game.TF.K.partFirst);
+    assert.strictEqual((await state(page)).parts[1], first);
+    await page.click('[data-act="r-base"]').catch(() => {});
+    await page.click('[data-act="hero-ok"]').catch(() => {});
+    await page.click('[data-act="tab"][data-tab="arms"]');
+    await page.click('[data-act="arm-type"][data-t="tank"]');
+    await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .devart');
+    assert((await page.textContent('#modalWrap')).includes('試作部品Ⅰを使用'));
+    s = await state(page);
+    assert.strictEqual(s.arms.tank.w, 6);
+    assert.strictEqual(s.parts[1], first - 1);
+  }, midState({ cleared: 9, sel: 10, bp: 200, parts: {}, arms: { tank: { w: 5 } } })));
 
   await test('広い戦場: なぞって見回し、2本指で拡大・縮小、「戦況を追う」で戻る。勝てば敵陣を占領', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');

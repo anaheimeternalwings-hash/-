@@ -276,6 +276,18 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 /* ===== 結果 ===== */
 .result h2{margin:0;text-align:center;font-size:40px;font-weight:900;letter-spacing:.1em}
 .armhead{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.partsbar{margin-top:8px;padding:9px 12px}
+.partsbar .pt{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.partsbar .pt svg{width:20px;height:20px}
+.partsbar .pt .small{flex-basis:100%}
+.partsbar .pl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pchip{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#2a2142;border:1px solid #6b55a8;color:#e2d2ff;font-size:13px}
+.pchip .gr{font-weight:900}
+.pchip.zero{opacity:.45}
+.cost.partc{color:#d9c2ff;font-weight:800}
+.cost.partc.short{color:var(--bad)}
+.rline.rare{background:linear-gradient(90deg,#3a2a66,#1a2116);box-shadow:0 0 0 1px #8f6ae0 inset;animation:rareglow 1.4s ease-in-out infinite alternate}
+@keyframes rareglow{from{box-shadow:0 0 0 1px #8f6ae0 inset}to{box-shadow:0 0 0 1px #c9b0ff inset,0 0 14px rgba(180,140,255,.5)}}
 .armhead .bpv{display:flex;align-items:center;gap:6px;font-size:20px;font-weight:900;flex:none}
 .armhead .bpv svg{width:28px;height:28px}
 .armhead .small{line-height:1.45}
@@ -325,6 +337,7 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .arm .act .costs{flex:1;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13px;min-width:0}
 .arm .act .btn{min-height:42px;padding:0 14px;font-size:14px;flex:none}
 .arm .act .btn.dev{background:linear-gradient(#b48cff,#7a52d6);color:#fff;box-shadow:0 3px 0 #4a2f8f}
+.arm .act .btn:disabled{background:#2f382a;color:#7b8570;box-shadow:none}
 .arm .why{font-size:12px;color:var(--warn)}
 .arm{position:relative}
 .arm.flash{animation:armflash .6s}
@@ -399,6 +412,7 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
   <defs>
     <symbol id="i-money" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#c99a2e"/><circle cx="12" cy="12" r="8.2" fill="#f1c453"/><circle cx="12" cy="12" r="6.4" fill="none" stroke="#c99a2e" stroke-width="1"/><path d="M12 6.7l1.6 3.3 3.6.4-2.7 2.4.8 3.6-3.3-1.9-3.3 1.9.8-3.6-2.7-2.4 3.6-.4z" fill="#a8791c"/></symbol>
     <symbol id="i-bp" viewBox="0 0 24 24"><path d="M4 2.5h11.5L20 7v14.5H4z" fill="#2f6fb2"/><path d="M15.5 2.5V7H20z" fill="#9cc8f2"/><g stroke="#d6ebff" stroke-width=".9" opacity=".75" fill="none"><path d="M6.5 9.5h11M6.5 13h11M6.5 16.5h11M9.5 7v12.5M14 7v12.5"/></g><path d="M7.5 18.5l3-3.5 2 2 3.5-4.5" stroke="#ffe08a" stroke-width="1.5" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-part" viewBox="0 0 24 24"><path d="M10.2 1.6h3.6l.6 2.8 2.2.9 2.4-1.6 2.6 2.6-1.6 2.4.9 2.2 2.8.6v3.6l-2.8.6-.9 2.2 1.6 2.4-2.6 2.6-2.4-1.6-2.2.9-.6 2.8h-3.6l-.6-2.8-2.2-.9-2.4 1.6-2.6-2.6 1.6-2.4-.9-2.2-2.8-.6v-3.6l2.8-.6.9-2.2-1.6-2.4 2.6-2.6 2.4 1.6 2.2-.9z" fill="#b48cff"/><circle cx="12" cy="12" r="5.6" fill="#2a1f45"/><rect x="9" y="9" width="6" height="6" rx="1" fill="#e2d2ff"/><path d="M10.5 9V7.6M13.5 9V7.6M10.5 16.4V15M13.5 16.4V15M9 10.5H7.6M9 13.5H7.6M16.4 10.5H15M16.4 13.5H15" stroke="#e2d2ff" stroke-width=".9"/></symbol>
     <symbol id="i-steel" viewBox="0 0 24 24"><path d="M3 5h18v3h-6.5v8H21v3H3v-3h6.5V8H3z" fill="#7d95ab"/><path d="M3 5h18v1.4H3zM9.5 8h1.4v8H9.5zM3 16h6.5v1.3H3z" fill="#d3e3f1"/></symbol>
   </defs>
 </svg>
@@ -525,6 +539,8 @@ var TF = (function () {
     // 特殊は苦手の半分を打ち消すまで(相性0.6→0.8など)で、レベルが上がるほど伸びが小さくなる: 上限×(1 - armXd^Lv)
     armW: 0.05, armA: 0.05, armXd: 0.9, armXk: 0.5, armPer: 5, armLab: 2,
     armM: 80, armS: 30, armG: 1.9, armBp: 4, armBpP: 1.8, bpStep: 20, bpBoss: 2,
+    // 試作部品: 新型の開発に1個使う。そのレベル帯に入るときのボス戦でだけ手に入る(初クリアは確定、以降はまれに)
+    partFirst: 4, partRate: 0.3,
     // 武装の普及に合わせて敵も強くなる(武装を使う前提の難しさ): 1 + arR * max(0, s - arS)^arP
     arR: 0.012, arS: 8, arP: 0.8,
     // 報酬
@@ -669,8 +685,23 @@ var TF = (function () {
   function armCost(t, k, l) {
     var f = Math.pow(l + 1, K.armG);
     var c = { m: Math.round(K.armM * f / 10) * 10, s: Math.round(K.armS * f / 10) * 10, bp: 0 };
-    if (armIsDev(l)) c.bp = Math.round(K.armBp * Math.pow(armTier(l) + 1, K.armBpP));
+    if (armIsDev(l)) { c.bp = Math.round(K.armBp * Math.pow(armTier(l) + 1, K.armBpP)); c.part = armTier(l); }
     return c;
+  }
+  // ---- 試作部品 ----
+  // ボス戦(10ステージごと)の等級: ステージ10→Ⅰ、20→Ⅱ、30→Ⅲ…
+  // 最初の型は部品なしで配備でき、n+1番目の新型の開発には等級nの部品(ステージ10nのボス)を使う
+  function partGrade(s) { return s % 10 !== 0 ? 0 : s / 10; }
+  function partStages(g) { return [10 * g]; }
+  var ROMAN = ['', 'Ⅰ', 'Ⅱ', 'Ⅲ', 'Ⅳ', 'Ⅴ', 'Ⅵ', 'Ⅶ', 'Ⅷ', 'Ⅸ', 'Ⅹ', 'Ⅺ', 'Ⅻ'];
+  function partName(g) { return '試作部品' + (ROMAN[g] || g); }
+  function partCount(st, g) { return st.parts && st.parts[g] > 0 ? st.parts[g] | 0 : 0; }
+  // ボス戦に勝ったときの試作部品。roll は 0〜1 の乱数(出撃時に決まる)
+  function partDrop(s, first, roll) {
+    var g = partGrade(s);
+    if (!g) return null;
+    var n = first ? K.partFirst : roll < K.partRate ? 1 : 0;
+    return { g: g, n: n };
   }
   // 効果(倍率の増分)。特殊の上限は「苦手な相性を等倍との中間まで戻す」分
   function armXMax(t) { var a = AFF[t][ARMS[t].vs[0]]; return (a + (1 - a) * K.armXk) / a - 1; }
@@ -684,6 +715,7 @@ var TF = (function () {
     if (!lv(st, 'lab')) return { ok: false, reason: '研究所を建てると開発できます', locked: true };
     var cur = armLv(st, t, k), c = armCost(t, k, cur), dev = c.bp > 0;
     if (cur >= armMax(st)) return { ok: false, reason: '研究所Lv' + (Math.floor(cur / K.armLab) + 1) + 'が必要', cap: true, cost: c, dev: dev };
+    if (c.part && partCount(st, c.part) < 1) return { ok: false, reason: partName(c.part) + 'が不足', cost: c, dev: dev, short: true, needPart: c.part };
     if ((st.bp || 0) < c.bp) return { ok: false, reason: '設計図が不足', cost: c, dev: dev, short: true };
     if (st.money < c.m || st.steel < c.s) return { ok: false, reason: '資源が不足', cost: c, dev: dev, short: true };
     return { ok: true, cost: c, dev: dev };
@@ -692,6 +724,7 @@ var TF = (function () {
     var chk = canArm(st, t, k);
     if (!chk.ok) return chk;
     st.money -= chk.cost.m; st.steel -= chk.cost.s; st.bp = (st.bp || 0) - chk.cost.bp;
+    if (chk.cost.part) { st.parts[chk.cost.part] = partCount(st, chk.cost.part) - 1; if (!st.parts[chk.cost.part]) delete st.parts[chk.cost.part]; }
     if (!st.arms) st.arms = {};
     if (!st.arms[t]) st.arms[t] = {};
     var l = armLv(st, t, k) + 1;
@@ -1146,7 +1179,7 @@ var TF = (function () {
     var info = stageInfo(s);
     return { form: form, p: p, e: info.enemies, info: info, reserves: battleReserves(st, s) };
   }
-  function applyResult(st, s, win, form) {
+  function applyResult(st, s, win, form, roll) {
     var info = stageInfo(s);
     form = form || st.form || [];
     var first = win && s > st.cleared;
@@ -1160,6 +1193,14 @@ var TF = (function () {
       exp = Math.round(info.reward.exp * K.lossExp);
     }
     st.money += gm; st.steel += gs; st.bp = (st.bp || 0) + gb;
+    // ボス戦の試作部品(初クリアは確定、以降はまれに)
+    var part = null;
+    if (win) {
+      if (roll === undefined) roll = hashInt(st.stats.battles * 7919 + s * 31 + 3) / 4294967296;
+      part = partDrop(s, first, roll);
+      if (part && part.n) { if (!st.parts) st.parts = {}; st.parts[part.g] = partCount(st, part.g) + part.n; }
+      if (part && !part.n) part = null;
+    }
     var heroExp = [];
     var seen = {};
     form.forEach(function (f) {
@@ -1181,7 +1222,7 @@ var TF = (function () {
     }
     st.stats.battles++;
     if (win) st.stats.wins++;
-    return { win: win, first: first, m: gm, s: gs, bp: gb, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
+    return { win: win, first: first, m: gm, s: gs, bp: gb, part: part, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
   }
 
   function newState(now) {
@@ -1189,7 +1230,7 @@ var TF = (function () {
       v: 1, money: K.startMoney, steel: K.startSteel,
       bld: { hq: { lv: 1, slot: 4 }, barracks: { lv: 1, slot: 1 } },
       heroes: { oni: { lv: 1, exp: 0 } },
-      cleared: 0, sel: 1, arms: {}, bp: 0,
+      cleared: 0, sel: 1, arms: {}, bp: 0, parts: {},
       form: [{ type: 'inf', hero: 'oni' }, { type: 'inf', hero: null }],
       pending: null, tab: 'base', speed: 1,
       stats: { battles: 0, wins: 0 }, created: now
@@ -1208,7 +1249,8 @@ var TF = (function () {
     assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
     ARMS: ARMS, ARM_KINDS: ARM_KINDS, ARM_KIND: ARM_KIND, armLv: armLv, armTier: armTier, armName: armName, armMax: armMax, armIsDev: armIsDev,
-    armCost: armCost, armEffect: armEffect, armXMax: armXMax, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
+    armCost: armCost, armEffect: armEffect, armXMax: armXMax,
+    partGrade: partGrade, partStages: partStages, partName: partName, partCount: partCount, partDrop: partDrop, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
     clearCache: function () { stageCache = {}; }
   };
 })();
@@ -1242,6 +1284,10 @@ if (typeof module !== 'undefined') module.exports = TF;
   }
   function now() { return Date.now(); }
   function icoMoney(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-money"/></svg>'; }
+  function icoPart(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-part"/></svg>'; }
+  function partWhere(g) { return 'ステージ' + TF.partStages(g).join('・') + 'のボス戦'; }
+  // 戦闘ごとの試作部品の抽選(出撃時の乱数から決まるので、閉じて開き直しても変わらない)
+  function partRoll(seed) { return TF.hashInt((seed | 0) ^ 0x5bd1e995) / 4294967296; }
   function icoBp(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-bp"/></svg>'; }
   function icoSteel(cls) { return '<svg viewBox="0 0 24 24"' + (cls ? ' class="' + cls + '"' : '') + '><use href="#i-steel"/></svg>'; }
   function costHtml(c) {
@@ -1648,6 +1694,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       s.bp = g;
       if (s.cleared > 0) s.flags.armNew = 1;
     } else s.bp = Math.max(0, +o.bp || 0);
+    // 試作部品。追加前のデータには、クリア済みのボス戦の初回分を配る
+    var parts = {};
+    if (o.parts && typeof o.parts === 'object') Object.keys(o.parts).forEach(function (g) { var n = o.parts[g] | 0; if (+g >= 1 && n > 0) parts[+g] = n; });
+    else for (var bs = 10; bs <= s.cleared; bs += 10) parts[TF.partGrade(bs)] = (parts[TF.partGrade(bs)] || 0) + TF.K.partFirst;
+    s.parts = parts;
     s.auto = o.auto !== false;
     s.lastSeen = +o.lastSeen || now();
     return s;
@@ -1916,6 +1967,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var lab = TF.lv(st, 'lab'), t = armSel();
     var html = '<div class="card armhead"><div class="bpv">' + icoBp() + '<span class="num" id="vBp">' + fmt(st.bp || 0) + '</span></div>' +
       '<div class="small"><b>設計図</b>は勝利で手に入ります(先のステージほど多く、ボス戦・初クリアは2倍)。新型の開発に使います。</div></div>';
+    html += partsBar();
     if (!lab) {
       html += '<div class="card" style="margin-top:10px;text-align:center;line-height:1.7"><div style="font-weight:900;font-size:16px;margin-bottom:4px">兵器開発</div>' +
         '各兵種の<b>武器</b>(攻撃力)・<b>防護</b>(耐久)・<b>特殊</b>(苦手な敵へのダメージ)を開発・強化できます。<br>' +
@@ -1945,14 +1997,28 @@ if (typeof module !== 'undefined') module.exports = TF;
         '<div class="kind">' + TF.ARM_KIND[k].name + (k === 'x' ? '(' + names(TF.ARMS[t].vs) + 'に強くなる)' : '') + '</div>' +
         '<div class="row"><span class="nm' + (l ? '' : ' none') + '">' + (l ? esc(TF.armName(t, k, l)) : '未開発') + '</span>' + (l ? '<span class="pill gold">Lv' + l + '</span>' : '') + '</div>' +
         (l ? '<div class="pips">' + pips + '</div>' : '') +
-        '<div class="eff">' + (l ? armEffText(t, k, l) : TF.ARM_KIND[k].name + 'なし') + ' → <b>' + armEffText(t, k, l + 1).replace(/^.* /, '') + '</b>' + (dev ? ' <span class="pill blue">新型: ' + esc(nextName) + '</span>' : '') + '</div></div></div>';
-      html += '<div class="act"><div class="costs">' + (c.bp ? '<span class="cost' + ((st.bp || 0) < c.bp ? ' short' : '') + '">' + icoBp() + fmt(c.bp) + '</span>' : '') + costHtml(c) + '</div>' +
-        '<button class="btn ' + (dev ? 'dev' : 'green') + '" data-act="arm-up" data-t="' + t + '" data-k="' + k + '"' + (chk.ok ? '' : ' disabled') + '>' + (dev ? '開発' : '強化') + '</button></div>' +
-        (chk.ok ? '' : '<div class="why">' + esc(chk.reason) + (chk.cap ? '(武装のレベル上限は 研究所Lv×' + TF.K.armLab + ')' : '') + '</div>') + '</div>';
+        '<div class="eff">' + (l ? armEffText(t, k, l) : TF.ARM_KIND[k].name + 'なし') + ' → <b>' + armEffText(t, k, l + 1).replace(/^.* /, '') + '</b>' + (dev && l ? ' <span class="pill blue">新型: ' + esc(nextName) + '</span>' : '') + '</div></div></div>';
+      html += '<div class="act"><div class="costs">' + (c.part ? '<span class="cost partc' + (TF.partCount(st, c.part) < 1 ? ' short' : '') + '">' + icoPart() + TF.partName(c.part).replace('試作部品', '部品') + ' ' + TF.partCount(st, c.part) + '/1</span>' : '') + (c.bp ? '<span class="cost' + ((st.bp || 0) < c.bp ? ' short' : '') + '">' + icoBp() + fmt(c.bp) + '</span>' : '') + costHtml(c) + '</div>' +
+        '<button class="btn ' + (dev ? 'dev' : 'green') + '" data-act="arm-up" data-t="' + t + '" data-k="' + k + '"' + (chk.ok ? '' : ' disabled') + '>' + (l === 0 ? '配備' : dev ? '開発' : '強化') + '</button></div>' +
+        (chk.ok ? '' : '<div class="why">' + esc(chk.reason) + (chk.cap ? '(武装のレベル上限は 研究所Lv×' + TF.K.armLab + ')' : '') +
+          (chk.needPart ? '<br><span class="small">' + partWhere(chk.needPart) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は' + Math.round(TF.K.partRate * 100) + '%)</span> <button class="pill" data-act="part-go" data-g="' + chk.needPart + '">ボス戦へ ▶</button>' : '') + '</div>') + '</div>';
     });
-    html += '</div><div class="small" style="margin-top:8px;line-height:1.6">研究所 Lv' + lab + ': 武装のレベル上限 ' + TF.armMax(st) + '。' + TF.K.armPer + 'レベルごとに新型の開発(設計図が必要)。増援の部隊にも武装が反映されます。武装の名前は実在の兵器から取っています(性能はゲーム用の数値です)。</div>';
+    html += '</div><div class="small" style="margin-top:8px;line-height:1.6">研究所 Lv' + lab + ': 武装のレベル上限 ' + TF.armMax(st) + '。最初の型は設計図で配備、' + TF.K.armPer + 'レベルごとの新型の開発には試作部品と設計図が必要。増援の部隊にも武装が反映されます。武装の名前は実在の兵器から取っています(性能はゲーム用の数値です)。</div>';
     $('scr-arms').innerHTML = html;
     if (st.flags.armNew) { delete st.flags.armNew; save(); renderTop(); }
+  }
+  // 持っている試作部品(等級ごと)。タップで入手場所を案内
+  function partsBar() {
+    // 表示する等級: 持っているもの、次の開発に要るもの(手の届く等級まで)
+    var reach = TF.partGrade(Math.max(10, Math.ceil((st.cleared + 1) / 10) * 10)), top = 1;
+    Object.keys(st.parts || {}).forEach(function (g) { top = Math.max(top, +g); });
+    TF.unlockedTypes(st).forEach(function (t) { TF.ARM_KINDS.forEach(function (k) { var c = TF.armCost(t, k, TF.armLv(st, t, k)); if (c.part && c.part <= reach) top = Math.max(top, c.part); }); });
+    var h = '<div class="card partsbar"><div class="pt">' + icoPart() + '<b>試作部品</b><span class="small">新型の開発に1個。その等級のボス戦で手に入る</span></div><div class="pl">';
+    for (var g = 1; g <= top; g++) {
+      var n = TF.partCount(st, g);
+      h += '<button class="pchip' + (n ? '' : ' zero') + '" data-act="part-info" data-g="' + g + '"><span class="gr">' + TF.partName(g).replace('試作部品', '') + '</span><b class="num">×' + n + '</b></button>';
+    }
+    return h + '</div></div>';
   }
   function showDevDone(t, k, r) {
     // 部隊の見た目が変わるなら、前と後を並べて見せる
@@ -1960,9 +2026,9 @@ if (typeof module !== 'undefined') module.exports = TF;
     var before = ArmArt.unit(t, ALLY_C, k === 'w' ? TF.armTier(r.lv - 1) : wT, k === 'a' ? TF.armTier(r.lv - 1) : aT);
     var after = ArmArt.unit(t, ALLY_C, wT, aT);
     var morph = before !== after ? '<div class="morph"><div class="uicon">' + before + '</div><span class="ar">▶</span><div class="uicon new">' + after + '</div></div><div class="small" style="text-align:center;margin-top:-4px;margin-bottom:6px">' + TF.UNIT[t].name + 'の見た目も新しくなりました</div>' : '';
-    openModal('<div class="result"><div class="sub" style="color:#d9b8ff;font-weight:900;letter-spacing:.2em;margin-bottom:0">新型兵器 開発成功!</div>' +
+    openModal('<div class="result"><div class="sub" style="color:#d9b8ff;font-weight:900;letter-spacing:.2em;margin-bottom:0">' + (r.lv === 1 ? '新兵器 配備完了!' : '新型兵器 開発成功!') + '</div>' +
       '<div class="devart"><div class="ring w2">' + ArmArt.icon(t, k, TF.armTier(r.lv)) + '<span class="kb ' + k + '">' + KICO[k] + '</span></div></div>' +
-      '<h2 class="win" style="font-size:' + (r.name.length > 11 ? 20 : r.name.length > 8 ? 24 : 28) + 'px;letter-spacing:.02em">' + esc(r.name) + '</h2><div class="sub">' + TF.UNIT[t].name + 'の' + TF.ARM_KIND[k].name + ' ・ Lv' + r.lv + '</div>' +
+      '<h2 class="win" style="font-size:' + (r.name.length > 11 ? 20 : r.name.length > 8 ? 24 : 28) + 'px;letter-spacing:.02em">' + esc(r.name) + '</h2><div class="sub">' + TF.UNIT[t].name + 'の' + TF.ARM_KIND[k].name + ' ・ Lv' + r.lv + (r.cost.part ? ' ・ ' + TF.partName(r.cost.part) + 'を使用' : '') + '</div>' +
       '<div class="rlist"><div class="rline"><span style="color:#d9b8ff">' + KICO[k].replace('<svg ', '<svg style="width:22px;height:22px" ') + '</span><span class="grow">' + armEffText(t, k, r.lv - 1).replace(/ [^ ]*$/, '') + '</span><span class="small">' + armEffText(t, k, r.lv - 1).replace(/^.* /, '') + ' → </span><b class="up">' + armEffText(t, k, r.lv).replace(/^.* /, '') + '</b></div></div>' +
       morph +
       '<div class="btns"><button class="btn wide" data-act="modal-close">配備する!</button></div></div>');
@@ -2031,6 +2097,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     html += '<div class="winbox card"><div class="wr"><svg class="c" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" fill="none" stroke="#11160f" stroke-width="4"/>' + (pct > 0 ? '<circle cx="18" cy="18" r="15.5" fill="none" stroke="' + wi[1] + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + (pct * 0.974).toFixed(1) + ' 100" transform="rotate(-90 18 18)"/>' : '') + '</svg><div><div class="v num" style="color:' + wi[1] + '">' + pct + '%</div><div class="l" style="color:' + wi[1] + '">' + wi[0] + '</div></div></div>' +
       '<div class="grow rewards"><div class="small">予想勝率(自動戦闘で100回模擬戦)</div><div style="font-weight:800">勝利報酬' + (first ? ' <span class="pill gold">初回×' + TF.K.firstMul + '</span>' : '') + '</div>' +
       '<div class="row"><span class="cost">' + icoMoney() + fmt(rw.m * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoSteel() + fmt(rw.s * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoBp() + fmt(rw.bp * (first ? TF.K.firstMul : 1)) + '</span></div>' +
+      (TF.partGrade(s) ? '<div class="row"><span class="cost partc">' + icoPart() + TF.partName(TF.partGrade(s)) + ' ' + (first ? '×' + TF.K.partFirst + ' 確定' : Math.round(TF.K.partRate * 100) + '%でドロップ') + '</span></div>' : '') +
       '<div class="small">指揮官EXP +' + fmt(rw.exp) + '(敗北時は半分)</div></div></div>';
     var auto = st.auto !== false;
     html += '<div class="modesel"><span class="lbl">戦闘</span><div class="seg"><button data-act="mode" data-m="auto" class="' + (auto ? 'on' : '') + '">自動</button><button data-act="mode" data-m="manual" class="' + (auto ? '' : 'on') + '">手動(指示・スキル)</button></div></div>';
@@ -2298,7 +2365,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       p.win = r.win; p.timeout = r.timeout; p.resumed = true;
     }
     var wasCleared = st.cleared;
-    var sum = TF.applyResult(st, p.s, p.win, p.form);
+    var sum = TF.applyResult(st, p.s, p.win, p.form, partRoll(p.seed));
     st.pending = null;
     if (sum.first) { st.sel = st.cleared + 1; st.flags.conq = p.s; }
     save();
@@ -2312,6 +2379,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       html += '<div class="rlist"><div class="rline">' + icoMoney() + '<span class="grow">資金</span><b class="num">+' + fmt(sum.m) + '</b></div>' +
         '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num">+' + fmt(sum.s) + '</b></div>' +
         '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num">+' + fmt(sum.bp) + '</b></div>' +
+        (sum.part ? '<div class="rline rare">' + icoPart() + '<span class="grow"><b>' + TF.partName(sum.part.g) + '</b> <span class="small">' + (sum.first ? '(初クリア確定)' : 'レアドロップ!') + '</span></span><b class="num">+' + sum.part.n + '</b></div>' : '') +
         (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') + '</div>';
     } else {
       html += '<h2 class="lose">' + (p.timeout ? '時間切れ' : '敗北…') + '</h2><div class="sub">兵は失われていません。強化して再挑戦しよう。</div>';
@@ -2466,6 +2534,15 @@ if (typeof module !== 'undefined') module.exports = TF;
   // ====== 操作 ======
   var actions = {
     tab: function (el) { show(el.dataset.tab); },
+    'part-info': function (el) {
+      var g = +el.dataset.g;
+      toast(TF.partName(g) + ': ' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は勝利の' + Math.round(TF.K.partRate * 100) + '%)');
+    },
+    'part-go': function (el) {
+      var g = +el.dataset.g, list = TF.partStages(g), s0 = list.filter(function (x) { return x <= st.cleared; }).pop();
+      if (!s0) { toast(partWhere(g) + 'はまだ先です(ステージ' + list[0] + 'まで進もう)'); s0 = Math.min(st.cleared + 1, list[0]); }
+      st.sel = s0; save(); show('sortie');
+    },
     'arm-type': function (el) { st.flags.armSel = el.dataset.t; save(); renderArms(); },
     'arm-up': function (el) {
       var t = el.dataset.t, k = el.dataset.k;

@@ -227,7 +227,7 @@ check('配置の指示: 前進は与えるダメージ・受けるダメージ�
   assert(Math.abs(d2 / d0 - TF.K.stDeal['-1']) < 0.02 && Math.abs(t2 / t0 - TF.K.stTake['-1']) < 0.02, '後退 ' + [d0, d2, t0, t2]);
   assert(TF.K.stDeal['1'] > 1 && TF.K.stTake['1'] > 1 && TF.K.stTake['-1'] < 1);
 });
-check('武装: 研究所がないと開発できず、レベル上限は研究所Lv×2。新型の開発(Lv0→1、Lv5→6…)には設計図が要る', () => {
+check('武装: 研究所がないと開発できず、レベル上限は研究所Lv×2。最初の型は設計図で配備、新型(Lv5→6…)には試作部品も要る', () => {
   const st = TF.newState(0);
   st.money = st.steel = 1e9; st.bp = 0;
   st.bld.factory = { lv: 5, slot: 5 };
@@ -236,6 +236,7 @@ check('武装: 研究所がないと開発できず、レベル上限は研究�
   st.bld.lab = { lv: 3, slot: 8 };
   assert.strictEqual(TF.canArm(st, 'tank', 'w').reason, '設計図が不足');
   st.bp = 1000;
+  st.parts = { 1: 1 };
   const names = [];
   for (let i = 0; i < 6; i++) { const r = TF.doArm(st, 'tank', 'w'); assert(r.ok, r.reason); names.push(r.name); assert.strictEqual(r.dev, i === 0 || i === 5); }
   assert.strictEqual(TF.armLv(st, 'tank', 'w'), 6);
@@ -243,6 +244,11 @@ check('武装: 研究所がないと開発できず、レベル上限は研究�
   assert.notStrictEqual(names[4], names[5], '5レベルごとに新型にならない');
   assert.strictEqual(TF.canArm(st, 'tank', 'w').cap, true, '上限(研究所Lv3×2=6)を超えた');
   assert.strictEqual(1000 - st.bp, TF.armCost('tank', 'w', 0).bp + TF.armCost('tank', 'w', 5).bp, '設計図は開発のときだけ減る');
+  assert.deepStrictEqual(st.parts, {}, '試作部品が開発で1個ずつ使われていない');
+  assert.strictEqual(TF.armCost('tank', 'w', 0).part, 0, '最初の型(配備)は部品なし');
+  assert.strictEqual(TF.armCost('tank', 'w', 5).part, 1, '2番目の新型には試作部品Ⅰ');
+  st.arms.tank.w = 10; st.bld.lab.lv = 6;
+  assert.strictEqual(TF.canArm(st, 'tank', 'w').reason, TF.partName(2) + 'が不足', '試作部品なしで新型を開発できた');
   assert.strictEqual(TF.armCost('tank', 'w', 3).bp, 0);
   const nw = TF.ARMS.tank.w.length;
   assert.strictEqual(TF.armName('tank', 'w', nw * 5), TF.ARMS.tank.w[nw - 1]);
@@ -280,6 +286,29 @@ check('武装: 武器は攻撃力、防護は耐久、特殊は苦手な敵へ�
   assert(Math.abs(sp.dmg / base.dmg - xm) < 0.02 && sp.sp === 1, '特効が乗らない');
   assert.strictEqual(other.dmg, other0.dmg, '苦手でない敵にも乗った');
   assert(!other.sp);
+});
+check('試作部品: n+1番目の新型にはステージ10nのボスの部品(最初の型は部品なし)。初クリアで確定、以降はまれに。ボス以外・敗北では出ない', () => {
+  assert.deepStrictEqual([9, 10, 15, 20, 30, 40, 120].map(TF.partGrade), [0, 1, 0, 2, 3, 4, 12]);
+  for (let g = 1; g <= 12; g++) TF.partStages(g).forEach(s => assert.strictEqual(TF.partGrade(s), g));
+  // 新型の段階と部品の等級が一致する
+  for (let l = 0; l < 60; l += 5) assert.strictEqual(TF.armCost('inf', 'w', l).part, TF.armTier(l));
+  const st = TF.newState(0);
+  st.cleared = 19;
+  let r = TF.applyResult(st, 20, true, st.form, 0.99);
+  assert.deepStrictEqual(r.part, { g: 2, n: K.partFirst }, '初クリアで確定しない');
+  r = TF.applyResult(st, 20, true, st.form, 0.99);
+  assert.strictEqual(r.part, null, '確率を外しても出た');
+  r = TF.applyResult(st, 20, true, st.form, K.partRate / 2);
+  assert.deepStrictEqual(r.part, { g: 2, n: 1 }, 'まれに出ない');
+  r = TF.applyResult(st, 20, false, st.form, 0);
+  assert.strictEqual(r.part, null, '負けても出た');
+  r = TF.applyResult(st, 19, true, st.form, 0);
+  assert.strictEqual(r.part, null, 'ボス以外で出た');
+  assert.strictEqual(TF.partCount(st, 2), K.partFirst + 1);
+  // ドロップ率は乱数どおり
+  let n = 0;
+  for (let i = 0; i < 1000; i++) if (TF.partDrop(30, false, i / 1000).n) n++;
+  assert(Math.abs(n / 1000 - K.partRate) < 0.01);
 });
 check('設計図: 勝つと手に入り(先のステージほど多く、ボス戦と初クリアは2倍)、負けると増えない', () => {
   const st = TF.newState(0);
@@ -328,7 +357,9 @@ function playthrough(opt) {
   const rnd = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
   const key = s => s + '|' + Object.keys(st.bld).map(k => k + st.bld[k].lv).join(',') + '|' + Object.keys(st.heroes).map(k => k + st.heroes[k].lv).join(',') + '|' + JSON.stringify(st.arms);
   const armTrace = {};
-  let want = null;
+  let partFarm = 0;
+  let want = null, partWish = 0;
+  const roll = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
   function getForm(s) {
     const k = key(s);
     if (cache.has(k)) return cache.get(k);
@@ -374,7 +405,8 @@ function playthrough(opt) {
           const delta = (usage[t] + avgP * 0.15) * frac * 0.5 * ((1 + e1) / (1 + e0) - 1);
           if (l >= TF.armMax(st)) { armCap += delta; continue; }
           const cost = TF.armCost(t, k, l);
-          cands.push({ id: 'arm', t, k, delta, cost, bpOk: (st.bp || 0) >= cost.bp });
+          const partOk = !cost.part || TF.partCount(st, cost.part) > 0;
+          cands.push({ id: 'arm', t, k, delta, cost, bpOk: (st.bp || 0) >= cost.bp && partOk, partOk });
         }
         const lab = cands.find(c => c.id === 'lab');
         if (lab) lab.delta += armCap;
@@ -390,14 +422,19 @@ function playthrough(opt) {
         c.afford = st.money >= c.cost.m && st.steel >= c.cost.s && c.bpOk !== false;
       });
       cands.sort((a, b) => b.ratio - a.ratio);
+      // 試作部品だけが足りない開発(資金・設計図は足りている)があれば、その等級の部品を狙う
+      const mine = cands.filter(c => opt.strategy !== 'mono' || ['factory', 'lab', 'hq'].includes(c.id) || (c.id === 'arm' && c.t === 'tank'));
+      const blocked = mine.find(c => c.id === 'arm' && !c.partOk && st.money >= c.cost.m && st.steel >= c.cost.s && (st.bp || 0) >= c.cost.bp);
+      partWish = blocked && mine.length && blocked.ratio >= mine[0].ratio * 0.5 ? blocked.cost.part : 0;
       let pick = null;
       if (opt.strategy === 'random') {
         // 欲しい強化をランダムに決め、買えるまで貯める
         const same = c => want && c.id === want.id && c.t === want.t && c.k === want.k;
-        if (!cands.some(same)) {
+        if (!cands.some(same) || (want && want.partOk === false)) {
           // 基地の画面と兵器の画面を気まぐれに見て、その画面の強化から選ぶ
           const arm = cands.filter(c => c.id === 'arm'), bld = cands.filter(c => c.id !== 'arm');
-          const pool = arm.length && (!bld.length || rnd() < 0.5) ? arm : bld;
+          const armOk = arm.filter(c => c.partOk);
+          const pool = armOk.length && (!bld.length || rnd() < 0.5) ? armOk : bld;
           want = pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
         }
         const c = cands.find(same);
@@ -434,12 +471,20 @@ function playthrough(opt) {
         const v = gg.wr * (rw.m + rw.s * STEEL_PRICE);
         if (v > best) { best = v; stage = s; form = gg.f; }
       }
+      // 開発したいのに試作部品が足りなければ、その等級のボス戦で部品を狙う(十分勝てるとき)
+      if (partWish) {
+        for (const s of TF.partStages(partWish)) {
+          if (s > st.cleared) continue;
+          const gg = getForm(s);
+          if (gg.wr >= 0.6) { stage = s; form = gg.f; partFarm++; break; }
+        }
+      }
       farmMin = Math.min(farmMin, getForm(stage).wr);
     }
     st.form = form;
     const b = TF.prepareBattle(st, form, stage);
     const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves });
-    const sum = TF.applyResult(st, stage, res.win, b.form);
+    const sum = TF.applyResult(st, stage, res.win, b.form, roll());
     battles++;
     timeSum += res.time; if (res.timeout) timeouts++;
     // 1戦 = 2倍速の戦闘時間 + 操作10秒 とみなす
@@ -453,7 +498,7 @@ function playthrough(opt) {
       lastClear = battles;
     }
   }
-  return { st, battles, perStage, stuckMax, stuckAt, hours: now / 3600e3, avgTime: timeSum / battles, timeouts, farmMin, armTrace };
+  return { st, battles, perStage, stuckMax, stuckAt, hours: now / 3600e3, avgTime: timeSum / battles, timeouts, farmMin, armTrace, partFarm };
 }
 
 function segments(res, size) {
@@ -472,7 +517,7 @@ function report(label, res) {
   console.log('    ' + segments(res, 20).map(g => `s${g.from}-${g.to}: 平均${g.avg.toFixed(1)} 最大${g.max}`).join('\n    '));
   const b = res.st.bld;
   console.log('    施設: ' + Object.keys(b).map(k => TF.BLD[k].name + b[k].lv).join(' '));
-  console.log('    武装: ' + TF.TYPES.filter(t => TF.typeUnlocked(res.st, t)).map(t => TF.UNIT[t].name + ' ' + TF.ARM_KINDS.map(k => TF.armLv(res.st, t, k)).join('/')).join('  ') + ` (武器/防護/特殊のLv) 設計図の残り ${res.st.bp}`);
+  console.log('    武装: ' + TF.TYPES.filter(t => TF.typeUnlocked(res.st, t)).map(t => TF.UNIT[t].name + ' ' + TF.ARM_KINDS.map(k => TF.armLv(res.st, t, k)).join('/')).join('  ') + ` (武器/防護/特殊のLv) 設計図の残り ${res.st.bp} / 部品集めのボス戦 ${res.partFarm}回 / 部品の残り ${JSON.stringify(res.st.parts)}`);
 }
 
 const TARGET = +process.env.STAGES || 120;
