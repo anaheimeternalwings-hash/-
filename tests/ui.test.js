@@ -57,7 +57,7 @@ function midState(over) {
     bld: { hq: { lv: 6, slot: 4 }, barracks: { lv: 10, slot: 1 }, supply: { lv: 8, slot: 0, stored: 0, t: now }, steel: { lv: 8, slot: 2, stored: 0, t: now },
       atpost: { lv: 9, slot: 3 }, factory: { lv: 9, slot: 5 }, depot: { lv: 4, slot: 6 }, artpost: { lv: 6, slot: 7 }, lab: { lv: 5, slot: 8 } },
     heroes: { oni: { lv: 15, exp: 0 }, tetsu: { lv: 14, exp: 0 }, taka: { lv: 12, exp: 0 } },
-    cleared: 14, sel: 15, form: [], pending: null, tab: 'base', speed: 1, stats: { battles: 40, wins: 30 }, created: now, flags: { intro: 1 }, lastSeen: now
+    cleared: 14, sel: 15, form: [], pending: null, tab: 'base', speed: 1, stats: { battles: 40, wins: 30 }, created: now, flags: { intro: 1, skipDeploy: 1 }, lastSeen: now
   }, over || {});
 }
 
@@ -344,8 +344,10 @@ function midState(over) {
       assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).reserve.used, 1, 'ドラッグで増援が出ない');
       await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.units.some(u => u.side === 0 && u.reserve); }, null, { timeout: 3000 });
       const d = await page.evaluate(() => window.__game.battle.debug());
-      const added = d.units.filter(u => u.side === 0 && u.reserve).pop();
-      assert(added.wx < 100, '置いた列(左側)に出ていない ' + added.wx);
+      const ai = d.units.map((u, k) => k).filter(k => d.units[k].side === 0 && d.units[k].reserve).pop();
+      // 画面の左側に置いた → 左側の列(0か1)に入る(出てくる場所は前線基地のこともある)
+      assert(d.lanes[ai] <= 1, '置いた列(左側)に出ていない ' + d.lanes[ai]);
+      assert(d.unitX[ai] < 130, '置いた列へ向かわない ' + d.unitX[ai]);
       await page.click('[data-act="skip"]');
       await page.waitForSelector('#modalWrap:not(.hidden) .result');
     }, st);
@@ -358,7 +360,8 @@ function midState(over) {
     await page.click('[data-act="sortie"]');
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.postEvents.some(e => e[0] === '0'); }, null, { timeout: 40000 });
     let d = await page.evaluate(() => window.__game.battle.debug());
-    assert(d.postInfo.front > 3, '前線が進んでいない');
+    // 前線の位置 = 3 + 自軍が占領した数 - 奪われた数(敵も占領してくる)
+    assert.strictEqual(d.postInfo.front, 3 + d.postEvents.filter(e => e[0] === '0').length - d.postEvents.filter(e => e[0] === '1').length, '前線の位置が占領と合わない');
     const captured = d.postEvents.filter(e => e[0] === '0').map(e => +e.split(':')[1]);
     captured.forEach(i => assert.strictEqual(d.posts[i], 0, '旗が自軍の色にならない'));
     assert(d.reserve.left >= 3, '前線基地の増援が増えない ' + d.reserve.left);
@@ -374,6 +377,68 @@ function midState(over) {
   }, midState({ cleared: 34, sel: 35, auto: false, bp: 0, parts: {},
     bld: { hq: { lv: 10, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
+
+  await test('配置: 出撃すると広い戦場(5列)で部隊を配置。地形が表示され、ドラッグで列を変更、おまかせ配置、戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
+    assert(await page.isVisible('#deployBar'), '配置の画面が出ない');
+    const txt = await page.textContent('#deployBar');
+    let d = await page.evaluate(() => window.__game.battle.debug());
+    assert.strictEqual(d.terrain.p.length, 5); assert.strictEqual(d.terrain.e.length, 5);
+    const names = await page.evaluate(() => Object.keys(window.__game.TF.TERRAIN).map(k => window.__game.TF.TERRAIN[k].name));
+    assert(names.some(n => txt.includes(n)), '地形の説明が出ない');
+    const allies = d.units.filter(u => u.side === 0);
+    assert.strictEqual(allies.length, 8, '部隊が8つ出ていない');
+    assert(new Set(d.lanes.slice(0, 8)).size >= 3, 'おまかせ配置が列に散らばっていない');
+    // 時間は進まない
+    const c0 = d.clock;
+    await page.waitForTimeout(800);
+    assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).clock, c0, '配置中に戦闘が進んだ');
+    // ドラッグで別の列へ
+    await page.waitForTimeout(800);
+    d = await page.evaluate(() => window.__game.battle.debug());
+    const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
+    const i0 = d.units.findIndex(u => u.side === 0), u0 = d.units[i0], lane0 = d.lanes[i0];
+    const tx = lane0 >= 2 ? 12 : box.w - 12; // 端の列へ
+    await page.mouse.move(box.x + u0.x, box.y + u0.y - 6); await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + u0.x + (tx - u0.x) * i / 10, box.y + u0.y - 6);
+    await page.mouse.up();
+    d = await page.evaluate(() => window.__game.battle.debug());
+    const moved = d.lanes[i0];
+    assert.notStrictEqual(moved, lane0, 'ドラッグで列が変わらない');
+    assert(moved === 0 || moved === 4);
+    // 戦闘開始: その配置のまま戦い、途中で閉じても同じ配置で決着できるよう保存される
+    await page.click('[data-act="deploy-go"]');
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight'; }, null, { timeout: 8000 });
+    d = await page.evaluate(() => window.__game.battle.debug());
+    assert.strictEqual(d.lanes[i0], moved, '配置が戦闘に反映されない');
+    const pend = await page.evaluate(() => window.__game.state.pending.form.map(f => f.lane));
+    assert.strictEqual(pend[i0], moved, '配置が保存されない');
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 },
+    bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
+    heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
+
+  await test('配置: 「次から省略」にすると配置画面を出さずにおまかせ配置で始まる', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
+    await page.click('#deployBar [data-act="deploy-skipnext"]');
+    assert.strictEqual((await state(page)).flags.skipDeploy, 1);
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+    await page.click('#modalWrap [data-act="r-form"]');
+    await page.click('[data-act="hero-ok"]').catch(() => {});
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase !== 'deploy'; }, null, { timeout: 5000 });
+    assert(!(await page.isVisible('#deployBar')), '省略にしても配置画面が出る');
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+  }, midState({ cleared: 2, sel: 3, flags: { intro: 1 } })));
 
   await test('勝つと戦場にコインが散らばり、自動で集まって報酬になる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');

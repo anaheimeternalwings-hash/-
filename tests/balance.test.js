@@ -43,9 +43,9 @@ check('相性: 対戦車兵は戦車にとても強く(2倍以上)、ほかに�
 check('相性: 砲兵は歩兵と対戦車兵に強く、戦車に弱い', () => {
   assert(TF.AFF.art.inf > 1 && TF.AFF.art.at > 1 && TF.AFF.art.tank < 1);
 });
-check('部隊の枠は司令部Lv1で2、最大6', () => {
+check('部隊の枠は司令部Lv1で2、最大8', () => {
   assert.strictEqual(TF.slotsFor(1), 2);
-  assert.strictEqual(TF.slotsFor(100), 6);
+  assert.strictEqual(TF.slotsFor(100), 8);
   for (let l = 1; l < 50; l++) assert(TF.slotsFor(l + 1) >= TF.slotsFor(l));
 });
 check('施設のレベル上限は司令部レベルで決まる', () => {
@@ -120,7 +120,7 @@ check('固有スキル: 突撃・装甲・一撃必中・一斉射撃', () => {
 check('ステージは上限なく続く(ステージ5000でも敵・報酬が有限で戦闘できる)', () => {
   [1, 10, 100, 1000, 5000].forEach(s => {
     const i = TF.stageInfo(s);
-    assert(i.enemies.length >= 2 && i.enemies.length <= 6);
+    assert(i.enemies.length >= 2 && i.enemies.length <= 8);
     i.enemies.forEach(e => assert(isFinite(e.maxHp) && isFinite(e.atk) && e.maxHp > 0));
     assert(isFinite(i.reward.m) && i.reward.m > 0);
     const r = TF.simulate(i.enemies, i.enemies, 1, true);
@@ -295,6 +295,69 @@ check('拠点: 手動では特殊ユニットをボタンで発進でき、1回�
     const s = TF.createBattle(p, e, seed, { record: true, reserves: res, posts: true });
     for (let t2 = 0.016; !s.isDone(); t2 += 0.033) s.step(t2);
     assert.strictEqual(JSON.stringify(s.result()), full, 'seed ' + seed);
+  }
+});
+check('地形: 森林・市街地は歩兵と対戦車兵を守り、戦車は平原で強く湿地・市街地で弱い。丘陵は攻撃が上がり砲兵はさらに強い', () => {
+  assert(TF.terrTake('forest', 'inf') < 1 && TF.terrTake('urban', 'at') < 1 && TF.terrTake('urban', 'tank') > 1);
+  assert(TF.terrAtk('plain', 'tank') > 1 && TF.terrAtk('marsh', 'tank') < 1 && TF.terrTake('marsh', 'tank') > 1);
+  assert(TF.terrAtk('hill', 'art') > TF.terrAtk('hill', 'inf') && TF.terrAtk('hill', 'inf') > 1 && TF.terrTake('hill', 'tank') < 1);
+  TF.TERRAIN_KEYS.forEach(k => TF.TYPES.forEach(t => { assert(TF.terrAtk(k, t) > 0.5 && TF.terrAtk(k, t) < 1.6); assert(TF.terrTake(k, t) > 0.5 && TF.terrTake(k, t) < 1.6); }));
+  // 戦闘でも効く: 同じ相手に、平原の戦車は湿地の戦車より大きなダメージを与える
+  const mk = (t, lane) => ({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
+  function firstDmg(trP, trE, att, def) {
+    const b = TF.createBattle([mk(att, 0)], [mk(def, 0)], 5, { record: true, terrain: { p: [trP, 'plain', 'plain', 'plain', 'plain'], e: [trE, 'plain', 'plain', 'plain', 'plain'] } });
+    b.step(4);
+    return b.ev.find(x => x.k === 'atk' && x.s === 0 && !x.miss).dmg;
+  }
+  assert(firstDmg('plain', 'plain', 'tank', 'inf') > firstDmg('marsh', 'plain', 'tank', 'inf') * 1.5, '平原と湿地の差がない');
+  assert(firstDmg('plain', 'forest', 'tank', 'inf') < firstDmg('plain', 'plain', 'tank', 'inf') * 0.75, '森林で守られない');
+});
+check('列: 部隊はおもに同じ列の敵を狙い、離れた列への攻撃は弱い。砲兵はどの列にも届く', () => {
+  const mk = (t, lane) => ({ type: t, maxHp: 1e7, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
+  function shots(att) {
+    const b = TF.createBattle([mk(att, 0)], [mk('inf', 0), mk('inf', 4)], 7, { record: true });
+    b.step(60);
+    const a = b.ev.filter(x => x.k === 'atk' && x.s === 0 && !x.miss);
+    const near = a.filter(x => x.d === 1), far = a.filter(x => x.d === 2);
+    return { near: near.length, far: far.length, nd: near.length ? near[0].dmg : 0, fd: far.length ? far[0].dmg : 0 };
+  }
+  const inf = shots('inf'), art = shots('art');
+  assert(inf.near > inf.far * 10, '同じ列をおもに狙わない ' + JSON.stringify(inf));
+  assert(art.far > art.near * 0.3, '砲兵が離れた列を撃たない ' + JSON.stringify(art));
+});
+check('ステージ: 地形は5列×両軍、敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
+  for (let s = 1; s <= 200; s += 7) {
+    const i = TF.stageInfo(s);
+    assert.strictEqual(i.terrain.p.length, 5); assert.strictEqual(i.terrain.e.length, 5);
+    i.terrain.p.concat(i.terrain.e).forEach(k => assert(TF.TERRAIN[k], k));
+    i.enemies.forEach(e => assert(e.lane >= 0 && e.lane < 5));
+    assert.deepStrictEqual(TF.stageInfo(s).terrain, i.terrain, '同じステージの地形が毎回同じでない');
+  }
+  const st = TF.newState(0);
+  st.bld.hq.lv = 12; st.bld.atpost = { lv: 5, slot: 3 }; st.bld.factory = { lv: 5, slot: 5 };
+  const f = TF.normalizeForm(st, []).map((x, k) => Object.assign(x, { lane: k === 0 ? 4 : null }));
+  const out = TF.autoLanes(st, f, 30);
+  assert.strictEqual(out[0].lane, 4, '決めた列が変わった');
+  out.forEach(x => assert(x.lane >= 0 && x.lane < 5));
+  assert(new Set(out.map(x => x.lane)).size >= 3, '列に散らばらない');
+  assert.strictEqual(TF.normalizeForm(st, [{ type: 'inf', hero: null, lane: null }])[0].lane, null, '列なしが0列になった');
+});
+check('列の移動: 手動のときだけ戦闘中に別の列へ動かせる。地形と列があっても少しずつ進めた結果は一括計算と同じ', () => {
+  const st = TF.newState(0);
+  st.bld.hq.lv = 12; st.bld.atpost = { lv: 8, slot: 3 }; st.bld.factory = { lv: 8, slot: 5 }; st.bld.barracks.lv = 8;
+  const b = TF.prepareBattle(st, TF.autoFormation(st, 30, 4), 30);
+  const m = TF.createBattle(b.p, b.e, 4, { record: true, auto: false, terrain: b.terrain, reserves: b.reserves, posts: true });
+  m.step(1);
+  const to = (b.p[0].lane + 2) % 5;
+  assert(m.setLane(0, to, 1), '動かせない');
+  assert.strictEqual(m.U[0].lane, to);
+  const a = TF.createBattle(b.p, b.e, 4, { record: true, terrain: b.terrain });
+  assert(!a.setLane(0, to, 1), 'AUTOなのに動かせた');
+  for (let seed = 1; seed <= 20; seed++) {
+    const full = JSON.stringify(TF.simulate(b.p, b.e, seed, true, { reserves: b.reserves, posts: true, terrain: b.terrain }));
+    const s2 = TF.createBattle(b.p, b.e, seed, { record: true, reserves: b.reserves, posts: true, terrain: b.terrain });
+    for (let t2 = 0.016; !s2.isDone(); t2 += 0.033) s2.step(t2);
+    assert.strictEqual(JSON.stringify(s2.result()), full, 'seed ' + seed);
   }
 });
 check('武装: 研究所がないと開発できず、レベル上限は研究所Lv×2。最初の型は設計図で配備、新型(Lv5→6…)には試作部品も要る', () => {
@@ -487,7 +550,7 @@ function playthrough(opt) {
       for (const id of TF.BLD_ORDER) if (TF.BLD[id].req === hq + 1 && id !== 'supply' && id !== 'steel') dh += avgP * 0.5;
       if (dh > 0) cands.push({ id: 'hq', delta: dh });
       // 試作部品は集めるのに手間がかかる(平均 1/ドロップ率 回のボス戦)ので、その分の稼ぎを費用に含めて比べる
-      const rwNow = TF.stageInfo(Math.max(1, st.cleared)).reward, partEq = opt.strategy ? 0 : (opt.partEqMul === undefined ? 0.3 : opt.partEqMul) * (rwNow.m + rwNow.s * STEEL_PRICE) / K.partRate;
+      const rwNow = TF.stageInfo(Math.max(1, st.cleared)).reward, partEq = (opt.partEqMul === undefined ? 0.3 : opt.partEqMul) * (rwNow.m + rwNow.s * STEEL_PRICE) / K.partRate;
       cands.forEach(c => {
         if (c.id !== 'arm') c.cost = TF.upgradeCost(c.id, TF.lv(st, c.id));
         c.ratio = c.delta / (c.cost.m + c.cost.s * STEEL_PRICE + (c.cost.part ? partEq : 0));
@@ -555,7 +618,7 @@ function playthrough(opt) {
     }
     st.form = form;
     const b = TF.prepareBattle(st, form, stage);
-    const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves, posts: b.posts });
+    const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves, posts: b.posts, terrain: b.terrain });
     const sum = TF.applyResult(st, stage, res.win, b.form, roll());
     battles++;
     timeSum += res.time; if (res.timeout) timeouts++;
