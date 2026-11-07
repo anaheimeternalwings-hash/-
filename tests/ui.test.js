@@ -352,6 +352,29 @@ function midState(over) {
   });
 
 
+  await test('拠点: 敵を撃破すると前線が進んで拠点を占領。前線基地から増援が出て、手動ではボタンで特殊ユニットを発進', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.postEvents.some(e => e[0] === '0'); }, null, { timeout: 40000 });
+    let d = await page.evaluate(() => window.__game.battle.debug());
+    assert(d.postInfo.front > 3, '前線が進んでいない');
+    const captured = d.postEvents.filter(e => e[0] === '0').map(e => +e.split(':')[1]);
+    captured.forEach(i => assert.strictEqual(d.posts[i], 0, '旗が自軍の色にならない'));
+    assert(d.reserve.left >= 3, '前線基地の増援が増えない ' + d.reserve.left);
+    // 手動なので自動では発進しない。ボタンで発進する
+    assert(!d.supEvents.some(e => e[0] === '0'), '手動なのに自動で発進した');
+    await page.waitForSelector('#supBar .supbtn', { timeout: 5000 });
+    await page.click('#supBar .supbtn');
+    d = await page.evaluate(() => window.__game.battle.debug());
+    assert(d.supEvents.some(e => e[0] === '0'), 'ボタンで特殊ユニットが発進しない');
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return !x || x.air > 0 || x.ending; }, null, { timeout: 3000 });
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+  }, midState({ cleared: 34, sel: 35, auto: false, bp: 0, parts: {},
+    bld: { hq: { lv: 10, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
+    heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
+
   await test('勝つと戦場にコインが散らばり、自動で集まって報酬になる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');

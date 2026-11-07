@@ -227,6 +227,76 @@ check('配置の指示: 前進は与えるダメージ・受けるダメージ�
   assert(Math.abs(d2 / d0 - TF.K.stDeal['-1']) < 0.02 && Math.abs(t2 / t0 - TF.K.stTake['-1']) < 0.02, '後退 ' + [d0, d2, t0, t2]);
   assert(TF.K.stDeal['1'] > 1 && TF.K.stTake['1'] > 1 && TF.K.stTake['-1'] < 1);
 });
+check('拠点: 敵部隊を撃破すると前線が進んで拠点を占領し、増援+1と特殊ユニット1回を得る(両軍とも)。占領は記録どおり', () => {
+  const st = TF.newState(0);
+  st.bld.hq.lv = 10; st.bld.factory = { lv: 5, slot: 5 };
+  const res = TF.battleReserves(st, 50);
+  const mk = (t, hp, atk) => ({ type: t, maxHp: hp, atk: atk, cd: 1, hero: null, boss: false, power: 1 });
+  // 自軍が強い: 撃破のたびに敵側の拠点を手前から占領
+  const strong = [mk('tank', 5000, 400), mk('tank', 5000, 400), mk('tank', 5000, 400)], weak = [1, 2, 3, 4].map(() => mk('inf', 900, 5));
+  const a = TF.createBattle(strong, weak, 3, { record: true, reserves: res, posts: true });
+  a.step(Infinity);
+  const posts = a.ev.filter(x => x.k === 'post');
+  assert(posts.length >= 2, '撃破しても占領しない');
+  assert.deepStrictEqual(posts.slice(0, 3).map(x => x.i), TF.POST_ORDER.slice(3, 3 + Math.min(3, posts.length)), '前線に近い拠点から順に占領していない');
+  assert(posts.every(x => x.side === 0));
+  assert.strictEqual(posts[0].kind, TF.POST_KIND[TF.POST_ORDER[3]]);
+  const sups = a.ev.filter(x => x.k === 'sup' && x.side === 0);
+  assert(sups.length >= 1, '自動で特殊ユニットが発進しない');
+  assert(sups[0].t >= posts[0].t + K.supDelay - 1e-9, '占領と同時に発進した');
+  assert(a.result().win);
+  // 決着した後は占領しない(勝利後の進軍はしない)
+  const lastKill = Math.max(...a.ev.filter(x => (x.kill) || (x.hits && x.hits.some(h => h.kill))).map(x => x.t));
+  assert(posts.every(x => x.t <= lastKill));
+  // 増援の枠が増える
+  const b = TF.createBattle(strong, weak, 3, { record: true, reserves: res, posts: true, auto: false });
+  const left0 = b.reserveInfo(0).left;
+  b.step(Infinity);
+  const pi = b.postInfo();
+  assert(pi.front > 3, '前線が進んでいない');
+  assert(b.reserveInfo(b.time()).left >= left0 + 1, '前線基地の増援が増えない');
+  // 手動では、ボタン(support)を押すまで発進しない
+  assert(!b.ev.some(x => x.k === 'sup' && x.side === 0), '手動なのに自動で発進した');
+  // 逆に自軍がやられると、自軍側の拠点を奪われ、敵が特殊ユニットを使う
+  const slow = [mk('tank', 5000, 40), mk('tank', 5000, 40), mk('tank', 5000, 40)];
+  const c = TF.createBattle(weak, slow, 3, { record: true, posts: true });
+  c.step(Infinity);
+  const lost = c.ev.filter(x => x.k === 'post');
+  assert(lost.length >= 1 && lost.every(x => x.side === 1), '自軍がやられても拠点を奪われない');
+  assert.strictEqual(lost[0].i, TF.POST_ORDER[2]);
+  assert(c.ev.some(x => x.k === 'sup' && x.side === 1), '敵が特殊ユニットを使わない');
+  // posts なしの戦闘には拠点の影響がない
+  const d = TF.createBattle(strong, weak, 3, { record: true });
+  d.step(Infinity);
+  assert(!d.ev.some(x => x.k === 'post' || x.k === 'sup'));
+});
+check('拠点: 手動では特殊ユニットをボタンで発進でき、1回使うと減る。少しずつ進めても一括計算と同じ結果', () => {
+  const mk = (t, hp, atk) => ({ type: t, maxHp: hp, atk: atk, cd: 1, hero: null, boss: false, power: 1 });
+  const strong = [mk('tank', 5000, 300), mk('tank', 5000, 300)], weak = [1, 2, 3, 4, 5].map(() => mk('inf', 700, 5));
+  const b = TF.createBattle(strong, weak, 9, { record: true, posts: true, auto: false });
+  let tt = 0;
+  while (!b.isDone() && !b.postInfo().charges.length && tt < 30) { tt += 0.1; b.step(tt); }
+  const ch = b.postInfo().charges;
+  assert(ch.length >= 1, '占領しても特殊ユニットが使えない');
+  const nSup = b.ev.filter(x => x.k === 'sup').length, nPost = b.ev.filter(x => x.k === 'post').length;
+  assert(b.support(ch[0], tt), '発進できない');
+  assert.strictEqual(b.ev.filter(x => x.k === 'sup').length, nSup + 1);
+  assert(b.ev.some(x => x.k === 'sup' && x.side === 0 && x.kind === ch[0]));
+  // 1回使うと減る(発進で撃破して新しく占領した分は増える)
+  const gained = b.ev.filter(x => x.k === 'post').slice(nPost).filter(x => x.kind).length;
+  assert.strictEqual(b.postInfo().charges.length, ch.length - 1 + gained);
+  const have = b.postInfo().charges, missing = ['heli', 'air', 'drone'].find(k => !have.includes(k));
+  if (missing && !b.isDone()) assert(!b.support(missing, tt), '持っていない特殊ユニットが発進した');
+  // 一括計算と少しずつ進めた場合が同じ
+  for (let seed = 1; seed <= 30; seed++) {
+    const e = TF.stageInfo(30 + seed % 20).enemies, p = TF.stageInfo(28 + seed % 20).enemies.map(q => Object.assign({}, q, { hero: null }));
+    const res = { p: { count: 2, defs: { tank: mk('tank', 800, 60), inf: mk('inf', 600, 40) } }, e: { list: [e[0]] } };
+    const full = JSON.stringify(TF.simulate(p, e, seed, true, { reserves: res, posts: true }));
+    const s = TF.createBattle(p, e, seed, { record: true, reserves: res, posts: true });
+    for (let t2 = 0.016; !s.isDone(); t2 += 0.033) s.step(t2);
+    assert.strictEqual(JSON.stringify(s.result()), full, 'seed ' + seed);
+  }
+});
 check('武装: 研究所がないと開発できず、レベル上限は研究所Lv×2。最初の型は設計図で配備、新型(Lv5→6…)には試作部品も要る', () => {
   const st = TF.newState(0);
   st.money = st.steel = 1e9; st.bp = 0;
@@ -350,10 +420,10 @@ check('最初のステージは初期状態で勝てる', () => {
 function playthrough(opt) {
   let now = 0;
   const st = TF.newState(now);
-  let battles = 0, seed = 1, lastClear = 0, stuckMax = 0, stuckAt = 0, timeSum = 0, timeouts = 0, farmMin = 1;
+  let battles = 0, seed = 1 + (opt.seedOff || 0), lastClear = 0, stuckMax = 0, stuckAt = 0, timeSum = 0, timeouts = 0, farmMin = 1;
   const perStage = {};
   const cache = new Map();
-  let r = 12345;
+  let r = 12345 + (opt.seedOff || 0);
   const rnd = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
   const key = s => s + '|' + Object.keys(st.bld).map(k => k + st.bld[k].lv).join(',') + '|' + Object.keys(st.heroes).map(k => k + st.heroes[k].lv).join(',') + '|' + JSON.stringify(st.arms);
   const armTrace = {};
@@ -485,7 +555,7 @@ function playthrough(opt) {
     }
     st.form = form;
     const b = TF.prepareBattle(st, form, stage);
-    const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves });
+    const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves, posts: b.posts });
     const sum = TF.applyResult(st, stage, res.win, b.form, roll());
     battles++;
     timeSum += res.time; if (res.timeout) timeouts++;
