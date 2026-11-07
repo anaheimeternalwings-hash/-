@@ -503,7 +503,7 @@ function midState(over) {
     assert.strictEqual(s.parts[1], first - 1);
   }, midState({ cleared: 9, sel: 10, bp: 200, parts: {}, arms: { tank: { w: 5 } } })));
 
-  await test('広い戦場: なぞって見回し、2本指で拡大・縮小、「戦況を追う」で戻る。勝てば敵陣を占領', () => withPage('iPhone 13', async page => {
+  await test('広い戦場: なぞって見回し、2本指で拡大・縮小、「戦況を追う」で戻る。勝っても敵陣へは進軍しない', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
@@ -530,9 +530,16 @@ function midState(over) {
     assert(c2.z > z0 * 1.3, '拡大できない ' + z0 + '→' + c2.z);
     await page.click('#camReset');
     assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).cam.user, false);
-    // スキップ後の勝利演出で、前線が敵陣まで押し上がって建物を占領する
+    // 勝っても敵陣へは進軍しない(前線はその場で止まり、建物も占領しない)
     await page.click('[data-act="skip"]');
-    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.captured >= 3; }, null, { timeout: 8000 });
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.ending; }, null, { timeout: 8000 });
+    const e0 = await page.evaluate(() => window.__game.battle.debug());
+    await page.waitForTimeout(1500);
+    const e1 = await page.evaluate(() => window.__game.battle.debug());
+    if (e1) {
+      assert(Math.abs(e1.front - e0.front) < 0.5, '勝利後に前線が進んだ ' + e0.front + '→' + e1.front);
+      assert.strictEqual(e1.captured, 0, '勝利後に建物を占領した');
+    }
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
     assert((await page.textContent('.result h2')).includes('勝利'));
   }, midState({ cleared: 2, sel: 3 })));
