@@ -202,6 +202,25 @@ function midState(over) {
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 5000 });
   }, midState({ tab: 'sortie' })));
 
+  await test('戦闘をスキップせず最後まで再生すると結果が出る(戦場と兵士が描かれている)', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForSelector('#battle:not(.hidden)');
+    await page.click('[data-act="speed"][data-sp="4"]');
+    await page.waitForTimeout(900);
+    const painted = await page.evaluate(() => {
+      const bg = document.getElementById('bbg'), fg = document.getElementById('bcv');
+      const a = bg.getContext('2d').getImageData(bg.width >> 1, bg.height >> 1, 1, 1).data[3];
+      const d = fg.getContext('2d').getImageData(0, 0, fg.width, fg.height).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4 * 61) if (d[i] > 0) n++;
+      return { bg: a, fg: n };
+    });
+    assert(painted.bg === 255 && painted.fg > 200, JSON.stringify(painted));
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 30000 });
+    assert.strictEqual((await state(page)).pending, null);
+  }, midState({ cleared: 2, sel: 3 })));
+
   await test('部隊の編成(兵種・指揮官の変更、おまかせ編成、予想勝率)', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="slot"][data-i="0"]');
