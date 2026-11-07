@@ -274,7 +274,7 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .deploybar .row2{display:flex;align-items:center;gap:8px}
 .deploybar .wrp{font-weight:900;font-size:15px}
 .deploybar .btn{min-height:40px;padding:0 12px;font-size:14px}
-.deploybar label{display:flex;align-items:center;gap:4px;color:var(--dim);font-size:11px;margin-top:6px}
+.deploybar label{display:inline-flex;align-items:center;gap:4px;color:var(--dim);font-size:11px;margin-top:8px}
 .supbar{position:absolute;right:8px;bottom:10px;z-index:3;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
 .supbtn{display:flex;align-items:center;gap:6px;padding:5px 10px 5px 6px;border-radius:14px;background:rgba(36,28,66,.92);border:2px solid #b48cff;color:#f0e6ff;font-size:12px;font-weight:900;box-shadow:0 0 14px rgba(180,140,255,.55);animation:suppulse 1.1s ease-in-out infinite alternate}
 .supbtn svg{width:40px;height:22px}
@@ -2410,6 +2410,9 @@ if (typeof module !== 'undefined') module.exports = TF;
     var auto = st.auto !== false;
     html += '<div class="modesel"><span class="lbl">戦闘</span><div class="seg"><button data-act="mode" data-m="auto" class="' + (auto ? 'on' : '') + '">自動</button><button data-act="mode" data-m="manual" class="' + (auto ? '' : 'on') + '">手動(指示・スキル)</button></div></div>';
     if (!auto) html += '<div class="small" style="margin-top:6px">手動: 戦闘中に自軍の部隊から敵へドラッグすると集中攻撃。指揮官スキルは下のボタンで自分で発動します(押さないと発動しません)。予想勝率は自動戦闘の場合です。</div>';
+    // 戦闘前の配置画面を出すかどうか(配置画面の「次から省略」もここで戻せる)
+    var dep = !(st.flags && st.flags.skipDeploy);
+    html += '<div class="modesel"><span class="lbl">配置</span><div class="seg"><button data-act="deploy-mode" data-m="on" class="' + (dep ? 'on' : '') + '">戦闘前に配置する</button><button data-act="deploy-mode" data-m="off" class="' + (dep ? '' : 'on') + '">省略(おまかせ)</button></div></div>';
     html += '<button class="btn wide big" style="margin-top:10px" data-act="sortie">出撃!</button>';
     if (st.cleared >= 1) html += '<button class="farmbtn" data-act="farm-find">💰 稼ぎにおすすめのステージを探す</button>';
     if (pct < 40) html += '<div class="tips">' + esc(adviceLine(info)) + '</div>';
@@ -2962,7 +2965,11 @@ if (typeof module !== 'undefined') module.exports = TF;
     'deploy-go': function () { Battle.deployGo(); },
     'terrain-info': function (el) { var tr = TF.TERRAIN[el.dataset.k]; toast(tr.name + ': ' + tr.desc); },
     'deploy-auto': function () { Battle.deployAuto(); },
-    'deploy-skipnext': function (el) { st.flags.skipDeploy = el.checked ? 1 : 0; save(); },
+    'deploy-skipnext': function (el) {
+      st.flags.skipDeploy = el.checked ? 1 : 0; save();
+      if (el.checked) toast('次回から配置を省略します(出撃画面の「配置」でいつでも戻せます)');
+    },
+    'deploy-mode': function (el) { st.flags.skipDeploy = el.dataset.m === 'off' ? 1 : 0; save(); renderSortie(); },
     'farm-find': function (el) {
       el.textContent = '探しています…';
       el.disabled = true;
@@ -3563,6 +3570,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.defs = prep.reserves.p.defs; B.rewardM = prep.rewardM || 0; B.coinShown = 0; B.coins = []; B.lanePref = null;
       buildCardBar();
       if (B.phase === 'deploy') $('cardBar').classList.add('hidden');
+      else if (st.flags && st.flags.skipDeploy) showHint('配置は省略中(出撃画面の「配置」で戻せます)', 3.5);
       else if (!auto) showHint('敵へドラッグで集中攻撃/空き地へドラッグで移動(別の列へも)/カードで増援', 5);
       else if (!(st.flags && st.flags.camHint)) { showHint('なぞると戦場を見回せます(2本指で拡大・縮小)', 4); st.flags = st.flags || {}; st.flags.camHint = 1; }
       lastTs = 0;

@@ -470,7 +470,7 @@ function midState(over) {
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 } } })));
 
-  await test('配置: 「次から省略」にすると配置画面を出さずにおまかせ配置で始まる', () => withPage('iPhone 13', async page => {
+  await test('配置: 「次から省略」にすると配置画面を出さずにおまかせ配置で始まる。出撃画面の「配置」でいつでも戻せる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="sortie"]');
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
@@ -484,6 +484,18 @@ function midState(over) {
     await page.click('[data-act="sortie"]');
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase !== 'deploy'; }, null, { timeout: 5000 });
     assert(!(await page.isVisible('#deployBar')), '省略にしても配置画面が出る');
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+    // 出撃画面の「配置」で戻すと、また配置画面が出る
+    await page.click('#modalWrap [data-act="r-form"]');
+    await page.click('[data-act="hero-ok"]').catch(() => {});
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    assert(await page.isVisible('[data-act="deploy-mode"][data-m="off"].on'), '出撃画面に省略中と出ない');
+    await page.click('[data-act="deploy-mode"][data-m="on"]');
+    assert.strictEqual((await state(page)).flags.skipDeploy, 0);
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; }, null, { timeout: 5000 });
+    assert(await page.isVisible('#deployBar'), '戻しても配置画面が出ない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
   }, midState({ cleared: 2, sel: 3, flags: { intro: 1 } })));
