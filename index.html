@@ -39,12 +39,31 @@ b,strong{font-weight:700}
 .res{display:flex;align-items:center;gap:6px;background:#10150e;border:1px solid #33402b;border-radius:999px;padding:4px 10px 4px 5px;min-width:0;flex:1 1 0}
 .res svg{width:22px;height:22px;flex:none}
 .res b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:370px){.res{gap:4px;padding:4px 8px 4px 4px}.res svg{width:18px;height:18px}.res b{font-size:13.5px}}
+@media (max-width:370px){#top{gap:5px;padding-left:8px;padding-right:8px}.res{gap:3px;padding:4px 7px 4px 4px}.res svg{width:18px;height:18px}.res b{font-size:13.5px}
+  .stagepill{padding:3px 5px;font-size:11px}.iconbtn{width:32px;height:34px}}
 .res.bump b{animation:bump .5s}
 @keyframes bump{30%{transform:scale(1.18);color:#fff}}
 .stagepill{flex:none;font-size:12px;color:var(--khaki);border:1px solid #4d5a3c;border-radius:8px;padding:3px 7px;white-space:nowrap}
 .iconbtn{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:#232c1e;border:1px solid #39462f}
 .iconbtn svg{width:20px;height:20px}
+.iconbtn{position:relative}
+.iconbtn .dot{position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 2px #151b12;display:none}
+.iconbtn .dot.on{display:block}
+/* アイテム一覧 */
+.itemlist{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.item{display:flex;align-items:center;gap:10px;padding:10px 12px}
+.item .ic{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:#1c2417;border:1px solid #3a4830}
+.item .ic svg{width:28px;height:28px}
+.item.part .ic{background:#241c3a;border-color:#6b55a8}
+.item .nm{font-weight:900;font-size:15px}
+.item .n{margin-left:auto;font-size:18px;font-weight:900;flex:none}
+.item.part .n{color:#e2d2ff}
+.item.zero{opacity:.55}
+.item .small{line-height:1.45;margin-top:2px}
+.item .use{color:var(--khaki)}
+.item .pill{margin-top:6px}
+.armlink{display:flex;align-items:center;gap:8px;padding:8px 12px}
+.armlink svg{width:22px;height:22px;flex:none}
 #main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .screen{max-width:520px;margin:0 auto;padding:12px 16px 24px}
 #tabs{flex:none;display:grid;grid-template-columns:repeat(4,1fr);background:#151b12;border-top:1px solid #2e3828;padding-bottom:var(--sab)}
@@ -289,26 +308,13 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 
 /* ===== 結果 ===== */
 .result h2{margin:0;text-align:center;font-size:40px;font-weight:900;letter-spacing:.1em}
-.armhead{display:flex;align-items:center;gap:10px;padding:10px 12px}
-.partsbar{margin-top:8px;padding:9px 12px}
-.partsbar .pt{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.partsbar .pt svg{width:20px;height:20px}
-.partsbar .pt .small{flex-basis:100%}
-.partsbar .pl{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.pchip{display:flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;background:#2a2142;border:1px solid #6b55a8;color:#e2d2ff;font-size:13px}
-.pchip .gr{font-weight:900}
-.pchip.zero{opacity:.45}
 .cost.partc{color:#d9c2ff;font-weight:800}
 button.cost.mat{background:none;border:0;padding:0 0 1px;font:inherit;color:inherit;border-bottom:1px dashed currentColor;cursor:pointer}
 button.cost.mat.partc{color:#d9c2ff}
 button.cost.mat.short{color:var(--bad)}
-.pchip .st{font-size:10px;color:#bfa8f0;margin-left:2px}
 .cost.partc.short{color:var(--bad)}
 .rline.rare{background:linear-gradient(90deg,#3a2a66,#1a2116);box-shadow:0 0 0 1px #8f6ae0 inset;animation:rareglow 1.4s ease-in-out infinite alternate}
 @keyframes rareglow{from{box-shadow:0 0 0 1px #8f6ae0 inset}to{box-shadow:0 0 0 1px #c9b0ff inset,0 0 14px rgba(180,140,255,.5)}}
-.armhead .bpv{display:flex;align-items:center;gap:6px;font-size:20px;font-weight:900;flex:none}
-.armhead .bpv svg{width:28px;height:28px}
-.armhead .small{line-height:1.45}
 .armtypes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
 .armtypes button{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;border-radius:12px;background:#1f281a;border:1px solid #34402c;color:var(--sub);font-size:11px;font-weight:800;position:relative}
 .armtypes button svg{width:30px;height:30px}
@@ -392,6 +398,7 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
     <div class="res" id="resM"><svg viewBox="0 0 24 24"><use href="#i-money"/></svg><b class="num" id="vM">0</b></div>
     <div class="res" id="resS"><svg viewBox="0 0 24 24"><use href="#i-steel"/></svg><b class="num" id="vS">0</b></div>
     <div class="stagepill" id="vStage">ST 1</div>
+    <button class="iconbtn" data-act="items" aria-label="アイテム" id="btnItems"><svg viewBox="0 0 24 24"><path fill="#d9c79a" fill-rule="evenodd" d="M9 3.5h6A2 2 0 0 1 17 5.5V7h2.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-10A1.5 1.5 0 0 1 4.5 7H7V5.5a2 2 0 0 1 2-2zM9 5.5V7h6V5.5zM3 11.5v1.6h7.5v1.4h3v-1.4H21v-1.6z"/></svg><i class="dot" id="dotItems"></i></button>
     <button class="iconbtn" data-act="menu" aria-label="メニュー"><svg viewBox="0 0 24 24"><path fill="#b0b9a0" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg></button>
   </header>
   <main id="main">
@@ -1513,6 +1520,15 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (n < 1e12) return trimNum((n / 1e8).toFixed(n < 1e9 ? 2 : 1)) + '億';
     return trimNum((n / 1e12).toFixed(2)) + '兆';
   }
+  // 上の資源表示用の短い書き方(幅の狭い画面でも切れないように)
+  function fmtTop(n) {
+    n = Math.floor(n || 0);
+    if (n < 100000) return n.toLocaleString('ja-JP');
+    if (n < 1e6) return trimNum((n / 1e4).toFixed(1)) + '万';
+    if (n < 1e8) return Math.floor(n / 1e4) + '万';
+    if (n < 1e12) return trimNum((n / 1e8).toFixed(n < 1e10 ? 1 : 0)) + '億';
+    return fmt(n);
+  }
   function fmtDur(ms) {
     var m = Math.floor(ms / 60000);
     if (m < 1) return Math.max(1, Math.floor(ms / 1000)) + '秒';
@@ -1964,14 +1980,15 @@ if (typeof module !== 'undefined') module.exports = TF;
 
   // ====== 画面: 上部 ======
   function renderTop() {
-    $('vM').textContent = fmt(st.money);
-    $('vS').textContent = fmt(st.steel);
+    $('vM').textContent = fmtTop(st.money);
+    $('vS').textContent = fmtTop(st.steel);
     $('vStage').textContent = 'ST ' + (st.cleared + 1);
     var anyUp = TF.BLD_ORDER.concat(['hq']).some(function (id) { return TF.lv(st, id) > 0 && TF.canUpgrade(st, id).ok; });
     var info = TF.storedInfo(st, now());
     var full = (info.supply && info.supply.full) || (info.steel && info.steel.full);
     $('dotBase').classList.toggle('on', !!(anyUp || full) && curTab !== 'base');
     $('dotArms').classList.toggle('on', (anyArm() || !!st.flags.armNew) && curTab !== 'arms');
+    $('dotItems').classList.toggle('on', !!st.flags.itemNew);
   }
 
   // ====== 次の目標 ======
@@ -2209,9 +2226,8 @@ if (typeof module !== 'undefined') module.exports = TF;
   }
   function renderArms() {
     var lab = TF.lv(st, 'lab'), t = armSel();
-    var html = '<div class="card armhead"><div class="bpv">' + icoBp() + '<span class="num" id="vBp">' + fmt(st.bp || 0) + '</span></div>' +
-      '<div class="small"><b>設計図</b>は勝利で手に入ります(先のステージほど多く、ボス戦・初クリアは2倍)。新型の開発に使います。</div></div>';
-    html += partsBar();
+    // 開発に使うアイテム(設計図・試作部品)は常に出さず、必要なときに一覧を開く
+    var html = '<button class="card armlink wide" data-act="items">' + icoPart() + '<span class="grow" style="text-align:left"><b>開発アイテム</b> <span class="small">設計図・試作部品の数と集め方</span></span><span class="pill">一覧 ▶</span></button>';
     if (!lab) {
       html += '<div class="card" style="margin-top:10px;text-align:center;line-height:1.7"><div style="font-weight:900;font-size:16px;margin-bottom:4px">兵器開発</div>' +
         '各兵種の<b>武器</b>(攻撃力)・<b>防護</b>(耐久)・<b>特殊</b>(苦手な敵へのダメージ)を開発・強化できます。<br>' +
@@ -2251,18 +2267,40 @@ if (typeof module !== 'undefined') module.exports = TF;
     $('scr-arms').innerHTML = html;
     if (st.flags.armNew) { delete st.flags.armNew; save(); renderTop(); }
   }
-  // 持っている試作部品(等級ごと)。タップで入手場所を案内
-  function partsBar() {
-    // 表示する等級: 持っているもの、次の開発に要るもの(手の届く等級まで)
-    var reach = TF.partGrade(Math.max(10, Math.ceil((st.cleared + 1) / 10) * 10)), top = 1;
+  // ====== アイテム一覧(開発に使う設計図・試作部品) ======
+  // 上のかばんのボタンか、兵器の画面から開く。各アイテムの集め方へ移動できる
+  function openItems() {
+    if (st.flags.itemNew) { delete st.flags.itemNew; save(); }
+    $('dotItems').classList.remove('on');
+    var html = '<div class="grab"></div><button class="close" data-act="sheet-close" aria-label="閉じる">✕</button><h3>アイテム</h3>' +
+      '<div class="small">兵器の開発に使うアイテムです。「集めに行く」で手に入るステージへ移動します。</div><div class="itemlist">';
+    // 設計図
+    var bpUse = [];
+    TF.unlockedTypes(st).forEach(function (t) { TF.ARM_KINDS.forEach(function (k) { var c = TF.armCost(t, k, TF.armLv(st, t, k)); if (c.bp && TF.armLv(st, t, k) < TF.armMax(st)) bpUse.push(c.bp); }); });
+    html += '<div class="card item' + ((st.bp || 0) ? '' : ' zero') + '"><div class="ic">' + icoBp() + '</div><div class="grow"><div class="row"><span class="nm">設計図</span><b class="n num">' + fmt(st.bp || 0) + '</b></div>' +
+      '<div class="small">戦闘に勝つと手に入ります(先のステージほど多く、ボス戦・初クリアは2倍)。武装の配備と新型の開発に使います。</div>' +
+      (bpUse.length ? '<div class="small use">次の開発に必要: ' + fmt(Math.min.apply(null, bpUse)) + '〜' + fmt(Math.max.apply(null, bpUse)) + '</div>' : '') +
+      '<button class="pill" data-act="bp-go">集めに行く ▶</button></div></div>';
+    // 試作部品: 持っている等級と、次の開発に要る等級(手の届くところまで)
+    var reach = TF.partGrade(Math.max(10, Math.ceil((st.cleared + 1) / 10) * 10)), top = 1, use = {};
     Object.keys(st.parts || {}).forEach(function (g) { top = Math.max(top, +g); });
-    TF.unlockedTypes(st).forEach(function (t) { TF.ARM_KINDS.forEach(function (k) { var c = TF.armCost(t, k, TF.armLv(st, t, k)); if (c.part && c.part <= reach) top = Math.max(top, c.part); }); });
-    var h = '<div class="card partsbar"><div class="pt">' + icoPart() + '<b>試作部品</b><span class="small">新型の開発に1個。タップすると、ドロップするボス戦のステージへ移動します</span></div><div class="pl">';
+    TF.unlockedTypes(st).forEach(function (t) {
+      TF.ARM_KINDS.forEach(function (k) {
+        var l = TF.armLv(st, t, k), c = TF.armCost(t, k, l);
+        if (!c.part) return;
+        if (c.part <= reach) top = Math.max(top, c.part);
+        (use[c.part] = use[c.part] || []).push(SHORT[t] + 'の' + TF.ARM_KIND[k].name + '「' + TF.armName(t, k, l + 1) + '」');
+      });
+    });
     for (var g = 1; g <= top; g++) {
-      var n = TF.partCount(st, g);
-      h += '<button class="pchip' + (n ? '' : ' zero') + '" data-act="part-go" data-g="' + g + '"><span class="gr">' + TF.partName(g).replace('試作部品', '') + '</span><b class="num">×' + n + '</b><span class="st">ST' + TF.partStages(g)[0] + ' ▶</span></button>';
+      var n = TF.partCount(st, g), first = TF.partStages(g)[0];
+      html += '<div class="card item part' + (n ? '' : ' zero') + '" id="item-part-' + g + '"><div class="ic">' + icoPart() + '</div><div class="grow"><div class="row"><span class="nm">' + TF.partName(g) + '</span><b class="n num">×' + n + '</b></div>' +
+        '<div class="small">' + partWhere(g) + 'でドロップ(初クリアで' + TF.K.partFirst + '個、以降は勝利の' + Math.round(TF.K.partRate * 100) + '%)。新型の開発に1個使います。</div>' +
+        (use[g] ? '<div class="small use">次に使う開発: ' + use[g].map(esc).join('、') + '</div>' : '') +
+        '<button class="pill" data-act="part-go" data-g="' + g + '">' + (st.cleared >= first ? 'ボス戦へ ▶' : 'ステージ' + first + 'へ ▶') + '</button></div></div>';
     }
-    return h + '</div></div>';
+    html += '</div>';
+    openSheet(html);
   }
   function showDevDone(t, k, r) {
     // 部隊の見た目が変わるなら、前と後を並べて見せる
@@ -2616,6 +2654,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var wasCleared = st.cleared;
     var sum = TF.applyResult(st, p.s, p.win, p.form, partRoll(p.seed));
     st.pending = null;
+    if (sum.part) st.flags.itemNew = 1; // 新しいアイテム: かばんのボタンに印
     if (sum.first) { st.sel = st.cleared + 1; st.flags.conq = p.s; }
     save();
     render();
@@ -2788,7 +2827,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       toast(TF.partName(g) + ': ' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は勝利の' + Math.round(TF.K.partRate * 100) + '%)');
     },
     // 素材(試作部品)をタップ → ドロップするボス戦のステージへ
+    items: function () { openItems(); },
     'part-go': function (el) {
+      closeSheet();
       var g = +el.dataset.g, list = TF.partStages(g), s0 = list.filter(function (x) { return x <= st.cleared; }).pop();
       if (!s0) {
         s0 = Math.min(st.cleared + 1, list[0]);
@@ -2798,6 +2839,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     },
     // 素材(設計図)をタップ → 勝てて稼げるステージへ(設計図は先のステージ・ボス戦ほど多い)
     'bp-go': function () {
+      closeSheet();
       if (st.cleared < 1) { st.sel = 1; save(); show('sortie'); return; }
       toast('設計図を集めやすいステージを探しています…');
       setTimeout(function () {

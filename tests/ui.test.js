@@ -609,12 +609,21 @@ function midState(over) {
     await page.click('[data-act="arm-type"][data-t="tank"]');
     assert(!(await page.isEnabled('[data-act="arm-up"][data-t="tank"][data-k="w"]')), '部品なしで開発ボタンが押せる');
     assert((await page.textContent('#arm-tank-w')).includes('試作部品Ⅰが不足'));
-    assert((await page.textContent('.partsbar')).includes('Ⅰ'));
-    // 素材をタップすると、ドロップするステージへ飛ぶ: 上の部品一覧・カードの必要素材・「ボス戦へ」
-    await page.click('.partsbar [data-act="part-go"][data-g="1"]');
+    // 開発アイテムは兵器の画面に常に出さず、アイテム一覧(上のかばん・兵器画面のボタン)で見る
+    assert(!(await page.$('#scr-arms .item')), '兵器の画面にアイテムが常に出ている');
+    await page.click('#scr-arms [data-act="items"]');
+    await page.waitForSelector('#sheetWrap:not(.hidden) .itemlist');
+    const list = await page.textContent('.itemlist');
+    assert(list.includes('設計図') && list.includes('試作部品Ⅰ') && list.includes('ステージ10'), 'アイテム一覧の中身が足りない ' + list);
+    assert((await page.textContent('#item-part-1')).includes('戦車'), '部品の使い道が出ない');
+    await page.click('.sheet .close');
+    // 素材をタップすると、ドロップするステージへ飛ぶ: アイテム一覧・カードの必要素材・「ボス戦へ」
+    await page.click('#top [data-act="items"]');
+    await page.click('#item-part-1 [data-act="part-go"]');
     let s = await state(page);
-    assert.strictEqual(s.sel, 10, '部品一覧からボス戦に飛べない');
+    assert.strictEqual(s.sel, 10, 'アイテム一覧からボス戦に飛べない');
     assert.strictEqual(s.tab, 'sortie');
+    assert(await page.isHidden('#sheetWrap'), 'アイテム一覧が閉じない');
     await page.evaluate(() => { window.__game.state.sel = 3; });
     await page.click('[data-act="tab"][data-tab="arms"]');
     await page.click('#arm-tank-w .costs [data-act="part-go"]');
@@ -634,6 +643,7 @@ function midState(over) {
     assert((await page.textContent('.result')).includes('試作部品Ⅰ'), '結果に部品が出ない');
     const first = await page.evaluate(() => window.__game.TF.K.partFirst);
     assert.strictEqual((await state(page)).parts[1], first);
+    assert(await page.isVisible('#dotItems.on'), '新しいアイテムの印が出ない');
     await page.click('[data-act="r-base"]').catch(() => {});
     await page.click('[data-act="hero-ok"]').catch(() => {});
     await page.click('[data-act="tab"][data-tab="arms"]');
