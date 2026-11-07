@@ -36,6 +36,7 @@ async function withPage(device, fn, initState) {
   }
 }
 async function test(name, fn) {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return;
   try { await fn(); console.log('  ✔ ' + name); }
   catch (e) { failures++; console.log('  ✘ ' + name + '\n      ' + (e && e.message || e)); }
 }
@@ -261,6 +262,144 @@ function midState(over) {
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result');
   }, midState({ cleared: 24, sel: 25, auto: true })));
+
+  await test('配置の指示: 部隊を前線の先へなぞると前進、後ろへなぞると後退。AUTOに戻すと解除', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
+    const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
+    // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる
+    async function dragTo(u, rel) {
+      const p = await page.evaluate(([wx, r]) => {
+        const d = window.__game.battle.debug(), foes = d.units.filter(f => f.side === 1 && f.alive);
+        let best = null, bd = -1;
+        for (let x = 20; x <= 180; x += 5) for (let k = 0; k <= 30; k += 5) {
+          const q = window.__game.battle.frontPoint(x, r + (r > 0 ? k : -k));
+          const dist = Math.min(...foes.map(f => Math.hypot(f.x - q.x, f.y - 6 - q.y)));
+          if (q.x > 10 && q.x < innerWidth - 10 && dist > bd) { bd = dist; best = q; }
+        }
+        return best;
+      }, [u.wx, rel]);
+      await page.mouse.move(box.x + u.x, box.y + u.y - 6);
+      await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + u.x + (p.x - u.x) * i / 8, box.y + u.y - 6 + (p.y - u.y + 6) * i / 8);
+      await page.mouse.up();
+    }
+    let d = await page.evaluate(() => window.__game.battle.debug());
+    const [a, b] = d.units.filter(u => u.side === 0 && u.alive);
+    await dragTo(a, 14);
+    await dragTo(b, -60);
+    d = await page.evaluate(() => window.__game.battle.debug());
+    const ua = d.units.find(u => u.id === a.id), ub = d.units.find(u => u.id === b.id);
+    assert.strictEqual(ua.stance, 1, '前進にならない');
+    assert.strictEqual(ub.stance, -1, '後退にならない');
+    assert.strictEqual(ua.order, null);
+    await page.click('[data-act="auto-toggle"]');
+    d = await page.evaluate(() => window.__game.battle.debug());
+    assert(d.units.filter(u => u.side === 0).every(u => u.stance === 0), 'AUTOで配置が解除されない');
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result');
+  }, midState({ cleared: 24, sel: 25, auto: false })));
+
+  await test('途中参戦: 増援ポイントがたまるとカードが使え、タップやドラッグで部隊が戦場に加わる', async () => {
+    async function startManual(page) {
+      await page.click('[data-act="tab"][data-tab="sortie"]');
+      await page.click('[data-act="auto"]');
+      await page.click('[data-act="sortie"]');
+      await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
+      assert(await page.isVisible('#cardBar'), '増援カードが出ていない');
+    }
+    const st = midState({ cleared: 12, sel: 13, auto: false });
+    // タップ: おまかせの列に出る
+    await withPage('iPhone 13', async page => {
+      await startManual(page);
+      const n0 = (await page.evaluate(() => window.__game.battle.debug())).units.filter(u => u.side === 0).length;
+      assert.strictEqual(await page.locator('#cardBar .rcard.on').count(), 0, 'ポイント不足なのに使える');
+      await page.click('#cardBar .rcard >> nth=0');
+      assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).reserve.used, 0, 'ポイント不足なのに出た');
+      await page.waitForSelector('#cardBar .rcard.on', { timeout: 20000 });
+      await page.click('#cardBar .rcard.on >> nth=0');
+      const d = await page.evaluate(() => window.__game.battle.debug());
+      assert.strictEqual(d.reserve.used, 1, 'タップで増援が出ない');
+      assert(d.units.filter(u => u.side === 0).length === n0 + 1 && d.units.some(u => u.side === 0 && u.reserve));
+      assert(d.reserve.pts < d.reserve.cost, 'ポイントが減っていない');
+      assert.strictEqual(await page.locator('#cardBar .rcard.on').count(), 0, '使った直後もカードが使える表示のまま');
+      await page.click('[data-act="skip"]');
+      await page.waitForSelector('#modalWrap:not(.hidden) .result');
+    }, st);
+    // ドラッグ: 置いた列に出る
+    await withPage('iPhone 13', async page => {
+      await startManual(page);
+      await page.waitForSelector('#cardBar .rcard.on', { timeout: 20000 });
+      const cb = await page.locator('#cardBar .rcard.on >> nth=0').boundingBox();
+      const r = await page.evaluate(() => { const b = document.getElementById('bcv').getBoundingClientRect(); return { x: b.left, y: b.top, w: b.width, h: b.height }; });
+      const x0 = cb.x + cb.width / 2, y0 = cb.y + cb.height / 2, tx = r.x + r.w * 0.2, ty = r.y + r.h * 0.75;
+      await page.mouse.move(x0, y0);
+      await page.mouse.down();
+      for (let i = 1; i <= 10; i++) await page.mouse.move(x0 + (tx - x0) * i / 10, y0 + (ty - y0) * i / 10);
+      assert(await page.isVisible('.cardghost'), 'ドラッグ中のカードが見えない');
+      await page.mouse.up();
+      const d = await page.evaluate(() => window.__game.battle.debug());
+      assert.strictEqual(d.reserve.used, 1, 'ドラッグで増援が出ない');
+      const added = d.units.filter(u => u.side === 0 && u.reserve).pop();
+      assert(added.wx < 100, '置いた列(左側)に出ていない ' + added.wx);
+      await page.click('[data-act="skip"]');
+      await page.waitForSelector('#modalWrap:not(.hidden) .result');
+    }, st);
+  });
+
+
+  await test('勝つと戦場にコインが散らばり、自動で集まって報酬になる', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForSelector('#battle:not(.hidden)');
+    await page.click('[data-act="skip"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.coinTotal > 0; }, null, { timeout: 8000 });
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return !d || d.coins >= d.coinTotal; }, null, { timeout: 8000 });
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
+    assert((await page.textContent('.result h2')).includes('勝利'));
+  }, midState({ cleared: 2, sel: 3 })));
+
+  await test('陣取り地図: マスをタップで選択、なぞって移動、未到達は選べない。初クリアで制圧の演出', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.waitForSelector('#mapcv');
+    await page.waitForTimeout(400);
+    const tapRow = async row => {
+      const p = await page.evaluate(r0 => { const c = window.__game.map.centerOf(r0); const r = document.getElementById('mapcv').getBoundingClientRect(); return { x: r.left + c.x, y: r.top + c.y }; }, row);
+      await page.mouse.click(p.x, p.y);
+    };
+    await tapRow(14);
+    assert.strictEqual((await state(page)).sel, 14, 'タップで選べない');
+    assert((await page.textContent('.stagebar .sn')).includes('14'));
+    await tapRow(17);
+    assert.strictEqual((await state(page)).sel, 14, 'まだ行けないステージが選べた');
+    // なぞって過去の段へ
+    const f0 = (await page.evaluate(() => window.__game.map.debug())).focus;
+    const b = await page.evaluate(() => { const r = document.getElementById('mapcv').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 60 }; });
+    await page.mouse.move(b.x, b.y); await page.mouse.down();
+    for (let i = 1; i <= 8; i++) await page.mouse.move(b.x, b.y - i * 18);
+    await page.mouse.up();
+    const f1 = (await page.evaluate(() => window.__game.map.debug())).focus;
+    assert(f1 < f0 - 2, '地図を動かせない ' + f0 + '→' + f1);
+    await tapRow(Math.round(f1));
+    assert.strictEqual((await state(page)).sel, Math.round(f1));
+    // 最新ステージを初クリア → 地図に戻ると制圧の演出
+    await page.evaluate(() => { window.__game.state.sel = 15; });
+    await page.click('[data-act="tab"][data-tab="army"]');
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await finishBattle(page);
+    assert((await page.textContent('.result h2')).includes('勝利'));
+    await page.click('[data-act="r-next"]');
+    await page.waitForFunction(() => window.__game.map.debug().anim, null, { timeout: 3000 });
+    const s = await state(page);
+    assert.strictEqual(s.cleared, 15);
+    assert.strictEqual(s.sel, 16);
+    assert(!s.flags.conq, '演出の印が残っている');
+  }, midState({ cleared: 14, sel: 15, tab: 'base' })));
 
   await test('広い戦場: なぞって見回し、2本指で拡大・縮小、「戦況を追う」で戻る。勝てば敵陣を占領', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');

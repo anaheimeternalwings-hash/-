@@ -175,6 +175,58 @@ check('手動: 自軍のスキルは押すまで発動せず、たまってか�
   b2.step(Infinity);
   assert(b2.ev.some(x => x.k === 'skill' && b2.U[x.s].side === 1));
 });
+check('増援: 増援の枠は司令部レベルで1〜3、敵はステージ6から増援を出す', () => {
+  assert.deepStrictEqual([1, 4, 5, 9, 10, 30].map(TF.reserveCount), [1, 1, 2, 2, 3, 3]);
+  assert.deepStrictEqual([1, 5, 6, 19, 20, 45].map(TF.enemyReserveCount), [0, 0, 1, 1, 2, 3]);
+  const st = TF.newState(0);
+  st.bld.hq.lv = 5;
+  const r = TF.battleReserves(st, 30);
+  assert.strictEqual(r.p.count, 2);
+  assert(Object.keys(r.p.defs).length >= 1);
+  assert.strictEqual(r.e.list.length, 2);
+  assert.deepStrictEqual(JSON.stringify(TF.battleReserves(st, 30)), JSON.stringify(r), '同じステージの敵の増援は毎回同じ');
+});
+check('増援: 自動ではポイントがたまると両軍とも途中参戦。手動ではポイントが足りないと出せず、たまれば出せる', () => {
+  const st = TF.newState(0);
+  st.bld.hq.lv = 10;
+  const res = TF.battleReserves(st, 50);
+  const big = q => Object.assign({}, q, { maxHp: q.maxHp * 6 });
+  const e = TF.stageInfo(50).enemies.map(big), p = TF.stageInfo(50).enemies.map(big);
+  const a = TF.createBattle(p, e, 5, { record: true, reserves: res });
+  a.step(Infinity);
+  const sp = a.ev.filter(x => x.k === 'spawn');
+  assert(sp.some(x => x.side === 0) && sp.some(x => x.side === 1), '両軍の増援が出ない');
+  assert(sp.filter(x => x.side === 0).length <= res.p.count && sp.filter(x => x.side === 1).length <= res.e.list.length, '枠より多く出た');
+  // 手動
+  const b = TF.createBattle(p, e, 5, { record: true, auto: false, reserves: res });
+  b.step(0.5);
+  const ty = Object.keys(res.p.defs)[0];
+  assert.strictEqual(b.deploy(ty, 0.5), null, 'ポイント不足なのに出せた');
+  b.step(TF.K.resCost);
+  assert(!b.ev.some(x => x.k === 'spawn' && x.side === 0), '手動なのに勝手に出た');
+  const id = b.deploy(ty, TF.K.resCost);
+  assert(id !== null, 'たまったのに出せない');
+  const info = b.reserveInfo(TF.K.resCost);
+  assert.strictEqual(info.used, 1);
+  assert(info.pts < info.cost);
+  assert.strictEqual(b.U[id].side, 0);
+  assert.strictEqual(b.U[id].type, ty);
+});
+check('配置の指示: 前進は与えるダメージ・受けるダメージが増え、後退は受けるダメージが減る', () => {
+  const one = t => [{ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1 }];
+  function firstHits(stance) {
+    const b = TF.createBattle(one('inf'), one('inf'), 11, { record: true, auto: false });
+    if (stance) assert(b.setStance(0, stance));
+    b.step(6);
+    const by = b.ev.filter(x => x.k === 'atk' && !x.miss && x.s === 0)[0];
+    const to = b.ev.filter(x => x.k === 'atk' && !x.miss && x.d === 0)[0];
+    return [by.dmg, to.dmg];
+  }
+  const [d0, t0] = firstHits(0), [d1, t1] = firstHits(1), [d2, t2] = firstHits(-1);
+  assert(Math.abs(d1 / d0 - TF.K.stDeal['1']) < 0.02 && Math.abs(t1 / t0 - TF.K.stTake['1']) < 0.02, '前進 ' + [d0, d1, t0, t1]);
+  assert(Math.abs(d2 / d0 - TF.K.stDeal['-1']) < 0.02 && Math.abs(t2 / t0 - TF.K.stTake['-1']) < 0.02, '後退 ' + [d0, d2, t0, t2]);
+  assert(TF.K.stDeal['1'] > 1 && TF.K.stTake['1'] > 1 && TF.K.stTake['-1'] < 1);
+});
 check('おまかせ編成は枠数どおりで、指揮官が重複しない', () => {
   const st = TF.newState(0);
   st.bld = { hq: { lv: 9, slot: 4 }, barracks: { lv: 5, slot: 0 }, atpost: { lv: 5, slot: 1 }, factory: { lv: 5, slot: 2 }, artpost: { lv: 5, slot: 3 } };
@@ -294,7 +346,7 @@ function playthrough(opt) {
     }
     st.form = form;
     const b = TF.prepareBattle(st, form, stage);
-    const res = TF.simulate(b.p, b.e, seed++, false);
+    const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves });
     const sum = TF.applyResult(st, stage, res.win, b.form);
     battles++;
     timeSum += res.time; if (res.timeout) timeouts++;

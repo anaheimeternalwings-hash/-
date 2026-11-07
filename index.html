@@ -245,6 +245,24 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .skb.ready{border-color:var(--gold);background:#3a3415;animation:pulse 1s infinite}
 .skb.ready .st{color:var(--gold);font-weight:900}
 .skb.dead{opacity:.35}
+.cardbar{flex:none;display:flex;gap:6px;align-items:stretch;padding:6px 10px 0;background:#141a11;touch-action:none}
+.cardbar .pts{flex:none;width:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;background:#10150e;border:1px solid #344029;font-size:10px;color:var(--sub);line-height:1.15}
+.cardbar .pts b{font-size:17px;color:var(--gold);font-weight:900}
+.cardbar .pts i{display:block;width:40px;height:4px;border-radius:3px;background:#2a3424;margin-top:3px;overflow:hidden}
+.cardbar .pts i em{display:block;height:100%;background:linear-gradient(90deg,#c99a2e,#f1c453)}
+.rcard{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:4px;min-height:44px;padding:3px 5px;border-radius:12px;background:#1b2a25;border:1px solid #2f5248;color:var(--text);touch-action:none}
+.rcard svg{width:26px;height:26px;flex:none}
+.rcard .nm{font-size:10px;font-weight:900;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rcard .cs{position:absolute;right:3px;top:2px;font-size:9px;font-weight:900;color:var(--gold)}
+.rcard.on{border-color:var(--gold);background:#24402f}
+.rcard.off{opacity:.45}
+.cardghost{position:fixed;z-index:95;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:14px;background:rgba(36,64,47,.92);border:2px solid var(--gold);display:grid;place-items:center;pointer-events:none}
+.cardghost svg{width:34px;height:34px}
+.coinfly{position:fixed;z-index:96;width:20px;height:20px;margin:-10px 0 0 -10px;pointer-events:none;transition:transform .7s cubic-bezier(.3,-.3,.6,1),opacity .7s}
+.coinfly svg{width:100%;height:100%}
+.mapwrap{position:relative;height:250px;border-radius:16px;overflow:hidden;border:1px solid #44523a;background:#1d2618;margin-bottom:10px}
+#mapcv{display:block;width:100%;height:100%;touch-action:none}
+.mapwrap .maptip{position:absolute;left:8px;bottom:6px;font-size:10px;color:#dfe8d4;background:rgba(10,14,9,.6);border-radius:8px;padding:2px 7px;pointer-events:none}
 .modesel{display:flex;align-items:center;gap:8px;margin-top:12px}
 .modesel .lbl{font-size:12px;color:var(--sub);flex:none}
 .seg{display:flex;flex:1;background:#10150e;border:1px solid #34402c;border-radius:12px;overflow:hidden}
@@ -299,6 +317,7 @@ textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px
   <div class="bsafe"></div>
   <div class="bcanvas" id="bwrap"><canvas id="bbg"></canvas><canvas id="bcv"></canvas><button class="camreset hidden" id="camReset" data-act="cam-reset">⌖ 戦況を追う</button></div>
   <div class="skillbar hidden" id="skillBar"></div>
+  <div class="cardbar hidden" id="cardBar"></div>
   <div class="bctl">
     <div class="speed" id="speedSel">
       <button data-act="speed" data-sp="1">×1</button><button data-act="speed" data-sp="2">×2</button><button data-act="speed" data-sp="4">×4</button>
@@ -397,6 +416,10 @@ var TF = (function () {
     miss: 0.06, crit: 0.10, critMul: 1.5,
     maxT: 60,
     startMoney: 500, startSteel: 300,
+    // 増援: 戦闘中に指揮ポイントがたまり、コストを払うと予備の部隊を投入できる
+    resRate: 1, resCost: 5, resStart: 2, resMax: 10, resMul: 0.6,
+    // 配置: 前進(与/被ダメージ↑・狙われやすい)、後退(与/被ダメージ↓・狙われにくい。砲兵は与ダメージが下がらない)
+    stDeal: { '1': 1.25, '-1': 0.75 }, stTake: { '1': 1.25, '-1': 0.6 }, stAim: { '1': 1.6, '-1': 0.5 },
     lossExp: 0.5, firstMul: 2, bossMul: 2, bossHp: 2.6, bossAtk: 1.4, bossTotal: 1.08, normMin: 0.6, normMax: 2.4,
     typeAdj: { inf: 1.04, at: 0.95, tank: 0.97, art: 1.18 },
     baseCapH: 2, depotCapH: 1, depotMaxLv: 22,
@@ -694,25 +717,60 @@ var TF = (function () {
     opt = opt || {};
     var rnd = rngFrom(seed);
     var U = [], live = [[], []];
-    function spawn(q, side, slot) {
+    function spawn(q, side, slot, at) {
       var u = {
         id: U.length, side: side, slot: slot, type: q.type, hp: q.maxHp, maxHp: q.maxHp, atk: q.atk, cd: q.cd,
-        next: 0.3 + rnd() * 0.7 * q.cd, alive: true, hero: q.hero, boss: q.boss, sk: null, skNext: Infinity, skLast: 0, order: null
+        next: (at || 0) + (at ? 1.4 : 0.3) + rnd() * 0.7 * q.cd, alive: true, hero: q.hero, boss: q.boss, sk: null, skNext: Infinity, skLast: 0, order: null,
+        stance: 0, reserve: !!at
       };
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       U.push(u); live[side].push(u);
+      return u;
     }
     var i;
     for (i = 0; i < pList.length; i++) spawn(pList[i], 0, i);
     for (i = 0; i < eList.length; i++) spawn(eList[i], 1, i);
     var atkUntil = [-1, -1], atkMulv = [1, 1], armUntil = [-1, -1];
     var ev = opt.record ? [] : null;
-    var t = 0, winner = -1, done = false, maxT = K.maxT, nU = U.length;
-    var auto = opt.auto !== false; // false: 自軍のスキルは手動で発動
+    var t = 0, winner = -1, done = false, maxT = K.maxT;
+    var auto = opt.auto !== false; // false: 自軍のスキル・増援・配置は手動
+    // 増援
+    var R = opt.reserves || null;
+    var rLeft = [R && R.p ? R.p.count : 0, R && R.e ? R.e.list.length : 0], rUsed = [0, 0];
+    var pts = [K.resStart, K.resStart], ptsT = [0, 0];
+    function ptsAt(side, tt) { return Math.min(K.resMax, pts[side] + K.resRate * (tt - ptsT[side])); }
+    function accrue(side, tt) { pts[side] = ptsAt(side, tt); ptsT[side] = tt; }
+    function deployTime(side) {
+      if (rLeft[side] <= 0 || (side === 0 && !auto)) return Infinity;
+      var need = K.resCost - ptsAt(side, t);
+      return need <= 0 ? t : t + need / K.resRate;
+    }
+    // 自動で出す増援の兵種: 生き残っている敵に対していちばん相性が良いもの
+    function bestReserveType() {
+      var best = null, bs = -1;
+      Object.keys(R.p.defs).forEach(function (ty) {
+        var d = 0, k = 0;
+        live[1].forEach(function (f) { d += AFF[ty][f.type] * f.hp; k += AFF[f.type][ty] * f.hp; });
+        var sc = (k > 0 ? d / k : 1) * R.p.defs[ty].power;
+        if (sc > bs) { bs = sc; best = ty; }
+      });
+      return best;
+    }
+    function deploy(side, ty) {
+      accrue(side, t);
+      pts[side] -= K.resCost;
+      var q = side === 0 ? R.p.defs[ty] : R.e.list[rUsed[1]];
+      rLeft[side]--; rUsed[side]++;
+      var u = spawn(q, side, 100 + rUsed[side], t);
+      if (ev) ev.push({ t: t, k: 'spawn', s: u.id, side: side, type: u.type });
+      return u;
+    }
 
     function hit(u, f, raw) {
       if (t < atkUntil[u.side]) raw *= atkMulv[u.side];
       if (t < armUntil[f.side]) raw *= SKILL.armor.mul;
+      if (u.stance) raw *= u.stance < 0 && u.type === 'art' ? 1 : K.stDeal[u.stance];
+      if (f.stance) raw *= K.stTake[f.stance];
       var dmg = Math.max(1, Math.round(raw));
       f.hp -= dmg;
       if (f.hp <= 0) {
@@ -732,10 +790,10 @@ var TF = (function () {
       } else {
         u.order = null;
         var aff = AFF2[u.type], tot = 0;
-        for (j = 0; j < n; j++) tot += aff[foes[j].type];
+        for (j = 0; j < n; j++) tot += aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1);
         var r = rnd() * tot;
         f = foes[n - 1];
-        for (j = 0; j < n; j++) { r -= aff[foes[j].type]; if (r <= 0) { f = foes[j]; break; } }
+        for (j = 0; j < n; j++) { r -= aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1); if (r <= 0) { f = foes[j]; break; } }
       }
       if (rnd() < K.miss) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
       var crit = rnd() < K.crit;
@@ -773,16 +831,18 @@ var TF = (function () {
     // 時刻 T までの行動をすべて処理する
     function step(T) {
       while (!done) {
-        var actor = null, bt = Infinity, isSk = false;
-        for (i = 0; i < nU; i++) {
+        var actor = null, bt = Infinity, isSk = false, dep = -1;
+        for (i = 0; i < U.length; i++) {
           var u = U[i];
           if (!u.alive) continue;
           if (u.skNext < bt && !manualSkill(u)) { bt = u.skNext; actor = u; isSk = true; }
           if (u.next < bt) { bt = u.next; actor = u; isSk = false; }
         }
-        if (!actor || bt > maxT) { if (T >= maxT) { t = maxT; done = true; } break; }
+        if (R) for (var sd = 1; sd >= 0; sd--) { var dt2 = deployTime(sd); if (dt2 < bt) { bt = dt2; dep = sd; actor = null; } }
+        if ((!actor && dep < 0) || bt > maxT) { if (T >= maxT) { t = maxT; done = true; } break; }
         if (bt > T) break;
         t = bt;
+        if (dep >= 0) { deploy(dep, dep === 0 ? bestReserveType() : null); continue; }
         if (isSk) { cast(actor); actor.skLast = t; actor.skNext += SKILL[actor.sk].cd; }
         else { attack(actor); actor.next += actor.cd; }
         if (!live[1 - actor.side].length) { winner = actor.side; done = true; }
@@ -790,7 +850,7 @@ var TF = (function () {
     }
     function result() {
       var hpP = 0, mxP = 0, hpE = 0, mxE = 0;
-      for (i = 0; i < nU; i++) { var x = U[i]; if (x.side === 0) { hpP += x.hp; mxP += x.maxHp; } else { hpE += x.hp; mxE += x.maxHp; } }
+      for (i = 0; i < U.length; i++) { var x = U[i]; if (x.side === 0) { hpP += x.hp; mxP += x.maxHp; } else { hpE += x.hp; mxE += x.maxHp; } }
       return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, ev: ev };
     }
     return {
@@ -801,7 +861,32 @@ var TF = (function () {
       // 自動/手動の切替。自動に戻すと、たまっているスキルはすぐ発動する
       setAuto: function (on, now) {
         auto = !!on;
-        if (auto) U.forEach(function (u) { if (u.side === 0 && u.sk && u.skNext < now) u.skNext = Math.max(t, now); });
+        if (auto) {
+          U.forEach(function (u) { if (u.side === 0 && u.sk && u.skNext < now) u.skNext = Math.max(t, now); });
+          U.forEach(function (u) { if (u.side === 0) u.stance = 0; });
+          if (R) { accrue(0, Math.max(t, now)); }
+        }
+      },
+      // 配置(前進=1 / 通常=0 / 後退=-1)
+      setStance: function (id, st2) {
+        var u = U[id];
+        if (!u || !u.alive || u.side !== 0 || auto) return false;
+        u.stance = st2 > 0 ? 1 : st2 < 0 ? -1 : 0;
+        return true;
+      },
+      // 指揮ポイントと残りの増援
+      reserveInfo: function (now) {
+        return { pts: R ? ptsAt(0, Math.max(t, now)) : 0, max: K.resMax, cost: K.resCost, left: rLeft[0], used: rUsed[0], eLeft: rLeft[1] };
+      },
+      // 手動で増援を投入
+      deploy: function (ty, now) {
+        if (done || auto || !R || rLeft[0] <= 0 || !R.p.defs[ty]) return null;
+        var tt = Math.max(t, now);
+        step(tt);
+        if (done) return null;
+        t = tt;
+        if (ptsAt(0, t) < K.resCost) return null;
+        return deploy(0, ty).id;
       },
       // 攻撃目標の指示(target=null で自由攻撃に戻す)
       order: function (id, target) {
@@ -829,18 +914,33 @@ var TF = (function () {
       }
     };
   }
-  function simulate(pList, eList, seed, record) {
-    var b = createBattle(pList, eList, seed, { record: record });
+  function simulate(pList, eList, seed, record, opt) {
+    var b = createBattle(pList, eList, seed, { record: record, reserves: opt && opt.reserves });
     b.step(Infinity);
     return b.result();
   }
 
+  // 増援の数: 自軍は司令部レベル、敵はステージで増える
+  function reserveCount(hqLv) { return 1 + (hqLv >= 5 ? 1 : 0) + (hqLv >= 10 ? 1 : 0); }
+  function enemyReserveCount(s) { return s < 6 ? 0 : 1 + (s >= 20 ? 1 : 0) + (s >= 45 ? 1 : 0); }
+  function battleReserves(st, s) {
+    var defs = {};
+    unlockedTypes(st).forEach(function (t) { defs[t] = makeSquad(t, unitMult(st, t) * labMult(st) * K.resMul); });
+    var info = stageInfo(s), list = [], rnd = rngFrom(hashInt(s * 977 + 5)), n = enemyReserveCount(s);
+    var normal = info.enemies.filter(function (e) { return !e.boss; });
+    if (!normal.length) normal = info.enemies;
+    for (var i = 0; i < n; i++) {
+      var e = normal[Math.floor(rnd() * normal.length)];
+      list.push(makeSquad(e.type, e.atk / UNIT[e.type].atk * K.resMul));
+    }
+    return { p: { count: reserveCount(lv(st, 'hq')), defs: defs }, e: { list: list } };
+  }
   function scoreOf(r) { return r.win ? 1 + r.pHp : -r.eHp; }
   function evalForm(st, form, s, n, seed0) {
-    var p = formSquads(st, form), e = stageInfo(s).enemies;
+    var p = formSquads(st, form), e = stageInfo(s).enemies, res = { reserves: battleReserves(st, s) };
     var wins = 0, sc = 0;
     for (var i = 0; i < n; i++) {
-      var r = simulate(p, e, (seed0 || 1000) + i * 7919, false);
+      var r = simulate(p, e, (seed0 || 1000) + i * 7919, false, res);
       if (r.win) wins++;
       sc += scoreOf(r);
     }
@@ -881,7 +981,7 @@ var TF = (function () {
     form = normalizeForm(st, form);
     var p = formSquads(st, form);
     var info = stageInfo(s);
-    return { form: form, p: p, e: info.enemies, info: info };
+    return { form: form, p: p, e: info.enemies, info: info, reserves: battleReserves(st, s) };
   }
   function applyResult(st, s, win, form) {
     var info = stageInfo(s);
@@ -941,7 +1041,7 @@ var TF = (function () {
     freeSlots: freeSlots, typeUnlocked: typeUnlocked, unlockedTypes: unlockedTypes, unitMult: unitMult, labMult: labMult,
     heroMult: heroMult, squadMult: squadMult, squadStats: squadStats, makeSquad: makeSquad, expNeed: expNeed, addHeroExp: addHeroExp,
     enemyCount: enemyCount, enemyTotal: enemyTotal, stageInfo: stageInfo, stageReward: stageReward, normalizeForm: normalizeForm, formSquads: formSquads,
-    assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
+    assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
     clearCache: function () { stageCache = {}; }
   };
@@ -986,6 +1086,26 @@ if (typeof module !== 'undefined') module.exports = TF;
     d.textContent = msg;
     $('toast').appendChild(d);
     setTimeout(function () { d.remove(); }, 2700);
+  }
+  // 回収したコイン(鋼材)が、上の表示へ飛んでいく
+  function coinFly(fromRect, toId, icon, n) {
+    var to = $(toId).getBoundingClientRect();
+    var fx = fromRect ? fromRect.left + fromRect.width / 2 : window.innerWidth / 2, fy = fromRect ? fromRect.top + fromRect.height / 2 : window.innerHeight / 2;
+    var tx = to.left + 18, ty = to.top + to.height / 2;
+    for (var i = 0; i < n; i++) (function (i) {
+      var d = document.createElement('div');
+      d.className = 'coinfly';
+      d.innerHTML = '<svg viewBox="0 0 24 24"><use href="#' + icon + '"/></svg>';
+      var ox = (Math.random() - 0.5) * 60, oy = (Math.random() - 0.5) * 30;
+      d.style.left = (fx + ox) + 'px'; d.style.top = (fy + oy) + 'px';
+      d.style.transitionDelay = (i * 0.04) + 's';
+      document.body.appendChild(d);
+      requestAnimationFrame(function () { requestAnimationFrame(function () {
+        d.style.transform = 'translate(' + (tx - fx - ox) + 'px,' + (ty - fy - oy) + 'px) scale(.7)';
+        d.style.opacity = '0.4';
+      }); });
+      setTimeout(function () { d.remove(); if (i === n - 1) bump(toId); }, 800 + i * 40);
+    })(i);
   }
   function bump(id) { var e = $(id); e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
 
@@ -1358,7 +1478,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     st.form = TF.normalizeForm(st, st.form);
     var s = st.sel, info = TF.stageInfo(s);
     var cleared = s <= st.cleared;
-    var html = '<div class="stagebar"><button class="nav" data-act="stage" data-d="-1"' + (s <= 1 ? ' disabled' : '') + ' aria-label="前のステージ">◀</button>' +
+    var html = '<div class="mapwrap"><canvas id="mapcv"></canvas><div class="maptip">なぞって移動・マスをタップで選択</div></div>';
+    html += '<div class="stagebar"><button class="nav" data-act="stage" data-d="-1"' + (s <= 1 ? ' disabled' : '') + ' aria-label="前のステージ">◀</button>' +
       '<div class="mid"><div class="sn">ステージ ' + s + '</div><div class="sp">' + esc(info.place) + ' ・ ' + esc(info.theme) + (cleared ? ' ・ <span style="color:var(--good)">クリア済</span>' : ' ・ <span style="color:var(--gold)">未踏</span>') + '</div></div>' +
       '<button class="nav" data-act="stage" data-d="1"' + (s >= st.cleared + 1 ? ' disabled' : '') + ' aria-label="次のステージ">▶</button></div>';
     if (s < st.cleared + 1) html += '<div style="text-align:center;margin-top:6px"><button class="pill" data-act="stage-latest" style="font-size:12px;padding:5px 12px">最新のステージ ' + (st.cleared + 1) + ' へ ▶▶</button></div>';
@@ -1400,6 +1521,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (st.cleared >= 1) html += '<button class="farmbtn" data-act="farm-find">💰 稼ぎにおすすめのステージを探す</button>';
     if (pct < 40) html += '<div class="tips">' + esc(adviceLine(info)) + '</div>';
     $('scr-sortie').innerHTML = html;
+    MapView.mount($('mapcv'));
   }
   function adviceLine(info) {
     var cnt = {};
@@ -1455,6 +1577,182 @@ if (typeof module !== 'undefined') module.exports = TF;
     else renderSortie();
   }
 
+  // ====== 陣取り地図 ======
+  // 六角形のマスでできた地図。1段=1ステージで、制圧した段までが自軍の領土(緑)、その先が敵の領土(赤)。
+  var MapView = (function () {
+    var cv = null, g = null, W = 0, H = 0, DPR = 1, R = 24, NC = 7;
+    var focus = null, target = 0, raf = 0, drag = null, anim = null, lastDraw = 0;
+    var path = [3];
+    function colOf(row) {
+      while (path.length <= row) {
+        var k = path.length, h = TF.hashInt(k * 131 + 7) % 10;
+        path.push(Math.max(1, Math.min(NC - 2, path[k - 1] + (h < 3 ? -1 : h < 7 ? 0 : 1))));
+      }
+      return path[row];
+    }
+    function terrain(col, row) {
+      if (row <= 0) return 'base';
+      if (colOf(row) === col) return 'stage';
+      var h = TF.hashInt(col * 7349 + row * 104729 + 11) % 100;
+      return h < 14 ? 'forest' : h < 21 ? 'mount' : h < 25 ? 'lake' : 'plain';
+    }
+    var BIO = { grass: '#6f9a4f', desert: '#c9ab6e', snow: '#cfd9e0' };
+    function biome(row) {
+      if (row < 1 || row > st.cleared + 7) return null;
+      var pl = TF.stageInfo(row).place;
+      return /雪|霧|北部/.test(pl) ? 'snow' : /砂漠|赤土|火山|荒野/.test(pl) ? 'desert' : 'grass';
+    }
+    function hexW() { return Math.sqrt(3) * R; }
+    function center(col, row) {
+      var w = hexW();
+      return { x: (W - w * (NC + 0.5)) / 2 + w * (col + 0.5 + (row & 1 ? 0.5 : 0)), y: H * 0.55 - (row - focus) * 1.5 * R };
+    }
+    function hexPath(x, y, r) {
+      g.beginPath();
+      for (var i = 0; i < 6; i++) { var a = Math.PI / 6 + i * Math.PI / 3; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+      g.closePath();
+    }
+    function mount(c) {
+      cv = c; g = cv.getContext('2d');
+      var r = cv.getBoundingClientRect();
+      W = r.width; H = r.height; DPR = Math.min(window.devicePixelRatio || 1, 2);
+      cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+      R = Math.max(18, Math.min(30, W / ((NC + 0.5) * Math.sqrt(3))));
+      target = anim ? anim.s + 0.3 : st.sel + 1;
+      if (focus === null) focus = target;
+      if (st.flags && st.flags.conq) {
+        anim = { s: st.flags.conq, t0: performance.now() };
+        focus = st.flags.conq - 0.5; target = st.flags.conq + 0.3;
+        delete st.flags.conq; save();
+        setTimeout(function () {
+          if (!cv) return;
+          var p = center(colOf(anim ? anim.s : 1), anim ? anim.s : 1), rr = cv.getBoundingClientRect();
+          coinFly({ left: rr.left + p.x - 10, top: rr.top + p.y - 10, width: 20, height: 20 }, 'resM', 'i-money', 8);
+        }, 350);
+      }
+      if (!cv.__bound) {
+        cv.__bound = true;
+        cv.addEventListener('pointerdown', function (e) { drag = { y0: e.clientY, f0: focus, moved: false, x: e.clientX, y: e.clientY }; try { cv.setPointerCapture(e.pointerId); } catch (er) { } });
+        cv.addEventListener('pointermove', function (e) {
+          if (!drag) return;
+          var dy = e.clientY - drag.y0;
+          if (Math.abs(dy) > 6) drag.moved = true;
+          if (drag.moved) { focus = Math.max(1, Math.min(st.cleared + 9, drag.f0 + dy / (1.5 * R))); target = focus; }
+        });
+        cv.addEventListener('pointerup', function (e) {
+          var d = drag; drag = null;
+          if (!d || d.moved) return;
+          var r2 = cv.getBoundingClientRect();
+          tap(e.clientX - r2.left, e.clientY - r2.top);
+        });
+        cv.addEventListener('pointercancel', function () { drag = null; });
+      }
+      loop();
+    }
+    function tap(x, y) {
+      var best = null, bd = R;
+      var r0 = Math.floor(focus - H / (1.5 * R)), r1 = Math.ceil(focus + H / (1.5 * R));
+      for (var row = Math.max(1, r0); row <= r1; row++) {
+        var c = center(colOf(row), row), d = Math.hypot(x - c.x, y - c.y);
+        if (d < bd) { bd = d; best = row; }
+      }
+      if (!best) return;
+      if (best > st.cleared + 1) { toast('ステージ' + (st.cleared + 1) + 'をクリアすると進めます'); return; }
+      st.sel = best; save();
+      renderSortie();
+    }
+    function loop() {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(function step(ts) {
+        if (!cv || !document.body.contains(cv) || curTab !== 'sortie' || document.hidden) { raf = 0; return; }
+        if (!drag) focus += (target - focus) * 0.15;
+        if (ts - lastDraw > 33 || anim) { draw(ts); lastDraw = ts; }
+        raf = requestAnimationFrame(step);
+      });
+    }
+    function draw(ts) {
+      g.setTransform(DPR, 0, 0, DPR, 0, 0);
+      g.fillStyle = '#1d2618'; g.fillRect(0, 0, W, H);
+      var C = st.cleared, at = anim ? (ts - anim.t0) / 1600 : 2;
+      if (anim && at > 1) { anim = null; target = st.sel + 1; }
+      var rows0 = Math.floor(focus - H / (1.5 * R)) - 1, rows1 = Math.ceil(focus + H / (1.5 * R)) + 1;
+      var row, col, c;
+      // マス
+      for (row = rows1; row >= rows0; row--) {
+        for (col = 0; col < NC; col++) {
+          c = center(col, row);
+          if (c.y < -R * 2 || c.y > H + R * 2) continue;
+          var tr = row < 0 ? 'plain' : terrain(col, row), bi = biome(Math.max(1, row)) || 'grass';
+          var base = tr === 'lake' ? '#4f86ad' : tr === 'base' ? '#7a8a5a' : BIO[bi];
+          if (tr === 'forest') base = shade(base, -0.28);
+          if (tr === 'mount') base = shade(base, -0.12);
+          hexPath(c.x, c.y, R - 1); g.fillStyle = base; g.fill();
+          // 領土の色
+          var tint = row <= C ? 'rgba(70,225,110,.22)' : 'rgba(240,80,70,.20)';
+          if (anim && row === anim.s) tint = 'rgba(' + (Math.round(240 - 170 * at)) + ',' + Math.round(80 + 145 * at) + ',' + Math.round(70 + 40 * at) + ',.28)';
+          g.fillStyle = tint; g.fill();
+          if (row > C + 6) { g.fillStyle = 'rgba(10,12,8,' + Math.min(0.75, 0.2 + (row - C - 6) * 0.12) + ')'; g.fill(); }
+          g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 1; g.stroke();
+          // 地形の飾り
+          if (tr === 'forest') { g.fillStyle = 'rgba(20,50,20,.7)'; for (var k = 0; k < 3; k++) { var tx = c.x + (k - 1) * R * 0.38, ty = c.y + (k % 2 ? -R * 0.15 : R * 0.18); g.beginPath(); g.moveTo(tx, ty - R * 0.32); g.lineTo(tx - R * 0.17, ty + R * 0.08); g.lineTo(tx + R * 0.17, ty + R * 0.08); g.fill(); } }
+          if (tr === 'mount') { g.fillStyle = 'rgba(90,90,85,.85)'; g.beginPath(); g.moveTo(c.x - R * 0.5, c.y + R * 0.3); g.lineTo(c.x, c.y - R * 0.45); g.lineTo(c.x + R * 0.5, c.y + R * 0.3); g.fill(); g.fillStyle = '#eef'; g.beginPath(); g.moveTo(c.x - R * 0.13, c.y - R * 0.2); g.lineTo(c.x, c.y - R * 0.45); g.lineTo(c.x + R * 0.13, c.y - R * 0.2); g.fill(); }
+          if (tr === 'lake') { g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(c.x - R * 0.3, c.y - 1, R * 0.4, 2); }
+        }
+      }
+      // 前線(自軍の段と敵の段の境目)
+      var fy0 = center(0, C).y, fy1 = center(0, C + 1).y, fy = (fy0 + fy1) / 2;
+      if (fy > -10 && fy < H + 10) {
+        g.lineJoin = 'round';
+        [[ 'rgba(240,80,70,.9)', -2 ], [ 'rgba(90,255,120,.95)', 2 ]].forEach(function (a) {
+          g.strokeStyle = a[0]; g.lineWidth = 2.5; g.beginPath();
+          for (var x = 0; x <= W; x += 6) { var y = fy + a[1] + Math.sin(x * 0.08 + C) * 3; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
+          g.stroke();
+        });
+      }
+      // 進軍路
+      g.strokeStyle = 'rgba(255,240,200,.35)'; g.lineWidth = 2; g.setLineDash([4, 5]);
+      g.beginPath();
+      for (row = Math.max(0, rows0); row <= Math.min(rows1, C + 7); row++) { c = center(colOf(row), row); if (row === Math.max(0, rows0)) g.moveTo(c.x, c.y); else g.lineTo(c.x, c.y); }
+      g.stroke(); g.setLineDash([]);
+      // 本部
+      c = center(colOf(0), 0);
+      if (c.y < H + R) { g.fillStyle = '#3fc45c'; g.fillRect(c.x - 8, c.y - 6, 16, 10); g.fillStyle = '#21813a'; g.beginPath(); g.moveTo(c.x - 10, c.y - 6); g.lineTo(c.x, c.y - 13); g.lineTo(c.x + 10, c.y - 6); g.fill(); g.fillStyle = '#fff'; g.font = '800 9px -apple-system,sans-serif'; g.textAlign = 'center'; g.fillText('本部', c.x, c.y + 14); }
+      // ステージの印
+      var pulse = 0.5 + 0.5 * Math.sin(ts / 220);
+      for (row = Math.max(1, rows0); row <= rows1; row++) {
+        if (row > C + 7) break;
+        c = center(colOf(row), row);
+        if (c.y < -R || c.y > H + R) continue;
+        var boss = row % 10 === 0, isNext = row === C + 1, done = row <= C && !(anim && row === anim.s && at < 0.5);
+        var r = R * 0.5;
+        if (row === st.sel) { g.strokeStyle = '#fff'; g.lineWidth = 2.5; hexPath(c.x, c.y, R - 3); g.stroke(); }
+        if (isNext) { g.strokeStyle = 'rgba(255,90,70,' + (0.4 + 0.6 * pulse) + ')'; g.lineWidth = 3; g.beginPath(); g.arc(c.x, c.y, r + 4 + pulse * 3, 0, Math.PI * 2); g.stroke(); }
+        g.fillStyle = done ? '#1b6a2e' : isNext ? '#c0392b' : '#7a2620';
+        g.beginPath(); g.arc(c.x, c.y, r, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = boss ? '#f1c453' : 'rgba(255,255,255,.85)'; g.lineWidth = boss ? 2.5 : 1.5; g.stroke();
+        g.fillStyle = '#fff'; g.font = '900 ' + Math.round(r * 0.95) + 'px -apple-system,"Hiragino Sans",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(done ? '✓' : isNext ? '⚔' : String(row), c.x, c.y + 0.5);
+        if (boss) { g.fillStyle = '#f1c453'; g.font = '900 9px -apple-system,sans-serif'; g.fillText('BOSS', c.x, c.y - r - 7); }
+        if (done || isNext || row === st.sel) { g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '800 9px -apple-system,"Hiragino Sans",sans-serif'; g.fillText(row + ' ' + TF.stageInfo(row).place, c.x, c.y + r + 9); }
+      }
+      // 制圧の演出
+      if (anim) {
+        c = center(colOf(anim.s), anim.s);
+        g.strokeStyle = 'rgba(120,255,150,' + (1 - at) + ')'; g.lineWidth = 3;
+        g.beginPath(); g.arc(c.x, c.y, R * (0.6 + at * 2.2), 0, Math.PI * 2); g.stroke();
+        g.fillStyle = 'rgba(255,255,255,' + Math.min(1, (1 - at) * 2) + ')'; g.font = '900 18px -apple-system,"Hiragino Sans",sans-serif'; g.textAlign = 'center';
+        g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.6)';
+        g.strokeText('ステージ' + anim.s + ' 制圧!', c.x, c.y - R - 8 - at * 20); g.fillStyle = '#bfffc8'; g.fillText('ステージ' + anim.s + ' 制圧!', c.x, c.y - R - 8 - at * 20);
+      }
+      // 凡例
+      g.font = '800 10px -apple-system,"Hiragino Sans",sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
+      g.fillStyle = 'rgba(10,14,9,.6)'; g.fillRect(6, 6, 132, 18);
+      g.fillStyle = '#5cff7c'; g.fillRect(12, 11, 9, 9); g.fillStyle = '#fff'; g.fillText('自軍の領土', 24, 10);
+      g.fillStyle = '#ff6a5c'; g.fillRect(78, 11, 9, 9); g.fillStyle = '#fff'; g.fillText('敵の領土', 90, 10);
+    }
+    return { mount: mount, debug: function () { return { focus: focus, target: target, anim: !!anim }; }, centerOf: function (row) { return center(colOf(row), row); } };
+  })();
+
   // ====== 出撃と結果 ======
   function startSortie() {
     var s = st.sel;
@@ -1464,6 +1762,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     // 結果は戦闘が終わってから決まる(手動の指示で変わるため)。途中で閉じたら残りは自動で決着
     st.pending = { s: s, seed: seed, form: prep.form };
     save();
+    var rw = prep.info.reward, firstWin = s > st.cleared;
+    prep.rewardM = rw.m * (firstWin ? TF.K.firstMul : 1);
     Battle.play(prep, seed, st.speed, st.auto !== false, function (res) {
       if (!st.pending) return;
       st.pending.win = res.win; st.pending.timeout = res.timeout;
@@ -1475,13 +1775,13 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (!p) return;
     if (p.win === undefined) {
       var prep = TF.prepareBattle(st, p.form, p.s);
-      var r = TF.simulate(prep.p, prep.e, p.seed | 0, false);
+      var r = TF.simulate(prep.p, prep.e, p.seed | 0, false, { reserves: prep.reserves });
       p.win = r.win; p.timeout = r.timeout; p.resumed = true;
     }
     var wasCleared = st.cleared;
     var sum = TF.applyResult(st, p.s, p.win, p.form);
     st.pending = null;
-    if (sum.first) st.sel = st.cleared + 1;
+    if (sum.first) { st.sel = st.cleared + 1; st.flags.conq = p.s; }
     save();
     render();
     showResult(p, sum, wasCleared);
@@ -1673,9 +1973,14 @@ if (typeof module !== 'undefined') module.exports = TF;
       toast(TF.BLD[id].name + ' Lv' + TF.lv(st, id) + 'に強化しました');
       save(); render(); openBuilding(id);
     },
-    collect: function () {
+    collect: function (el) {
       var g = TF.collect(st, now());
-      if (g.m + g.s > 0) { toast('資金+' + fmt(g.m) + ' 鋼材+' + fmt(g.s) + 'を回収'); bump('resM'); bump('resS'); }
+      if (g.m + g.s > 0) {
+        toast('資金+' + fmt(g.m) + ' 鋼材+' + fmt(g.s) + 'を回収');
+        var from = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+        if (g.m > 0) coinFly(from, 'resM', 'i-money', 10);
+        if (g.s > 0) coinFly(from, 'resS', 'i-steel', 6);
+      }
       save(); render();
     },
     'welcome-collect': function () { closeModal(); actions.collect(); },
@@ -2173,7 +2478,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       wrap = $('bwrap'); cv = $('bcv'); cx = cv.getContext('2d'); bgCanvas = $('bbg');
       $('battle').classList.remove('hidden');
       bindInput();
-      var eng = TF.createBattle(prep.p, prep.e, seed, { record: true, auto: auto });
+      var eng = TF.createBattle(prep.p, prep.e, seed, { record: true, auto: auto, reserves: prep.reserves });
       B = {
         eng: eng, auto: auto, sel: null, drag: null, pan: null, pinch: null, ptrs: {}, hint: null, userCam: false,
         units: [], ev: eng.ev, ei: 0, clock: 0, res: null, info: prep.info, speed: speed, cb: cb,
@@ -2222,7 +2527,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       makeMap();
       layout();
       $('camReset').classList.add('hidden');
-      if (!auto) showHint('部隊から敵へドラッグで集中攻撃!スキルは下のボタンで発動', 5);
+      B.defs = prep.reserves.p.defs; B.rewardM = prep.rewardM || 0; B.coinShown = 0; B.coins = []; B.lanePref = null;
+      buildCardBar();
+      if (!auto) showHint('敵へドラッグで集中攻撃/空き地へドラッグで移動/カードで増援', 5);
       else if (!(st.flags && st.flags.camHint)) { showHint('なぞると戦場を見回せます(2本指で拡大・縮小)', 4); st.flags = st.flags || {}; st.flags.camHint = 1; }
       lastTs = 0;
       cancelAnimationFrame(raf);
@@ -2262,6 +2569,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           var r = TF.rngFrom(B.seed + u.id * 97);
           u.row = row;
           u.col = CXW + (j - (k - 1) / 2) * 40;
+          u.homeCol = u.col;
           u.jx = (r() - 0.5) * 6; u.jy = (r() - 0.5) * 3;
           u.wx = u.col + u.jx;
           u.bridge = u.col < CXW - 1 ? BRIDGES[0] : u.col > CXW + 1 ? BRIDGES[1] : BRIDGES[u.slot % 2];
@@ -2287,6 +2595,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       startEnding();
     }
     function applyEventInstant(ev) {
+      if (ev.k === 'spawn') { spawnVisual(ev); return; }
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
       else if (ev.hits) ev.hits.forEach(function (h) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); });
     }
@@ -2302,7 +2611,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       update(dt);
       if (!B) return;
       draw();
-      if (B.ending && B.endT > (B.res.win ? 3.2 : 2.6)) { finish(); return; }
+      if (B.ending && B.endT > (B.res.win ? 3.8 : 2.6)) { finish(); return; }
       raf = requestAnimationFrame(frame);
     }
     function finish() {
@@ -2360,6 +2669,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.ending && B.res.win) B.blds.forEach(function (b) {
         if (b.owner === 1 && !b.ruin && frontAt(b.x) > b.y - 4) {
           b.owner = 0; bgKey = '';
+          spawnCoins(b, b.fragile ? 3 : 9);
           B.pillars.push({ wx: b.x, wy: b.y, side: 0, t: fxNow(), big: 1.6 });
           if (!b.fragile) text(b.x, b.y, '占領!', '#bfffc8', 16, b.h * 4 + 14);
         }
@@ -2402,6 +2712,8 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (u.dead) return;
         var hold = B.phase === 'intro' && B.introT < 0.45;
         var tx = u.col + u.jx, gap = (u.row === 0 ? 10 : 26) + (B.ending ? 8 : 0);
+        var stc = u.side === 0 && !B.ending ? B.eng.U[u.id].stance : 0;
+        if (stc > 0) gap = -3; else if (stc < 0) gap = 40;   // 前進は前線の上、後退はずっと後ろ
         var ty = hold ? u.wy : frontAt(tx) + (u.side === 0 ? -gap : gap) + u.jy;
         if (hold) tx = u.wx;
         if (u.side === 0) {
@@ -2443,6 +2755,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.banner) { B.banner.t += dtReal; if (B.banner.t > 1.2) B.banner = null; }
       if (B.hint) { B.hint.t += dtReal; if (B.hint.t > B.hint.dur) B.hint = null; }
       updateSkillBar();
+      updateCardBar();
+      updateCoins(dtReal);
       B.projs.forEach(function (p) {
         if ((p.kind === 'at' && Math.random() < 0.7) || p.kind === 'rocket') {
           var wk = (B.clock - p.t0) / (p.t1 - p.t0);
@@ -2463,6 +2777,25 @@ if (typeof module !== 'undefined') module.exports = TF;
       var q = figPos(u, f);
       return { x: q.x, y: q.y, f: f };
     }
+    // 増援部隊を画面に出す(自軍は川を渡った所、敵は敵陣から)
+    function spawnVisual(ev) {
+      var e = B.eng.U[ev.s];
+      var u = mkSquad({ type: e.type, maxHp: e.maxHp, boss: false, hero: null }, ev.side, 100 + ev.s, ev.s);
+      u.troop = Math.round(u.troop * TF.K.resMul / 50) * 50;
+      u.reserve = true;
+      var lane;
+      if (ev.side === 0 && B.lanePref !== null) { lane = B.lanePref; B.lanePref = null; }
+      else {
+        var cnt = COLS.map(function (x) { return B.units.filter(function (v) { return v.side === ev.side && !v.dead && Math.abs(v.col - x) < 20; }).length; });
+        lane = COLS[cnt.indexOf(Math.min.apply(null, cnt))];
+      }
+      u.col = lane; u.row = 1; u.jx = (Math.random() - 0.5) * 6; u.jy = (Math.random() - 0.5) * 3;
+      u.bridge = Math.abs(lane - BRIDGES[0]) < Math.abs(lane - BRIDGES[1]) ? BRIDGES[0] : BRIDGES[1];
+      if (ev.side === 0) { u.wx = u.bridge; u.wy = riverY(u.bridge) + 12; } else { u.wx = lane; u.wy = Math.min(250, B.front + 70); }
+      B.units[ev.s] = u;
+      B.pillars.push({ wx: u.wx, wy: u.wy, side: ev.side, t: fxNow(), big: 1.3 });
+      text(u.wx, u.wy, ev.side === 0 ? '増援到着!' : '敵の増援!', ev.side === 0 ? '#bfffc8' : '#ffb3a8', 15, 30);
+    }
     function fire(ev) {
       var s = B.units[ev.s];
       if (ev.k === 'atk') {
@@ -2477,6 +2810,8 @@ if (typeof module !== 'undefined') module.exports = TF;
           if (i === n - 1) B.imps.push({ at: B.clock + i * 0.05 + fl, d: ev.d, dmg: ev.dmg, crit: ev.crit, kill: ev.kill, miss: ev.miss, kind: s.type, wx: b.x, wy: b.y });
         }
         if (s.type === 'inf' || s.type === 'at') for (i = 0; i < 4; i++) { var ff = figWorld(s).f; ff.fire = B.clock + Math.random() * 0.15; }
+      } else if (ev.k === 'spawn') {
+        spawnVisual(ev);
       } else if (ev.k === 'skill') {
         var hd = TF.HERO[s.hero], sk = TF.SKILL[ev.sk];
         B.banner = { t: 0, name: hd.name, skill: sk.name, side: s.side, sub: ev.sk === 'charge' ? '味方全体 攻撃力+50%' : ev.sk === 'armor' ? '味方全体 被ダメージ半減' : ev.sk === 'snipe' ? '必中の一撃' : '敵全体へ砲撃' };
@@ -2724,6 +3059,14 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.fillStyle = '#2a2008'; cx.font = '900 ' + Math.round(hr * 1.25) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textBaseline = 'middle';
         cx.fillText(TF.HERO[u.hero].name.charAt(0), hx, hy + 0.5);
       }
+      var stc = u.side === 0 ? B.eng.U[u.id].stance : 0;
+      if (stc || u.reserve) {
+        var sx = p.x - r * 2.0, sy = y - r;
+        cx.fillStyle = stc > 0 ? '#ffb04a' : stc < 0 ? '#7fc6ff' : '#9cffb0';
+        cx.beginPath(); cx.arc(sx, sy, r * 0.72, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = '#1a1a14'; cx.font = '900 ' + Math.round(r * 1.0) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textBaseline = 'middle';
+        cx.fillText(stc > 0 ? '▲' : stc < 0 ? '▼' : '援', sx, sy + 0.5);
+      }
     }
     var PATHS = {};
     function path(t) {
@@ -2814,6 +3157,52 @@ if (typeof module !== 'undefined') module.exports = TF;
       var n = 0;
       B.units.forEach(function (u) { if (u.side === side) n += Math.ceil(u.hp / u.maxHp * u.troop); });
       return n;
+    }
+    // ---- コイン回収(勝利時、占領した建物から資金のコインが上の表示へ飛ぶ) ----
+    function spawnCoins(b, n) {
+      var p = proj(b.x, b.y);
+      for (var i = 0; i < n; i++) {
+        B.coins.push({ x: p.x + (Math.random() - 0.5) * 20, y: p.y - b.h * p.k, vx: (Math.random() - 0.5) * 160, vy: -120 - Math.random() * 120, t: 0, delay: Math.random() * 0.25, ph: Math.random() * 6 });
+      }
+      B.coinTotal = (B.coinTotal || 0) + n;
+    }
+    function updateCoins(dt) {
+      if (!B.coins.length) return;
+      var tx = W / 2, ty = 76;
+      B.coins = B.coins.filter(function (c) {
+        c.t += dt;
+        if (c.t < c.delay) return true;
+        var a = c.t - c.delay;
+        if (a < 0.45) { c.x += c.vx * dt; c.y += c.vy * dt; c.vy += 420 * dt; }   // 飛び出す
+        else { var k = Math.min(1, dt * 7); c.x += (tx - c.x) * k; c.y += (ty - c.y) * k; } // 回収
+        if (a > 0.45 && Math.hypot(tx - c.x, ty - c.y) < 10) {
+          B.coinGot = (B.coinGot || 0) + 1; B.coinPulse = 1;
+          return false;
+        }
+        return a < 3;
+      });
+      B.coinPulse = Math.max(0, (B.coinPulse || 0) - dt * 4);
+    }
+    function drawCoins() {
+      var all = B.coinTotal || 0;
+      if (!all) return;
+      B.coins.forEach(function (c) {
+        if (c.t < c.delay) return;
+        var w = Math.abs(Math.cos(c.t * 9 + c.ph)) * 7 + 1.5;
+        cx.fillStyle = '#a8791c'; cx.beginPath(); cx.ellipse(c.x, c.y + 1, w, 8, 0, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = '#f1c453'; cx.beginPath(); cx.ellipse(c.x, c.y, w, 8, 0, 0, Math.PI * 2); cx.fill();
+        cx.fillStyle = 'rgba(255,255,255,.6)'; cx.beginPath(); cx.ellipse(c.x - w * 0.3, c.y - 3, w * 0.25, 2, 0, 0, Math.PI * 2); cx.fill();
+      });
+      var got = Math.min(1, (B.coinGot || 0) / all);
+      var val = Math.round(B.rewardM * got);
+      var sc = 1 + 0.15 * (B.coinPulse || 0);
+      cx.save(); cx.translate(W / 2, 76); cx.scale(sc, sc);
+      cx.fillStyle = 'rgba(10,14,9,.85)'; rr(-62, -14, 124, 28, 14); cx.fill();
+      cx.strokeStyle = '#f1c453'; cx.lineWidth = 1.5; cx.stroke();
+      cx.fillStyle = '#f1c453'; cx.beginPath(); cx.arc(-44, 0, 8, 0, Math.PI * 2); cx.fill();
+      cx.fillStyle = '#fff'; cx.font = '900 15px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.fillText('+' + fmt(val), 8, 0.5);
+      cx.restore();
     }
     function drawHud() {
       cx.fillStyle = 'rgba(10,14,9,.8)'; cx.fillRect(0, 0, W, 62);
@@ -2923,6 +3312,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       drawBanner();
       drawHint();
       if (B.ending) drawEnding();
+      drawCoins();
+      drawCardGhost();
     }
 
     // ---- 手動操作・スキル ----
@@ -2961,6 +3352,81 @@ if (typeof module !== 'undefined') module.exports = TF;
         $('skst' + u.id).textContent = st;
       });
     }
+    function buildCardBar() {
+      var bar = $('cardBar');
+      var types = Object.keys(B.defs);
+      bar.classList.toggle('hidden', !types.length);
+      bar.innerHTML = '<div class="pts"><span>増援</span><b id="rpPts">0</b><i><em id="rpBar" style="width:0%"></em></i></div>' +
+        types.map(function (t) {
+          return '<div class="rcard off" data-type="' + t + '" id="rc-' + t + '">' + unitSvg(t, ALLY_C) + '<span class="nm">' + TF.UNIT[t].name + '</span><span class="cs">' + TF.K.resCost + '</span></div>';
+        }).join('');
+      B.rcCache = '';
+    }
+    function updateCardBar() {
+      var info = B.eng.reserveInfo(B.clock);
+      var can = !B.auto && !B.ending && B.phase === 'fight' && info.left > 0 && info.pts >= info.cost;
+      var key = Math.floor(info.pts * 4) + '|' + info.left + '|' + can + '|' + B.auto;
+      if (key === B.rcCache) return;
+      B.rcCache = key;
+      $('rpPts').textContent = info.left > 0 ? Math.floor(info.pts) : '済';
+      $('rpBar').style.width = (info.pts / info.max * 100).toFixed(0) + '%';
+      Array.prototype.forEach.call(document.querySelectorAll('#cardBar .rcard'), function (el) {
+        el.classList.toggle('on', can);
+        el.classList.toggle('off', !can);
+        el.querySelector('.cs').textContent = B.auto ? '自動' : info.left > 0 ? '残' + info.left : 'なし';
+      });
+    }
+    function deployCard(type, lane) {
+      if (!B || B.ending) return;
+      if (B.auto) { showHint('AUTOをOFFにすると、好きなときに増援を出せます'); return; }
+      if (B.phase !== 'fight') { showHint('まだ展開中です'); return; }
+      var info = B.eng.reserveInfo(B.clock);
+      if (info.left <= 0) { showHint('この戦闘の増援は出しきりました'); return; }
+      if (info.pts < info.cost) { showHint('増援ポイントがたまっていません(' + info.cost + '必要)'); return; }
+      B.lanePref = lane === undefined ? null : Math.max(20, Math.min(180, lane));
+      if (B.eng.deploy(type, B.clock) === null) { B.lanePref = null; showHint('いまは増援を出せません'); }
+      updateCardBar();
+    }
+    // カードは、タップでおまかせの位置に、戦場へドラッグするとその列に出す
+    var cardDrag = null;
+    function cardDown(e) {
+      var el = e.target.closest('.rcard');
+      if (!el || !B) return;
+      e.preventDefault();
+      cardDrag = { type: el.dataset.type, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false, ghost: null };
+    }
+    function cardMove(e) {
+      if (!cardDrag) return;
+      cardDrag.x = e.clientX; cardDrag.y = e.clientY;
+      if (!cardDrag.moved && Math.hypot(e.clientX - cardDrag.x0, e.clientY - cardDrag.y0) > 10) {
+        cardDrag.moved = true;
+        var g = document.createElement('div'); g.className = 'cardghost'; g.innerHTML = unitSvg(cardDrag.type, ALLY_C);
+        document.body.appendChild(g); cardDrag.ghost = g;
+      }
+      if (cardDrag.ghost) { cardDrag.ghost.style.left = e.clientX + 'px'; cardDrag.ghost.style.top = e.clientY + 'px'; }
+    }
+    function cardUp(e) {
+      if (!cardDrag) return;
+      var d = cardDrag; cardDrag = null;
+      if (d.ghost) d.ghost.remove();
+      if (!B) return;
+      if (!d.moved) { deployCard(d.type); return; }
+      var r = cv.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+        var w = unproj(e.clientX - r.left, e.clientY - r.top);
+        deployCard(d.type, w.x);
+      }
+    }
+    function drawCardGhost() {
+      if (!cardDrag || !cardDrag.moved) return;
+      var r = cv.getBoundingClientRect(), x = cardDrag.x - r.left, y = cardDrag.y - r.top;
+      if (x < 0 || x > W || y < 0 || y > H) return;
+      var w = unproj(x, y), lane = Math.max(20, Math.min(180, w.x));
+      var a = proj(lane, B.front - 26), b = proj(lane, riverY(lane) + 12);
+      cx.strokeStyle = 'rgba(90,255,120,.8)'; cx.lineWidth = 3; cx.setLineDash([8, 6]);
+      cx.beginPath(); cx.moveTo(b.x, b.y); cx.lineTo(a.x, a.y); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle = 'rgba(90,255,120,.25)'; cx.beginPath(); cx.ellipse(a.x, a.y, 16 * a.k / 3, 6 * a.k / 3, 0, 0, Math.PI * 2); cx.fill();
+    }
     function setAutoUI() {
       $('btnAuto').classList.toggle('on', B.auto);
       $('autoState').textContent = B.auto ? 'ON' : 'OFF';
@@ -2972,10 +3438,10 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.eng.setAuto(B.auto, B.clock);
       B.sel = null; B.drag = null;
       if (B.auto) {
-        B.units.forEach(function (u) { if (u.side === 0) B.eng.order(u.id, null); });
+        B.units.forEach(function (u) { if (u.side === 0) { B.eng.order(u.id, null); if (u.reserve !== true) u.col = u.homeCol || u.col; } });
         showHint('自動戦闘に切り替えました', 1.6);
       } else {
-        showHint('手動: 部隊から敵へドラッグで集中攻撃!スキルは下のボタン', 3.5);
+        showHint('敵へドラッグで集中攻撃/空き地へドラッグで移動/カードで増援', 3.5);
       }
       setAutoUI();
       return B.auto;
@@ -3000,6 +3466,16 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (d < R && d < bd) { bd = d; best = u; }
       });
       return best;
+    }
+    // 空き地へドラッグ: その場所へ移動。前線より前なら前進、ずっと後ろなら後退
+    function moveSquad(u, w) {
+      var rel = w.y - frontAt(w.x);
+      var stc = rel > 0 ? 1 : rel < -20 ? -1 : 0;
+      B.eng.order(u.id, null);
+      B.eng.setStance(u.id, stc);
+      u.col = Math.max(15, Math.min(185, w.x)); u.jx = 0;
+      text(u.wx, u.wy, stc > 0 ? '前進!' : stc < 0 ? '後退' : '移動', stc > 0 ? '#ffe08a' : '#cfe9ff', 14, 30);
+      part(w.x, w.y, { life: 0.45, r: 6, c: 'ring' });
     }
     function issueOrder(u, target) {
       if (B.eng.order(u.id, target.id)) {
@@ -3072,7 +3548,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (d.u.dead) return;
         if (!d.moved) { B.sel = B.sel === d.u ? null : d.u; if (B.sel) showHint('攻撃する敵部隊をタップ', 1.8); return; }
         if (d.hover) issueOrder(d.u, d.hover);
-        else if (B.eng.order(d.u.id, null)) text(d.u.wx, d.u.wy, '自由に攻撃', '#e6e6d6', 13, 30);
+        else moveSquad(d.u, unproj(d.x, d.y));
         return;
       }
       if (B.pan) {
@@ -3095,6 +3571,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       c.addEventListener('pointermove', onMove);
       c.addEventListener('pointerup', onUp);
       c.addEventListener('pointercancel', function (e) { if (B) { delete B.ptrs[e.pointerId]; B.drag = null; B.pan = null; B.pinch = null; } });
+      var cb = $('cardBar');
+      cb.addEventListener('pointerdown', cardDown);
+      document.addEventListener('pointermove', cardMove);
+      document.addEventListener('pointerup', cardUp);
+      document.addEventListener('pointercancel', function () { if (cardDrag && cardDrag.ghost) cardDrag.ghost.remove(); cardDrag = null; });
       c.addEventListener('wheel', function (e) {
         if (!B) return;
         e.preventDefault();
@@ -3159,7 +3640,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.restore();
     }
     window.addEventListener('resize', function () { if (B) resize(); });
-    return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, active: function () { return !!B; },
+    return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, deployCard: deployCard, active: function () { return !!B; },
       debug: function () {
         if (!B) return null;
         return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
@@ -3168,10 +3649,15 @@ if (typeof module !== 'undefined') module.exports = TF;
           ruins: B.blds.filter(function (b) { return b.ruin; }).length,
           aims: B.units.filter(function (u) { return !u.dead && u.aim !== null && B.clock - u.aimT < 2.4; }).length,
           rockets: B.projs.filter(function (p) { return p.kind === 'rocket'; }).length,
+          reserve: B.eng.reserveInfo(B.clock), spawned: B.ev.filter(function (e) { return e.k === 'spawn'; }).map(function (e) { return e.side; }),
+          stances: B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return B.eng.U[u.id].stance; }),
+          coins: B.coinGot || 0, coinTotal: B.coinTotal || 0,
           bridgeY: RY, minAllyY: Math.min.apply(null, B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return u.wy; })),
-          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, order: eu.order, alive: eu.alive, skNext: eu.sk ? eu.skNext : null }; }),
+          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, x: p.x, y: p.y, wx: u.wx, order: eu.order, alive: eu.alive, stance: eu.stance, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
-      } };
+      },
+      // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標
+      frontPoint: function (x, rel) { if (!B) return null; var p = proj(x, frontAt(x) + rel); return { x: p.x, y: p.y }; } };
   })();
 
   // ====== アプリのアイコン(ホーム画面用PNGを生成) ======
@@ -3218,7 +3704,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     save();
   }
-  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, bestFarm: function () { farmCache = null; return bestFarm(); } };
+  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, map: MapView, bestFarm: function () { farmCache = null; return bestFarm(); } };
   boot();
 })();
 </script>
