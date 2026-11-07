@@ -267,17 +267,19 @@ function midState(over) {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
-    await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
+    // 部隊が前線に着いてから(戦闘開始直後は出撃線から進んでいる途中)
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d.phase === 'fight' && d.clock > 3; }, null, { timeout: 15000 });
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
-    // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる
+    // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる(下のボタンに隠れていない所)
     async function dragTo(u, rel) {
       const p = await page.evaluate(([wx, r]) => {
         const d = window.__game.battle.debug(), foes = d.units.filter(f => f.side === 1 && f.alive);
+        const cv = document.getElementById('bcv').getBoundingClientRect(), lim = document.getElementById('skillBar').getBoundingClientRect().top - cv.top - 12;
         let best = null, bd = -1;
-        for (let x = 20; x <= 180; x += 5) for (let k = 0; k <= 30; k += 5) {
+        for (let x = 0; x <= 300; x += 6) for (let k = 0; k <= 30; k += 5) {
           const q = window.__game.battle.frontPoint(x, r + (r > 0 ? k : -k));
           const dist = Math.min(...foes.map(f => Math.hypot(f.x - q.x, f.y - 6 - q.y)));
-          if (q.x > 10 && q.x < innerWidth - 10 && dist > bd) { bd = dist; best = q; }
+          if (q.x > 10 && q.x < innerWidth - 10 && q.y > 10 && q.y < lim && dist > bd) { bd = dist; best = q; }
         }
         return best;
       }, [u.wx, rel]);
@@ -378,7 +380,7 @@ function midState(over) {
     bld: { hq: { lv: 10, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('配置: 出撃すると広い戦場(5列)で部隊を配置。地形が表示され、ドラッグで列を変更、おまかせ配置、戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
+  await test('配置: 出撃すると広大な戦場(7列)で部隊を配置。地形が表示され、ドラッグで列を変更、おまかせ配置、戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
@@ -386,7 +388,7 @@ function midState(over) {
     assert(await page.isVisible('#deployBar'), '配置の画面が出ない');
     const txt = await page.textContent('#deployBar');
     let d = await page.evaluate(() => window.__game.battle.debug());
-    assert.strictEqual(d.terrain.p.length, 5); assert.strictEqual(d.terrain.e.length, 5);
+    assert.strictEqual(d.terrain.p.length, 7); assert.strictEqual(d.terrain.e.length, 7);
     const names = await page.evaluate(() => Object.keys(window.__game.TF.TERRAIN).map(k => window.__game.TF.TERRAIN[k].name));
     assert(names.some(n => txt.includes(n)), '地形の説明が出ない');
     const allies = d.units.filter(u => u.side === 0);
@@ -401,14 +403,14 @@ function midState(over) {
     d = await page.evaluate(() => window.__game.battle.debug());
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width }; });
     const i0 = d.units.findIndex(u => u.side === 0), u0 = d.units[i0], lane0 = d.lanes[i0];
-    const tx = lane0 >= 2 ? 12 : box.w - 12; // 端の列へ
+    const tx = lane0 >= 3 ? 12 : box.w - 12; // 端の列へ
     await page.mouse.move(box.x + u0.x, box.y + u0.y - 6); await page.mouse.down();
     for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + u0.x + (tx - u0.x) * i / 10, box.y + u0.y - 6);
     await page.mouse.up();
     d = await page.evaluate(() => window.__game.battle.debug());
     const moved = d.lanes[i0];
     assert.notStrictEqual(moved, lane0, 'ドラッグで列が変わらない');
-    assert(moved === 0 || moved === 4);
+    assert(moved === 0 || moved === 6, '端の列にならない ' + moved);
     // 戦闘開始: その配置のまま戦い、途中で閉じても同じ配置で決着できるよう保存される
     await page.click('[data-act="deploy-go"]');
     await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight'; }, null, { timeout: 8000 });
@@ -421,6 +423,36 @@ function midState(over) {
   }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 },
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
+
+  await test('移動: 戦闘が始まると出撃線から前線へ進み、地形に応じた時刻に着く。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
+    await page.click('[data-act="deploy-go"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight'; }, null, { timeout: 8000 });
+    let d = await page.evaluate(() => window.__game.battle.debug());
+    const movers = d.units.filter(u => u.side === 0 && u.type !== 'art');
+    assert(movers.length >= 3);
+    // 到着時刻は地形の速さどおり(エンジンの値)
+    const exp = await page.evaluate(ids => { const G = window.__game, T = G.battle.debug().terrain; return ids.map(([type, lane]) => G.TF.K.app[type] / G.TF.terrMove(T.p[lane], type)); }, movers.map(u => [u.type, d.lanes[u.id]]));
+    movers.forEach((u, i) => assert(Math.abs(u.arrT - exp[i]) < 1e-9, '到着時刻が地形どおりでない ' + u.arrT + ' ' + exp[i]));
+    assert(movers.some(u => Math.abs(u.wy - d.front) > 70), '出撃線から始まらない');
+    const last = Math.max(...movers.map(u => u.arrT));
+    await page.waitForFunction(t => { const x = window.__game.battle.debug(); return x && (x.clock > t + 0.6 || x.ending); }, last, { timeout: 20000 });
+    d = await page.evaluate(() => window.__game.battle.debug());
+    if (!d.ending) movers.forEach(m => { const u = d.units.find(x => x.id === m.id); if (u.alive && u.stance === 0) assert(Math.abs(u.wy - d.front) < 60, '前線に着かない ' + (u.wy - d.front)); });
+    // いちばん引くと、7列すべてと両軍の陣地が画面に収まる
+    const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2);
+    for (let i = 0; i < 30; i++) await page.mouse.wheel(0, 120);
+    const z = await page.evaluate(() => window.__game.battle.debug().cam.z);
+    assert(z <= 0.16, '十分に引けない ' + z);
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 },
+    bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
+    heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 } } })));
 
   await test('配置: 「次から省略」にすると配置画面を出さずにおまかせ配置で始まる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');

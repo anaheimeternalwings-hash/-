@@ -305,8 +305,9 @@ check('地形: 森林・市街地は歩兵と対戦車兵を守り、戦車は�
   // 戦闘でも効く: 同じ相手に、平原の戦車は湿地の戦車より大きなダメージを与える
   const mk = (t, lane) => ({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
   function firstDmg(trP, trE, att, def) {
-    const b = TF.createBattle([mk(att, 0)], [mk(def, 0)], 5, { record: true, terrain: { p: [trP, 'plain', 'plain', 'plain', 'plain'], e: [trE, 'plain', 'plain', 'plain', 'plain'] } });
-    b.step(4);
+    const pl = ['plain', 'plain', 'plain', 'plain', 'plain', 'plain'];
+    const b = TF.createBattle([mk(att, 0)], [mk(def, 0)], 5, { record: true, terrain: { p: [trP].concat(pl), e: [trE].concat(pl) } });
+    b.step(8);
     return b.ev.find(x => x.k === 'atk' && x.s === 0 && !x.miss).dmg;
   }
   assert(firstDmg('plain', 'plain', 'tank', 'inf') > firstDmg('marsh', 'plain', 'tank', 'inf') * 1.5, '平原と湿地の差がない');
@@ -325,12 +326,38 @@ check('列: 部隊はおもに同じ列の敵を狙い、離れた列への攻�
   assert(inf.near > inf.far * 10, '同じ列をおもに狙わない ' + JSON.stringify(inf));
   assert(art.far > art.near * 0.3, '砲兵が離れた列を撃たない ' + JSON.stringify(art));
 });
-check('ステージ: 地形は5列×両軍、敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
+check('移動: 地形で進む速さが変わり(戦車は平原で速く湿地でとても遅い)、射撃位置に着くまで撃てない。砲兵は陣地から撃てる。列の移動にも時間がかかる', () => {
+  assert(TF.terrMove('plain', 'tank') > 1 && TF.terrMove('marsh', 'tank') < 0.6 && TF.terrMove('forest', 'tank') < TF.terrMove('forest', 'inf'));
+  TF.TERRAIN_KEYS.forEach(k => TF.TYPES.forEach(t => assert(TF.terrMove(k, t) >= 0.4 && TF.terrMove(k, t) <= 1.4, k + t)));
+  const mk = (t, lane) => ({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
+  const T = a => ({ p: [a, 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'], e: ['plain', 'plain', 'plain', 'plain', 'plain', 'plain', 'plain'] });
+  function first(att, tr) {
+    const b = TF.createBattle([mk(att, 0)], [mk('inf', 0)], 3, { record: true, terrain: T(tr) });
+    b.step(10);
+    return { arr: b.U[0].arrT, t: b.ev.find(x => x.k === 'atk' && x.s === 0).t };
+  }
+  const tp = first('tank', 'plain'), tm = first('tank', 'marsh'), ar = first('art', 'marsh');
+  assert(tp.arr > 0.3 && tm.arr > tp.arr * 2, '湿地で遅くならない ' + tp.arr + ' ' + tm.arr);
+  assert(tp.t >= tp.arr && tm.t >= tm.arr, '着く前に撃った');
+  assert.strictEqual(ar.arr, 0, '砲兵が移動を待った');
+  assert.strictEqual(TF.createBattle([mk('tank', 0)], [mk('inf', 0)], 3, {}).U[0].arrT, 0, '地形がないのに移動した');
+  // 列の移動: 3列先へは数秒かかり、その間は撃たない
+  const m = TF.createBattle([mk('inf', 0)], [mk('inf', 0)], 3, { record: true, auto: false, terrain: T('plain') });
+  m.step(5);
+  assert(m.setLane(0, 3, 5), '動かせない');
+  const lv = m.ev.find(x => x.k === 'lane');
+  assert(lv.dur > 2, '列の移動が一瞬 ' + lv.dur);
+  m.step(5 + lv.dur + 3);
+  assert(!m.ev.some(x => x.k === 'atk' && x.s === 0 && x.t > 5 && x.t < 5 + lv.dur), '移動中に撃った');
+  assert(m.ev.some(x => x.k === 'atk' && x.s === 0 && x.t > 5 + lv.dur), '移動のあと撃たない');
+});
+check('ステージ: 地形は7列×両軍、敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
+  assert.strictEqual(K.laneN, 7);
   for (let s = 1; s <= 200; s += 7) {
     const i = TF.stageInfo(s);
-    assert.strictEqual(i.terrain.p.length, 5); assert.strictEqual(i.terrain.e.length, 5);
+    assert.strictEqual(i.terrain.p.length, 7); assert.strictEqual(i.terrain.e.length, 7);
     i.terrain.p.concat(i.terrain.e).forEach(k => assert(TF.TERRAIN[k], k));
-    i.enemies.forEach(e => assert(e.lane >= 0 && e.lane < 5));
+    i.enemies.forEach(e => assert(e.lane >= 0 && e.lane < 7));
     assert.deepStrictEqual(TF.stageInfo(s).terrain, i.terrain, '同じステージの地形が毎回同じでない');
   }
   const st = TF.newState(0);
@@ -338,7 +365,7 @@ check('ステージ: 地形は5列×両軍、敵は地形に合った列に配�
   const f = TF.normalizeForm(st, []).map((x, k) => Object.assign(x, { lane: k === 0 ? 4 : null }));
   const out = TF.autoLanes(st, f, 30);
   assert.strictEqual(out[0].lane, 4, '決めた列が変わった');
-  out.forEach(x => assert(x.lane >= 0 && x.lane < 5));
+  out.forEach(x => assert(x.lane >= 0 && x.lane < 7));
   assert(new Set(out.map(x => x.lane)).size >= 3, '列に散らばらない');
   assert.strictEqual(TF.normalizeForm(st, [{ type: 'inf', hero: null, lane: null }])[0].lane, null, '列なしが0列になった');
 });
@@ -348,7 +375,7 @@ check('列の移動: 手動のときだけ戦闘中に別の列へ動かせる�
   const b = TF.prepareBattle(st, TF.autoFormation(st, 30, 4), 30);
   const m = TF.createBattle(b.p, b.e, 4, { record: true, auto: false, terrain: b.terrain, reserves: b.reserves, posts: true });
   m.step(1);
-  const to = (b.p[0].lane + 2) % 5;
+  const to = (b.p[0].lane + 2) % 7;
   assert(m.setLane(0, to, 1), '動かせない');
   assert.strictEqual(m.U[0].lane, to);
   const a = TF.createBattle(b.p, b.e, 4, { record: true, terrain: b.terrain });
