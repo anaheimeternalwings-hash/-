@@ -752,17 +752,25 @@ function midState(over) {
     assert((await page.textContent('.result h2')).includes('勝利'));
   }, midState({ cleared: 2, sel: 3 })));
 
-  await test('自軍は川の手前から橋を渡って前線へ。戦闘中は狙いの線が出て、敵の前に土のうの壁がある', () => withPage('iPhone 13', async page => {
+  await test('自軍は配置した場所から前線へ進む(最初に川や橋を渡らない)。戦闘中は狙いの線が出て、敵の前に土のうの壁がある', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
+    // 出撃画面にマップの型が出る(となりのステージとは違う型)
+    const ty1 = await page.textContent('#mapType');
+    assert(ty1.startsWith('マップ: '), ty1);
+    await page.click('[data-act="stage"][data-d="-1"]');
+    const ty0 = await page.textContent('#mapType');
+    assert(ty0 !== ty1, 'となりのステージと同じ型 ' + ty0);
+    await page.click('[data-act="stage"][data-d="1"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
     await page.waitForSelector('#battle:not(.hidden)');
     const d0 = await page.evaluate(() => window.__game.battle.debug());
-    assert(d0.minAllyY < d0.bridgeY, '開始時に川の手前にいない ' + d0.minAllyY);
+    assert(d0.bridgeY === undefined, 'まだ川がある');
+    assert(d0.minAllyY > d0.startY - 5 && d0.minAllyY < d0.startY + 50, '開始時に配置エリアにいない ' + d0.minAllyY);
     assert(d0.wallsTotal > 20 && d0.walls === d0.wallsTotal);
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight' && d.clock > 1.5; }, null, { timeout: 15000 });
     const d1 = await page.evaluate(() => window.__game.battle.debug());
-    assert(d1.minAllyY > d1.bridgeY, '川を渡っていない ' + d1.minAllyY);
+    assert(d1.minAllyY > d0.minAllyY + 15, '前線へ進まない ' + d0.minAllyY + ' → ' + d1.minAllyY);
     assert(d1.aims > 0, '狙いの線が出ない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });

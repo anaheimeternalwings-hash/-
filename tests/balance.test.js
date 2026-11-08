@@ -466,6 +466,27 @@ check('地形はマップ上の区域: 同じ列でも前後で地形が違い�
   const inForest = firstDmg(3), onPlain = firstDmg(5);
   assert(inForest < onPlain * 0.8, '森にいる敵が守られない ' + inForest + ' ' + onPlain);
 });
+check('マップの型: ステージごとに地形の並び方が変わる(9ステージで9種類すべて・となりのステージとは違う型)。拠点の場所も毎回違う', () => {
+  const keys = Object.keys(TF.LAYOUTS);
+  assert(keys.length >= 9);
+  for (let b = 0; b < 30; b++) {
+    const got = new Set();
+    for (let s = 3 + b * keys.length; s < 3 + (b + 1) * keys.length; s++) got.add(TF.stageLayout(s));
+    assert.strictEqual(got.size, keys.length, 'ブロック' + b + 'で型がそろわない');
+  }
+  for (let s = 3; s <= 1000; s++) assert.notStrictEqual(TF.stageLayout(s), TF.stageLayout(s - 1), 'ステージ' + s + 'がとなりと同じ型');
+  for (let s = 3; s <= 300; s++) assert.strictEqual(TF.stageInfo(s).terrain.layout, TF.stageLayout(s));
+  // 型ごとに地形の形が違う: 市街戦は市街地が多く、横切る帯は同じ地形が横一列、開けた平原は区域が小さい
+  const area = T => T.blobs.reduce((a, b) => a + b.rx * b.ry, 0);
+  const of = k => { const out = []; for (let s = 3; out.length < 6; s++) if (TF.stageLayout(s) === k) out.push(TF.stageInfo(s).terrain); return out; };
+  of('town').forEach(T => assert(T.blobs.filter(b => b.k === 'urban').length >= 4, '市街戦に町が少ない'));
+  of('band').forEach(T => { const b0 = T.blobs[0], row = T.blobs.filter(b => b.k === b0.k && Math.abs(b.y - b0.y) < 0.1); assert(row.length >= 5 && Math.max(...row.map(b => b.x)) - Math.min(...row.map(b => b.x)) > 4, '帯になっていない'); });
+  of('open').forEach(T => assert(area(T) < Math.min(...of('scatter').map(area)), '開けた平原なのに区域が大きい'));
+  // 拠点の場所(見た目)もステージで違う
+  const posKey = s => JSON.stringify(TF.stageInfo(s).terrain.posts.map(p => p.x.toFixed(2)));
+  assert(new Set([10, 11, 12, 13, 14, 15]
+    .map(posKey)).size >= 5, '拠点の場所が毎回同じ');
+});
 check('ステージ: 地形マップ(森林・市街地・丘陵・湿地の区域)は毎回同じで両軍の側にある。敵は地形に合った列に配置。おまかせ配置は決めた列を変えずに残りを振り分ける', () => {
   assert.strictEqual(K.laneN, 7);
   for (let s = 1; s <= 200; s += 7) {
