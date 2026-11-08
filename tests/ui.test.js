@@ -272,52 +272,42 @@ function midState(over) {
     await page.waitForSelector('#modalWrap:not(.hidden) .result');
   }, midState({ cleared: 24, sel: 25, auto: true })));
 
-  await test('配置の指示: 部隊を前線の先へなぞると前進、後ろへなぞると後退。AUTOに戻すと解除', () => withPage('iPhone 13', async page => {
+  await test('移動の指示: 手動では自軍の部隊をマップ上の好きな場所へなぞると、そこへ移動して守る。AUTOに戻すと解除', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
-    // 部隊が前線に着いてから(戦闘開始直後は出撃線から進んでいる途中)
-    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d.phase === 'fight' && d.clock > 3; }, null, { timeout: 15000 });
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d.phase === 'fight' && d.clock > 1; }, null, { timeout: 15000 });
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
-    // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる(下のボタンに隠れていない所)
-    // なぞる直前に、まだ生きている自軍の部隊を選ぶ(戦闘中なので、なぞっている間にやられたら別の部隊でやり直す)
-    async function dragTo(rel, skip) {
-      for (let tries = 0; ; tries++) {
-        const u = await dragOnce(rel, skip);
-        const now = await page.evaluate(id => window.__game.battle.debug().units.find(x => x.id === id), u.id);
-        if (now.alive || tries >= 3) return u;
-      }
-    }
-    async function dragOnce(rel, skip) {
+    // 自軍の側の、部隊からも敵からも離れた地点(下のボタンに隠れていない所)を探してなぞる。なぞっている間にやられたらやり直す
+    let done = null;
+    for (let tries = 0; tries < 4 && !done; tries++) {
       await page.waitForTimeout(300);
-      const u = await page.evaluate(no => window.__game.battle.debug().units.find(x => x.side === 0 && x.alive && !x.reserve && x.id !== no), skip); // 動いた後の今の位置
-      const p = await page.evaluate(([wx, r]) => {
-        const d = window.__game.battle.debug(), foes = d.units.filter(f => f.side === 1 && f.alive);
+      const plan = await page.evaluate(() => {
+        const G = window.__game.battle, d = G.debug(), us = d.units.filter(u => u.alive && (u.side === 0 || u.vis));
         const cv = document.getElementById('bcv').getBoundingClientRect(), lim = document.getElementById('skillBar').getBoundingClientRect().top - cv.top - 12;
+        const u = d.units.find(x => x.side === 0 && x.alive && !x.reserve);
         let best = null, bd = -1;
-        for (let x = 0; x <= 300; x += 6) for (let k = 0; k <= 30; k += 5) {
-          const q = window.__game.battle.frontPoint(x, r + (r > 0 ? k : -k));
-          const dist = Math.min(...foes.map(f => Math.hypot(f.x - q.x, f.y - 6 - q.y)));
-          if (q.x > 10 && q.x < innerWidth - 10 && q.y > 10 && q.y < lim && dist > bd) { bd = dist; best = q; }
+        for (let x = 0.5; x <= 5.5; x += 0.5) for (let y = -0.8; y <= -0.1; y += 0.1) {
+          const q = G.mapPoint(x, y);
+          if (!(q.x > 20 && q.x < innerWidth - 20 && q.y > 20 && q.y < lim)) continue;
+          const dist = Math.min(...us.map(v => Math.hypot(v.x - q.x, v.y - 6 - q.y)));
+          if (dist > bd) { bd = dist; best = { x, y, sx: q.x, sy: q.y }; }
         }
-        return best;
-      }, [u.wx, rel]);
+        return { u, best };
+      });
+      const { u, best } = plan;
       await page.mouse.move(box.x + u.x, box.y + u.y - 6);
       await page.mouse.down();
-      for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + u.x + (p.x - u.x) * i / 8, box.y + u.y - 6 + (p.y - u.y + 6) * i / 8);
+      for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + u.x + (best.sx - u.x) * i / 8, box.y + u.y - 6 + (best.sy - u.y + 6) * i / 8);
       await page.mouse.up();
-      return u;
+      const now = await page.evaluate(id => window.__game.battle.debug().units.find(x => x.id === id), u.id);
+      if (now.alive) done = { id: u.id, goal: now.goal, best };
     }
-    const a = await dragTo(14, -1);
-    const b = await dragTo(-60, a.id);
-    let d = await page.evaluate(() => window.__game.battle.debug());
-    const ua = d.units.find(u => u.id === a.id), ub = d.units.find(u => u.id === b.id);
-    assert.strictEqual(ua.stance, 1, '前進にならない');
-    assert.strictEqual(ub.stance, -1, '後退にならない');
-    assert.strictEqual(ua.order, null);
+    assert(done && done.goal, '移動の指示が入らない');
+    assert(Math.abs(done.goal.x - done.best.x) < 0.4 && Math.abs(done.goal.y - done.best.y) < 0.15, '指示した場所がずれた ' + JSON.stringify(done));
     await page.click('[data-act="auto-toggle"]');
-    d = await page.evaluate(() => window.__game.battle.debug());
-    assert(d.units.filter(u => u.side === 0).every(u => u.stance === 0), 'AUTOで配置が解除されない');
+    const d = await page.evaluate(() => window.__game.battle.debug());
+    assert(d.units.filter(u => u.side === 0).every(u => !u.goal), 'AUTOで指示が解除されない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result');
   }, midState({ cleared: 24, sel: 25, auto: false })));
@@ -358,7 +348,7 @@ function midState(over) {
       // 戦場全体が見えるまで引いてから、左端の列のあたりへ落とす
       await page.mouse.move(r.x + r.w / 2, r.y + r.h / 2);
       for (let i = 0; i < 12; i++) await page.mouse.wheel(0, 120);
-      const lp = await page.evaluate(() => window.__game.battle.frontPoint(-10, -40));
+      const lp = await page.evaluate(() => window.__game.battle.mapPoint(0, -0.5));
       const x0 = cb.x + cb.width / 2, y0 = cb.y + cb.height / 2, tx = r.x + Math.max(12, lp.x), ty = r.y + lp.y;
       await page.mouse.move(x0, y0);
       await page.mouse.down();
@@ -402,9 +392,9 @@ function midState(over) {
     bld: { hq: { lv: 10, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('配置: 出撃すると広大な戦場(7列)で部隊を配置。敵は索敵範囲に入るまで見えない。ドラッグで好きな場所(列の間・前後も)に置ける。戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
+  await test('配置: 出撃すると広大な戦場で部隊を配置。敵は索敵範囲に入るまで見えない。ドラッグで自軍の側の好きな場所(列の間・前後も)に置ける。戦闘開始で置いた場所から戦う', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
-    await page.click('[data-act="auto"]');
+    // 混成の編成で(おまかせ編成は使わない)
     await page.click('[data-act="sortie"]');
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
     assert(await page.isVisible('#deployBar'), '配置の画面が出ない');
@@ -436,7 +426,7 @@ function midState(over) {
     const moved = d.lanes[i0];
     assert.notStrictEqual(moved, lane0, 'ドラッグで列が変わらない');
     assert(moved === 0 || moved === 6, '端の列にならない ' + moved);
-    // 自由配置: 列と列の間・前寄りの好きな場所に置ける(置いた場所に止まり、前に置いた分だけ早く着く)
+    // 自由配置: 列と列の間・前寄りの好きな場所に置ける(置いた場所に止まる)
     const i1 = d.units.findIndex((u, k) => u.side === 0 && k !== i0 && u.type !== 'art');
     const u1 = d.units[i1], to = await page.evaluate(() => window.__game.battle.worldToScreen(122, 103));
     await page.mouse.move(box.x + u1.x, box.y + u1.y - 6); await page.mouse.down();
@@ -445,47 +435,46 @@ function midState(over) {
     await page.waitForTimeout(300);
     d = await page.evaluate(() => window.__game.battle.debug());
     const p1 = d.units[i1];
-    assert(Math.abs(p1.wx - 122) < 16 && Math.abs(p1.wy - 103) < 4, '置いた場所にいない ' + p1.wx + ',' + p1.wy);
+    // 落とした画面の点に見えている地面(丘の上ならその表面)に置かれる
+    const w1 = await page.evaluate(p => window.__game.battle.screenToWorld(p.x, p.y), to);
+    assert(Math.abs(p1.wx - w1.x) < 16 && Math.abs(p1.wy - w1.y) < 4, '置いた場所にいない ' + p1.wx + ',' + p1.wy + ' / ' + w1.x + ',' + w1.y);
     const f1 = (await page.evaluate(() => window.__game.battle.debugForm()))[i1];
     assert(typeof f1.lx === 'number' && Math.abs(f1.lx - Math.round(f1.lx)) > 0.05, '列の間の位置が残らない ' + JSON.stringify(f1));
     assert(f1.adv > 0.45, '前に置いた奥行きが残らない ' + JSON.stringify(f1));
-    // 戦闘開始: その配置のまま戦い、途中で閉じても同じ配置で決着できるよう保存される
+    // 戦闘開始: 置いた場所から始まり、途中で閉じても同じ配置で決着できるよう保存される
     await page.click('[data-act="deploy-go"]');
+    d = await page.evaluate(() => window.__game.battle.debug());
+    assert.strictEqual(d.phase, 'intro');
+    const e1 = d.units[i1];
+    assert(Math.abs(e1.ex - f1.lx) < 1e-6 && Math.abs(e1.ey - (-1 + f1.adv * 0.9)) < 1e-3, '置いた場所から始まらない ' + JSON.stringify([e1.ex, e1.ey, f1]));
     await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight'; }, null, { timeout: 8000 });
     // 近づくと索敵範囲に入って見えてくる
     await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight' && x.units.some(u => u.side === 1 && u.vis); }, null, { timeout: 15000 });
-    d = await page.evaluate(() => window.__game.battle.debug());
-    assert.strictEqual(d.lanes[i0], moved, '配置が戦闘に反映されない');
     const pend = await page.evaluate(() => window.__game.state.pending.form);
     assert.strictEqual(pend[i0].lane, moved, '配置が保存されない');
     assert.strictEqual(pend[i1].lx, f1.lx, '自由配置の位置が保存されない');
-    const ex = await page.evaluate(u => { const G = window.__game, T = G.battle.debug().terrain; return G.TF.arrivalTime(T, 0, u.type, u.lx); }, d.units[i1]);
-    assert(d.units[i1].arrT < ex - 0.05, '前に置いても早く着かない ' + d.units[i1].arrT + ' ' + ex);
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
-  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 },
+  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 }, form: ['tank', 'inf', 'at', 'tank', 'inf', 'art', 'at', 'tank'].map((t, i) => ({ type: t, hero: ['oni', 'tetsu', 'taka', 'rai'][i] || null })), 
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('移動: 戦闘が始まると配置した場所から前線へ進み、通り道の地形に応じた時刻に着く。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
+  await test('移動: 戦闘が始まると部隊は配置した場所からマップ上を進み、出会った所で戦う(画面の位置は戦闘の計算どおり)。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
-    await page.click('[data-act="auto"]');
+    // 混成の編成で(おまかせ編成は使わない)
     await page.click('[data-act="sortie"]');
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
     await page.click('[data-act="deploy-go"]');
-    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight'; }, null, { timeout: 8000 });
     let d = await page.evaluate(() => window.__game.battle.debug());
     const movers = d.units.filter(u => u.side === 0 && u.type !== 'art');
     assert(movers.length >= 3);
-    // 到着時刻は、置いた場所から前線までの通り道の地形どおり(進軍の速い・遅い指揮官の部隊はその分だけ早い・遅い)
-    const exp = await page.evaluate(us => { const G = window.__game, T = G.battle.debug().terrain; return us.map(u => G.TF.arrivalTime(T, 0, u.type, u.lx, u.adv) / u.spd); }, movers);
-    assert(movers.some(u => u.spd !== 1), '進軍の速さが違う指揮官の部隊がいない');
-    movers.forEach((u, i) => assert(Math.abs(u.arrT - exp[i]) < 1e-9, '到着時刻が地形どおりでない ' + u.arrT + ' ' + exp[i]));
-    assert(movers.every(u => Math.abs(u.wy - d.front) > 50), '配置した場所から始まらない ' + movers.map(u => Math.round(u.wy - d.front)));
-    const last = Math.max(...movers.map(u => u.arrT));
-    await page.waitForFunction(t => { const x = window.__game.battle.debug(); return x && (x.clock > t + 0.6 || x.ending); }, last, { timeout: 20000 });
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && (x.clock > 2.5 || x.ending); }, null, { timeout: 20000 });
     d = await page.evaluate(() => window.__game.battle.debug());
-    if (!d.ending) movers.forEach(m => { const u = d.units.find(x => x.id === m.id); if (u.alive && u.stance === 0) assert(Math.abs(u.wy - d.front) < 60, '前線に着かない ' + (u.wy - d.front)); });
+    // 前へ進んでいる(見えている敵がいなければ探しに行く)
+    const adv = movers.filter(m => { const u = d.units.find(x => x.id === m.id); return u.alive && u.wy > m.wy + 15; });
+    assert(adv.length >= 2, '前へ進まない');
+    // 画面の位置は戦闘の計算の位置どおり(重なりをよける分だけずれる)
+    d.units.filter(u => u.side === 0 && u.alive && u.ex !== null).forEach(u => assert(Math.abs(u.wx - (-18 + u.ex * 56)) < 32, '画面の位置が計算とずれる ' + u.wx + ' ' + u.ex));
     // いちばん引くと、7列すべてと両軍の陣地が画面に収まる
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
     await page.mouse.move(box.x + box.w / 2, box.y + box.h / 2);
@@ -494,7 +483,7 @@ function midState(over) {
     assert(z <= 0.16, '十分に引けない ' + z);
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
-  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 },
+  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 }, form: ['tank', 'inf', 'at', 'tank', 'inf', 'art', 'at', 'tank'].map((t, i) => ({ type: t, hero: ['oni', 'tetsu', 'taka', 'rai'][i] || null })), 
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 } } })));
 
@@ -754,7 +743,7 @@ function midState(over) {
     assert((await page.textContent('.result h2')).includes('勝利'));
   }, midState({ cleared: 2, sel: 3 })));
 
-  await test('自軍は配置した場所から前線へ進む(最初に川や橋を渡らない)。戦闘中は狙いの線が出て、敵の前に土のうの壁がある', () => withPage('iPhone 13', async page => {
+  await test('自軍は配置した場所から進む(最初に川や橋を渡らない。前線の線や土のうの壁もない)。戦闘中は狙いの線が出る', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     // 出撃画面にマップの型が出る(となりのステージとは違う型)
     const ty1 = await page.textContent('#mapType');
@@ -768,12 +757,14 @@ function midState(over) {
     await page.waitForSelector('#battle:not(.hidden)');
     const d0 = await page.evaluate(() => window.__game.battle.debug());
     assert(d0.bridgeY === undefined, 'まだ川がある');
-    assert(d0.minAllyY > d0.startY - 5 && d0.minAllyY < d0.startY + 50, '開始時に配置エリアにいない ' + d0.minAllyY);
-    assert(d0.wallsTotal > 20 && d0.walls === d0.wallsTotal);
+    assert.strictEqual(d0.wallsTotal, 0, '土のうの壁がある');
+    d0.units.filter(u => u.side === 0).forEach(u => assert(Math.abs(u.wy - (150 + (-1 + u.adv * 0.9) * 98)) < 30, '開始時に配置した場所にいない ' + u.wy));
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight' && d.clock > 1.5; }, null, { timeout: 15000 });
     const d1 = await page.evaluate(() => window.__game.battle.debug());
-    assert(d1.minAllyY > d0.minAllyY + 15, '前線へ進まない ' + d0.minAllyY + ' → ' + d1.minAllyY);
-    assert(d1.aims > 0, '狙いの線が出ない');
+    const mv = d1.units.filter(u => u.side === 0 && u.type !== 'art' && u.alive && u.wy > d0.units.find(v => v.id === u.id).wy + 15);
+    assert(mv.length >= 1, '前へ進まない');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && (d.aims > 0 || d.ending); }, null, { timeout: 20000 });
+    assert((await page.evaluate(() => window.__game.battle.debug())).aims > 0, '狙いの線が出ない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
   }, midState({ cleared: 14, sel: 15 })));

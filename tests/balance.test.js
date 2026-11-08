@@ -136,8 +136,9 @@ check('指揮官は得意兵種を率いると強くなり、レベルアップ�
   assert(TF.squadStats(st, 'tank', 'hayate').spd > 1.2, '進軍の速さが部隊に付かない');
   // 進軍が速い指揮官の部隊は早く着く
   const mk = o => Object.assign({ type: 'tank', maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: 0 }, o);
-  const arr = q => TF.createBattle([q], [mk({})], 3, { terrain: TF.flatTerrain() }).U[0].arrT;
-  assert(arr(mk({ spd: 1.35 })) < arr(mk({})) * 0.8, '進軍が速くならない');
+  // 1秒でどれだけ前へ進むか(見えている敵がいないので前へ探しに行く)
+  const gone = q => { const b = TF.createBattle([q], [mk({ lane: 6 })], 3, { terrain: TF.flatTerrain() }); const y0 = b.pos(0, 0).y; b.step(1.2); return b.pos(0, 1.2).y - y0; };
+  assert(gone(mk({ spd: 1.35 })) > gone(mk({})) * 1.2, '進軍が速くならない');
 });
 check('固有スキル: 10人それぞれ違うスキル(突撃・装甲・一撃必中・一斉射撃・応急手当・電撃戦・煙幕・鉄壁反撃・爆撃要請・弱点看破)', () => {
   assert.deepStrictEqual(TF.HEROES.map(h => TF.SKILL[h.skill].name), ['突撃', '装甲', '一撃必中', '一斉射撃', '応急手当', '電撃戦', '煙幕', '鉄壁反撃', '爆撃要請', '弱点看破']);
@@ -262,20 +263,24 @@ check('増援: 自動ではポイントがたまると両軍とも途中参戦�
   assert.strictEqual(b.U[id].side, 0);
   assert.strictEqual(b.U[id].type, ty);
 });
-check('配置の指示: 前進は与えるダメージ・受けるダメージが増え、後退は受けるダメージが減る', () => {
-  const one = t => [{ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1 }];
-  function firstHits(stance) {
-    const b = TF.createBattle(one('inf'), one('inf'), 11, { record: true, auto: false });
-    if (stance) assert(b.setStance(0, stance));
-    b.step(6);
-    const by = b.ev.filter(x => x.k === 'atk' && !x.miss && x.s === 0)[0];
-    const to = b.ev.filter(x => x.k === 'atk' && !x.miss && x.d === 0)[0];
-    return [by.dmg, to.dmg];
-  }
-  const [d0, t0] = firstHits(0), [d1, t1] = firstHits(1), [d2, t2] = firstHits(-1);
-  assert(Math.abs(d1 / d0 - TF.K.stDeal['1']) < 0.02 && Math.abs(t1 / t0 - TF.K.stTake['1']) < 0.02, '前進 ' + [d0, d1, t0, t1]);
-  assert(Math.abs(d2 / d0 - TF.K.stDeal['-1']) < 0.02 && Math.abs(t2 / t0 - TF.K.stTake['-1']) < 0.02, '後退 ' + [d0, d2, t0, t2]);
-  assert(TF.K.stDeal['1'] > 1 && TF.K.stTake['1'] > 1 && TF.K.stTake['-1'] < 1);
+check('移動の指示: 手動のときだけ、マップ上の好きな場所へ動かせる。着いたらそこで守り、射程内の見えている敵だけ撃つ。AUTOに戻すと解除', () => {
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  const T = TF.flatTerrain();
+  const a = TF.createBattle([mk('inf', 1)], [mk('inf', 5)], 3, { terrain: T });
+  assert(!a.moveTo(0, 4, 0.2, 0.5), 'AUTOなのに動かせた');
+  const b = TF.createBattle([mk('inf', 1)], [mk('inf', 5)], 3, { record: true, auto: false, terrain: T });
+  assert(b.moveTo(0, 4, 0.2, 0.5), '動かせない');
+  b.step(1.5);
+  assert(b.pos(0).moving, '動き出さない');
+  b.step(12);
+  const p = b.pos(0);
+  assert(Math.abs(p.x - 4) < 0.05 && Math.abs(p.y - 0.2) < 0.05, '指示した場所に着かない ' + JSON.stringify(p));
+  // 着いたあとは、その場で守る(自分からは探しに行かない)
+  b.step(14);
+  const q = b.pos(0);
+  assert(Math.abs(q.x - 4) < 0.05 && Math.abs(q.y - 0.2) < 0.05, '守らずに動いた');
+  b.setAuto(true, 14);
+  assert.strictEqual(b.U[0].goal, null, 'AUTOで指示が解除されない');
 });
 check('拠点: 敵部隊を撃破すると前線が進んで拠点を占領し、増援+1と特殊ユニット1回を得る(両軍とも)。占領は記録どおり', () => {
   const st = TF.newState(0);
@@ -376,76 +381,66 @@ check('列: 部隊はおもに同じ列の敵を狙い、離れた列への攻�
   assert(inf.near > inf.far * 10, '同じ列をおもに狙わない ' + JSON.stringify(inf));
   assert(art.far >= 5 && art.far > art.near * 0.15 && inf.far === 0, '砲兵が離れた列を撃たない ' + JSON.stringify(art));
 });
-check('移動: 地形で進む速さが変わり(戦車は平原で速く湿地でとても遅い)、射撃位置に着くまで撃てない。砲兵は陣地から撃てる。列の移動にも時間がかかる', () => {
+check('移動: 部隊はマップ全体を動き、地形で速さが変わる(戦車は平原で速く湿地でとても遅い)。動いている間は撃たない。見えている敵がいなければ前へ探しに行き、砲兵はその場から撃つ', () => {
   assert(TF.terrMove('plain', 'tank') > 1 && TF.terrMove('marsh', 'tank') < 0.6 && TF.terrMove('forest', 'tank') < TF.terrMove('forest', 'inf'));
   TF.TERRAIN_KEYS.forEach(k => TF.TYPES.forEach(t => assert(TF.terrMove(k, t) >= 0.4 && TF.terrMove(k, t) <= 1.4, k + t)));
-  const mk = (t, lane) => ({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
-  const T = a => TF.flatTerrain(a, 'plain');
-  function first(att, tr) {
-    const b = TF.createBattle([mk(att, 0)], [mk('inf', 0)], 3, { record: true, terrain: T(tr) });
-    b.step(10);
-    return { arr: b.U[0].arrT, t: b.ev.find(x => x.k === 'atk' && x.s === 0).t };
+  assert(K.spd.tank > K.spd.inf && K.spd.inf > K.spd.art);
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  // 1.5秒で進む距離(自軍の側が平原か湿地か)
+  const gone = (t, tr) => { const b = TF.createBattle([mk(t, 0)], [mk('inf', 6)], 3, { terrain: TF.flatTerrain(tr, 'plain') }); const y0 = b.pos(0, 0).y; b.step(1.5); return b.pos(0, 1.5).y - y0; };
+  const gp = gone('tank', 'plain'), gm = gone('tank', 'marsh');
+  assert(gp > 0.4 && gm < gp * 0.6, '湿地で遅くならない ' + gp + ' ' + gm);
+  assert(gone('tank', 'plain') > gone('inf', 'plain'), '戦車が歩兵より遅い');
+  assert(gone('art', 'plain') === 0, '砲兵が自分から動いた');
+  // 動いている間は撃たない
+  const b = TF.createBattle([mk('inf', 3)], [mk('inf', 3)], 5, { record: true, terrain: TF.flatTerrain() });
+  for (let tt = 0.05; tt < 8; tt += 0.05) {
+    b.step(tt);
+    const shot = b.ev.find(x => x.k === 'atk' && x.s === 0 && Math.abs(x.t - tt) < 0.05);
+    if (shot) assert(!b.pos(0, shot.t).moving, '動きながら撃った');
   }
-  const tp = first('tank', 'plain'), tm = first('tank', 'marsh'), ar = first('art', 'marsh');
-  assert(tp.arr > 0.3 && tm.arr > tp.arr * 2, '湿地で遅くならない ' + tp.arr + ' ' + tm.arr);
-  assert(tp.t >= tp.arr && tm.t >= tm.arr, '着く前に撃った');
-  assert.strictEqual(ar.arr, 0, '砲兵が移動を待った');
-  assert.strictEqual(TF.createBattle([mk('tank', 0)], [mk('inf', 0)], 3, {}).U[0].arrT, 0, '地形がないのに移動した');
-  // 列の移動: 3列先へは数秒かかり、その間は撃たない
-  const m = TF.createBattle([mk('inf', 0)], [mk('inf', 0)], 3, { record: true, auto: false, terrain: T('plain') });
-  m.step(5);
-  assert(m.setLane(0, 3, 5), '動かせない');
-  const lv = m.ev.find(x => x.k === 'lane');
-  assert(lv.dur > 2, '列の移動が一瞬 ' + lv.dur);
-  m.step(5 + lv.dur + 3);
-  assert(!m.ev.some(x => x.k === 'atk' && x.s === 0 && x.t > 5 && x.t < 5 + lv.dur), '移動中に撃った');
-  assert(m.ev.some(x => x.k === 'atk' && x.s === 0 && x.t > 5 + lv.dur), '移動のあと撃たない');
+  assert(b.ev.some(x => x.k === 'atk' && x.s === 0), '出会っても撃たない');
+  // 戦う場所は決まっていない: 敵陣の奥にいる敵へは、こちらから敵の側まで進んで戦う
+  const c = TF.createBattle([mk('inf', 1, { maxHp: 1e7 })], [mk('inf', 5, { maxHp: 1e7, adv: 0, hold: true })], 5, { record: true, terrain: TF.flatTerrain() });
+  c.step(30);
+  const first = c.ev.find(x => x.k === 'atk' && x.s === 0);
+  assert(first && c.pos(0, first.t).y > 0.3, '敵の側で戦っていない');
 });
-check('自由配置: 列の間(小数の列)や前後の好きな位置に置ける。前に置くほど早く着き、列の間はとなりの列との中間の狙い方になる', () => {
+check('自由配置: 自軍の側の好きな場所(列の間・前後)に置け、範囲外は自軍の側に収める。置いた場所から戦いが始まる。敵は配置の時点では見つからない奥に布陣する', () => {
   const st = TF.newState(0);
   st.bld.hq.lv = 12;
   const f = TF.normalizeForm(st, [{ type: 'inf', hero: null, lane: 2, lx: 2.4, adv: 9 }, { type: 'inf', hero: null, lane: 2, lx: 5, adv: -9 }, { type: 'inf', hero: null, lane: null, lx: 1, adv: 0.5 }]);
-  assert.strictEqual(f[0].lx, 2.4); assert.strictEqual(f[0].adv, K.advMax, '前に置ける範囲を超えた');
+  assert.strictEqual(f[0].lx, 2.4); assert.strictEqual(f[0].adv, K.advMax, '置ける範囲を超えた');
   assert.strictEqual(f[1].lx, undefined, '列から離れた位置が通った'); assert.strictEqual(f[1].adv, K.advMin);
   assert.strictEqual(f[2].lx, undefined, '列なしで位置が通った');
+  assert(TF.advY(0, K.advMax) < -0.1 && TF.advY(0, K.advMax) > -0.2 && TF.advY(0, K.advMin) <= -0.99, '自軍の側の全体に置けない');
   const p = TF.prepareBattle(st, [{ type: 'inf', hero: null, lane: 3, lx: 3.3, adv: 0.5 }], 30);
   assert(p.p[0].lane === 3 && p.p[0].lx === 3.3 && p.p[0].adv === 0.5, '出撃の準備で位置が消えた');
-  // 前に置くほど早く着く(ふだんの位置ならこれまでどおり)
-  const mk = (adv, lx) => ({ type: 'inf', maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: 0, lx: lx, adv: adv });
-  const arr = adv => TF.createBattle([mk(adv)], [mk()], 3, { terrain: TF.flatTerrain() }).U[0].arrT;
-  assert(arr(K.advMax) < arr(undefined) && arr(undefined) < arr(K.advMin), '前後の位置で到着が変わらない');
-  assert(Math.abs(arr(undefined) - K.app.inf / TF.terrMove('plain', 'inf')) < 1e-9);
-  // 狙い方: 列の間は、となりの列との中間
-  assert.strictEqual(TF.laneW(K.laneAim, 1), K.laneAim[1]);
-  const mid = TF.laneW(K.laneAim, 0.5);
-  assert(mid < K.laneAim[0] && mid > K.laneAim[1]);
-  function share(lx) {
-    const b = TF.createBattle([Object.assign(mk(), { lane: Math.round(lx), lx: lx, maxHp: 1e7 })], [Object.assign(mk(), { lane: 0, maxHp: 1e7 }), Object.assign(mk(), { lane: 1, maxHp: 1e7 })], 9, { record: true });
-    b.step(60);
-    const a = b.ev.filter(x => x.k === 'atk' && x.s === 0);
-    return a.filter(x => x.d === 2).length / a.length;
-  }
-  const s0 = share(0), s5 = share(0.5), s1 = share(1);
-  assert(s0 < 0.4 && s1 > 0.6 && s5 > s0 + 0.15 && s5 < s1 - 0.15, '列の間で狙い方が中間にならない ' + [s0, s5, s1]);
+  const b = TF.createBattle(p.p, p.e, 1, { terrain: p.terrain });
+  const q = b.pos(0, 0);
+  assert(Math.abs(q.x - 3.3) < 1e-9 && Math.abs(q.y - TF.advY(0, 0.5)) < 1e-9, '置いた場所から始まらない');
+  // 敵の布陣: 敵の側の奥(配置の時点では見つからない)に、地形の良い場所を選んで置く
+  for (let s = 5; s <= 80; s += 5) TF.stageInfo(s).enemies.forEach(e => { assert(e.adv >= 0 && e.adv <= K.eAdvMax + 1e-9 && e.lx >= 0 && e.lx <= 6, 'ステージ' + s); });
 });
-check('射程: 歩兵は左右2列・対戦車兵2.5列・戦車3列・砲兵は戦場全体。射程の外の敵は狙わず、射程内に敵がいなければ見えている近い敵のほうへ横に動く(動く間は撃たない)', () => {
+check('射程: 歩兵2列・対戦車兵2.5列・戦車3列ぶんの距離まで撃て、砲兵は戦場全体に届く。射程の外の敵は狙わず、見えている敵が射程の外なら近づいてから撃つ', () => {
   assert(K.rng.inf < K.rng.at && K.rng.at < K.rng.tank && K.rng.art >= K.laneN);
-  const mk = (t, lane) => ({ type: t, maxHp: 1e7, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
-  // 列5の敵は砲兵(自分は動かない)。射程内の敵(列1)が残っている間は、射程の外の列5は撃たない
-  let b = TF.createBattle([mk('inf', 0)], [mk('inf', 1), mk('art', 5)], 3, { record: true });
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 1e7, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  // 射程内の敵(すぐ前)が残っている間は、射程の外の敵は撃たない(地形なし=見え方の制限なし)
+  let b = TF.createBattle([mk('inf', 0, { adv: 0.9 })], [mk('inf', 0, { adv: 0.9 }), mk('art', 6, { adv: 0 })], 3, { record: true });
+  b.step(20);
+  assert(!b.ev.some(e => e.k === 'atk' && e.s === 0 && e.d === 2 && TF.K.rng.inf < 6), '射程の外の敵を撃った');
+  // 見えている敵が射程の外なら近づいてから撃つ(撃った時点では射程内)
+  b = TF.createBattle([mk('inf', 0), mk('inf', 6, { adv: 0.95 })], [mk('inf', 6, { adv: 0.4, hold: true })], 3, { record: true, terrain: TF.flatTerrain() });
   b.step(30);
-  assert(!b.ev.some(e => e.k === 'atk' && e.s === 0 && e.d === 2), '射程の外の敵を撃った');
-  // 離れた列の砲兵は、偵察が進んで見えてから近づく
-  b = TF.createBattle([mk('inf', 0)], [mk('art', 5)], 3, { record: true, terrain: TF.flatTerrain() });
-  b.step(45);
-  const mv = b.ev.find(e => e.k === 'lane' && e.s === 0);
-  assert(mv && mv.auto && Math.abs(mv.lx - 5) <= K.rng.inf + 1e-9, '射程の外の敵へ近づかない');
-  assert(!b.ev.some(e => e.k === 'atk' && e.s === 0 && e.t < mv.t + mv.dur - 1e-9), '動いている間に撃った');
-  assert(b.ev.some(e => e.k === 'atk' && e.s === 0 && e.t >= mv.t + mv.dur), '近づいたあとに撃たない');
-  // 砲兵は、味方が見つけた敵なら反対の端の列でも撃てる(動かない)
-  b = TF.createBattle([mk('art', 0), mk('inf', 6)], [mk('inf', 6)], 3, { record: true, terrain: TF.flatTerrain() });
-  b.step(5);
-  assert(!b.ev.some(e => e.k === 'lane' && e.s === 0) && b.ev.some(e => e.k === 'atk' && e.s === 0), '砲兵が戦場全体に届かない');
+  const shot = b.ev.find(e => e.k === 'atk' && e.s === 0);
+  assert(shot, '近づいて撃たない');
+  const ps = b.pos(0, shot.t), pe = b.pos(2, shot.t), d = Math.hypot(ps.x - pe.x, (ps.y - pe.y) * K.detY);
+  assert(d <= K.rng.inf + 1e-6, '射程の外から撃った ' + d);
+  assert(Math.abs(ps.x - 0) > 0.5, '近づいていない');
+  // 砲兵は、味方が見つけた敵なら反対の端でも、その場から撃てる
+  b = TF.createBattle([mk('art', 0), mk('inf', 6, { adv: 0.95 })], [mk('inf', 6)], 3, { record: true, terrain: TF.flatTerrain() });
+  b.step(6);
+  assert(b.ev.some(e => e.k === 'atk' && e.s === 0) && b.pos(0, 6).x === 0, '砲兵が戦場全体に届かない');
 });
 check('地形はマップ上の区域: 同じ列でも前後で地形が違い、戦う場所の地形が効く。拠点を取って前線が進むと戦う場所も進む。通り道の地形で進む速さが変わる', () => {
   // 敵側の前線近く(列3)だけに森、自軍の通り道(列1)に湿地がある地図
@@ -563,23 +558,28 @@ check('索敵: 部隊ごとに索敵範囲があり、範囲に入るまで敵�
   assert(first && first.t > K.detT0, '離れた列の敵がすぐ見えた');
   assert(!b.result().timeout, '見つけられずに時間切れ');
 });
-check('列の移動: 手動のときだけ戦闘中に別の列へ動かせる。地形と列があっても少しずつ進めた結果は一括計算と同じ', () => {
+check('戦闘の再現: 少しずつ進めた結果は一括計算と同じ(手動の移動指示を入れても、同じ時刻に入れれば同じ)', () => {
   const st = TF.newState(0);
   st.bld.hq.lv = 12; st.bld.atpost = { lv: 8, slot: 3 }; st.bld.factory = { lv: 8, slot: 5 }; st.bld.barracks.lv = 8;
   const b = TF.prepareBattle(st, TF.autoFormation(st, 30, 4), 30);
-  const m = TF.createBattle(b.p, b.e, 4, { record: true, auto: false, terrain: b.terrain, reserves: b.reserves, posts: true });
-  m.step(1);
-  const to = (b.p[0].lane + 2) % 7;
-  assert(m.setLane(0, to, 1), '動かせない');
-  assert.strictEqual(m.U[0].lane, to);
-  const a = TF.createBattle(b.p, b.e, 4, { record: true, terrain: b.terrain });
-  assert(!a.setLane(0, to, 1), 'AUTOなのに動かせた');
   for (let seed = 1; seed <= 20; seed++) {
     const full = JSON.stringify(TF.simulate(b.p, b.e, seed, true, { reserves: b.reserves, posts: true, terrain: b.terrain }));
     const s2 = TF.createBattle(b.p, b.e, seed, { record: true, reserves: b.reserves, posts: true, terrain: b.terrain });
     for (let t2 = 0.016; !s2.isDone(); t2 += 0.033) s2.step(t2);
     assert.strictEqual(JSON.stringify(s2.result()), full, 'seed ' + seed);
   }
+  // 0.5秒の時点で生きている自軍の部隊に指示を出す
+  const probe = TF.createBattle(b.p, b.e, 4, { auto: false, terrain: b.terrain, reserves: b.reserves, posts: true });
+  probe.step(0.5);
+  const id = probe.U.find(u => u.side === 0 && u.alive).id;
+  function run(stepped) {
+    const m = TF.createBattle(b.p, b.e, 4, { record: true, auto: false, terrain: b.terrain, reserves: b.reserves, posts: true });
+    if (stepped) for (let t2 = 0.02; t2 < 0.5; t2 += 0.05) m.step(t2);
+    assert(m.moveTo(id, 2.5, -0.3, 0.5), '動かせない');
+    if (stepped) for (let t2 = 1.02; !m.isDone(); t2 += 0.05) m.step(t2); else m.step(Infinity);
+    return JSON.stringify(m.result());
+  }
+  assert.strictEqual(run(true), run(false), '手動の移動指示を入れると再現しない');
 });
 check('武装: 研究所がないと開発できず、レベル上限は研究所Lv×2。最初の型は設計図で配備、新型(Lv5→6…)には試作部品も要る', () => {
   const st = TF.newState(0);
