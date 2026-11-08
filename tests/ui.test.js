@@ -50,15 +50,22 @@ async function noHorizontalScroll(page) {
   const r = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, w: window.innerWidth, mw: document.getElementById('main').scrollWidth, mcw: document.getElementById('main').clientWidth }));
   assert(r.sw <= r.w && r.mw <= r.mcw, JSON.stringify(r));
 }
+const HERO_UNLOCK = { tetsu: 3, taka: 8, rai: 15, sakura: 22, hayate: 30, kiri: 40, kuro: 50, amagi: 62, ayase: 75 };
 function midState(over) {
   const now = Date.now();
-  return Object.assign({
+  const st = Object.assign({
     v: 1, money: 50000, steel: 30000,
     bld: { hq: { lv: 6, slot: 4 }, barracks: { lv: 10, slot: 1 }, supply: { lv: 8, slot: 0, stored: 0, t: now }, steel: { lv: 8, slot: 2, stored: 0, t: now },
       atpost: { lv: 9, slot: 3 }, factory: { lv: 9, slot: 5 }, depot: { lv: 4, slot: 6 }, artpost: { lv: 6, slot: 7 }, lab: { lv: 5, slot: 8 } },
     heroes: { oni: { lv: 15, exp: 0 }, tetsu: { lv: 14, exp: 0 }, taka: { lv: 12, exp: 0 } },
     cleared: 14, sel: 15, form: [], pending: null, tab: 'base', speed: 1, stats: { battles: 40, wins: 30 }, created: now, flags: { intro: 1, skipDeploy: 1 }, lastSeen: now
   }, over || {});
+  // いまの版のセーブと同じく、クリア済みのステージで着任する指揮官はそろえておく(古いセーブを試すときは oldSave)
+  if (!(over && over.oldSave)) {
+    st.heroes = Object.assign({}, st.heroes);
+    Object.entries(HERO_UNLOCK).forEach(([h, s]) => { if (st.cleared >= s && !st.heroes[h]) st.heroes[h] = { lv: 10, exp: 0 }; });
+  }
+  return st;
 }
 
 (async () => {
@@ -456,8 +463,9 @@ function midState(over) {
     let d = await page.evaluate(() => window.__game.battle.debug());
     const movers = d.units.filter(u => u.side === 0 && u.type !== 'art');
     assert(movers.length >= 3);
-    // 到着時刻は、置いた場所から前線までの通り道の地形どおり
-    const exp = await page.evaluate(us => { const G = window.__game, T = G.battle.debug().terrain; return us.map(u => G.TF.arrivalTime(T, 0, u.type, u.lx, u.adv)); }, movers);
+    // 到着時刻は、置いた場所から前線までの通り道の地形どおり(進軍の速い・遅い指揮官の部隊はその分だけ早い・遅い)
+    const exp = await page.evaluate(us => { const G = window.__game, T = G.battle.debug().terrain; return us.map(u => G.TF.arrivalTime(T, 0, u.type, u.lx, u.adv) / u.spd); }, movers);
+    assert(movers.some(u => u.spd !== 1), '進軍の速さが違う指揮官の部隊がいない');
     movers.forEach((u, i) => assert(Math.abs(u.arrT - exp[i]) < 1e-9, '到着時刻が地形どおりでない ' + u.arrT + ' ' + exp[i]));
     assert(movers.every(u => Math.abs(u.wy - d.front) > 50), '配置した場所から始まらない ' + movers.map(u => Math.round(u.wy - d.front)));
     const last = Math.max(...movers.map(u => u.arrT));
@@ -814,6 +822,25 @@ function midState(over) {
     await page.click('.sheet .close');
     assert(await page.isHidden('#sheetWrap'), '✕で閉じない');
   }, midState({ cleared: 45, sel: 46, parts: { 1: 2, 2: 1, 3: 1, 4: 2 } })));
+
+  await test('あとから追加された指揮官: 着任のステージをクリア済みなら、開いたときに着任の画面が出て使えるようになる', () => withPage('iPhone 13', async page => {
+    await page.waitForSelector('#modalWrap:not(.hidden)', { timeout: 5000 });
+    const names = [];
+    for (let i = 0; i < 4; i++) {
+      const txt = await page.textContent('#modal');
+      assert(txt.includes('新たな指揮官が着任') && txt.includes('クリア済み'), '着任の画面が出ない ' + txt.slice(0, 60));
+      names.push(txt);
+      await page.click('[data-act="hero-ok"]');
+    }
+    assert(names[0].includes('桜井') && names[3].includes('黒岩'), '着任の順番が違う');
+    const s = await state(page);
+    assert.deepStrictEqual(['sakura', 'hayate', 'kiri', 'kuro'].map(h => !!s.heroes[h]), [true, true, true, true], '着任していない');
+    assert(!s.heroes.amagi, 'まだのステージの指揮官まで着任した');
+    // 空いていた部隊に配属され、出撃で使える
+    assert(s.form.some(f => f.hero === 'sakura'), '部隊に配属されていない');
+    await page.click('[data-act="tab"][data-tab="army"]');
+    assert((await page.textContent('#scr-army')).includes('桜井 ユイ'), '部隊タブに出ない');
+  }, midState({ oldSave: true, cleared: 60, sel: 61, heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 25, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
   await test('施設の強化で資源が減り、レベルが上がる', () => withPage('iPhone 13', async page => {
     const before = await state(page);

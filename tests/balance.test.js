@@ -108,6 +108,18 @@ check('指揮官10人はステージを進めると着任する', () => {
   assert.strictEqual(Object.keys(st.heroes).length, 10);
   assert.deepStrictEqual(joined, ['tetsu@3', 'taka@8', 'rai@15', 'sakura@22', 'hayate@30', 'kiri@40', 'kuro@50', 'amagi@62', 'ayase@75']);
 });
+check('あとから追加された指揮官も、着任のステージをクリア済みなら着任する(レベルはいちばん高い指揮官の7割)', () => {
+  const st = TF.newState(0);
+  st.cleared = 60;
+  st.heroes = { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 25, exp: 0 }, rai: { lv: 22, exp: 0 } };
+  const got = TF.grantHeroes(st);
+  assert.deepStrictEqual(got, ['sakura', 'hayate', 'kiri', 'kuro']);
+  got.forEach(h => assert.strictEqual(st.heroes[h].lv, 21));
+  assert(!st.heroes.amagi && !st.heroes.ayase, 'まだのステージの指揮官まで着任した');
+  assert.deepStrictEqual(TF.grantHeroes(st), [], '2回目でも着任した');
+  st.cleared = 62;
+  assert.deepStrictEqual(TF.grantHeroes(st), ['amagi']);
+});
 check('指揮官は得意兵種を率いると強くなり、レベルアップで強くなる。それぞれ特徴が違う(攻撃型・耐久型・伸び方・進軍・射程・会心)', () => {
   TF.HEROES.forEach(h => {
     assert(TF.heroMult(1, true, h.id) > TF.heroMult(1, false, h.id), h.id);

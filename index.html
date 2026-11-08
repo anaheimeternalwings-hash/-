@@ -1700,20 +1700,27 @@ var TF = (function () {
     var newHeroes = [];
     if (first) {
       st.cleared = s;
-      var maxL = 1;
-      Object.keys(st.heroes).forEach(function (k) { maxL = Math.max(maxL, st.heroes[k].lv); });
-      HEROES.forEach(function (h) {
-        if (!st.heroes[h.id] && h.unlock > 0 && s >= h.unlock) {
-          st.heroes[h.id] = { lv: Math.max(1, Math.round(maxL * 0.7)), exp: 0 };
-          newHeroes.push(h.id);
-        }
-      });
+      newHeroes = grantHeroes(st);
     }
     st.stats.battles++;
     if (win) st.stats.wins++;
     return { win: win, first: first, m: gm, s: gs, bp: gb, part: part, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
   }
 
+  // 着任のステージをクリア済みなのに、まだいない指揮官を着任させる(戻り値: 着任した指揮官)。
+  // ふつうはそのステージの初クリアで着任する。あとから追加された指揮官は、すでにクリアしていれば次に開いたときに着任する。
+  // レベルはいちばん高い指揮官の7割から
+  function grantHeroes(st) {
+    var maxL = 1, out = [];
+    Object.keys(st.heroes).forEach(function (k) { maxL = Math.max(maxL, st.heroes[k].lv); });
+    HEROES.forEach(function (h) {
+      if (!st.heroes[h.id] && h.unlock > 0 && st.cleared >= h.unlock) {
+        st.heroes[h.id] = { lv: Math.max(1, Math.round(maxL * 0.7)), exp: 0 };
+        out.push(h.id);
+      }
+    });
+    return out;
+  }
   function newState(now) {
     return {
       v: 1, money: K.startMoney, steel: K.startSteel,
@@ -1728,7 +1735,7 @@ var TF = (function () {
 
   return {
     K: K, TYPES: TYPES, UNIT: UNIT, AFF: AFF, BLD: BLD, BLD_ORDER: BLD_ORDER, TYPE_BLD: TYPE_BLD,
-    HEROES: HEROES, HERO: HERO, SKILL: SKILL, UNIT_POW: UNIT_POW, heroTraits: heroTraits,
+    HEROES: HEROES, HERO: HERO, SKILL: SKILL, UNIT_POW: UNIT_POW, heroTraits: heroTraits, grantHeroes: grantHeroes,
     rngFrom: rngFrom, hashInt: hashInt,
     lv: lv, slots: slots, slotsFor: slotsFor, maxLevel: maxLevel, upgradeCost: upgradeCost, canUpgrade: canUpgrade,
     doUpgrade: doUpgrade, prodRate: prodRate, capHours: capHours, settle: settle, storedInfo: storedInfo, collect: collect,
@@ -2983,7 +2990,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     html += '</div>';
     openModal(html);
-    pendingHeroes = sum.newHeroes.slice();
+    pendingHeroes = pendingHeroes.concat(sum.newHeroes);
   }
   var pendingHeroes = [];
   function showHeroJoin() {
@@ -3003,6 +3010,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       '<h2 class="win" style="font-size:26px">' + hd.name + '</h2><div class="sub">' + hd.title + ' ・ Lv' + st.heroes[id].lv + ' ・ 得意: ' + TF.UNIT[hd.fav].name + '</div>' +
       '<div class="traits" style="justify-content:center">' + TF.heroTraits(id).map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>' +
       '<div class="skill" style="font-size:13px">固有スキル <b>' + sk.name + '</b>: ' + sk.desc + '</div>' +
+      (st.cleared > hd.unlock ? '<div class="small" style="margin-top:8px;color:var(--khaki)">ステージ' + hd.unlock + 'はクリア済みなので、すぐに着任しました。</div>' : '') +
       '<div class="small" style="margin-top:8px">' + (st.form.some(function (f) { return f.hero === id; }) ? '空いていた部隊に配属しました。' : '出撃画面で部隊に配属しよう。') + '得意兵種を率いると大きく強くなります。</div>' +
       '<div class="btns"><button class="btn wide" data-act="hero-ok">了解!</button></div></div>');
     return true;
@@ -3189,7 +3197,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       save(); render();
     },
-    'welcome-collect': function () { closeModal(); actions.collect(); },
+    'welcome-collect': function () { closeModal(); actions.collect(); showHeroJoin(); },
     'sheet-close': function () {
       var wasSlot = sheetCtx && sheetCtx.kind === 'slot';
       closeSheet();
@@ -3268,7 +3276,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       else { box.select(); document.execCommand('copy'); done(); }
     },
     import: function () {
-      if (importCode($('importBox').value)) { closeSheet(); TF.clearCache(); show(st.tab); toast('データを復元しました'); }
+      if (importCode($('importBox').value)) {
+        closeSheet(); TF.clearCache();
+        pendingHeroes = TF.grantHeroes(st); save();
+        show(st.tab); toast('データを復元しました'); showHeroJoin();
+      }
       else toast('コードが正しくありません');
     },
     reset: function () {
@@ -5490,7 +5502,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           supEvents: B.ev.filter(function (e) { return e.k === 'sup'; }).map(function (e) { return e.side + ':' + e.kind; }),
           postEvents: B.ev.filter(function (e) { return e.k === 'post'; }).map(function (e) { return e.side + ':' + e.i; }),
           bridgeY: RY, minAllyY: Math.min.apply(null, B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return u.wy; })),
-          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, type: u.type, x: p.x, y: p.y, wx: u.wx, wy: u.wy, arrT: eu.arrT, lx: eu.lx, adv: eu.adv, order: eu.order, alive: eu.alive, stance: eu.stance, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
+          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, type: u.type, x: p.x, y: p.y, wx: u.wx, wy: u.wy, arrT: eu.arrT, lx: eu.lx, adv: eu.adv, spd: eu.spd, order: eu.order, alive: eu.alive, stance: eu.stance, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
       },
       // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標
@@ -5523,6 +5535,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     if (fresh) { st.flags = {}; st.lastSeen = now(); }
     var away = now() - (st.lastSeen || now());
     TF.settle(st, now());
+    // 着任のステージをクリア済みの指揮官(あとから追加された指揮官など)は、ここで着任
+    if (!fresh) pendingHeroes = TF.grantHeroes(st);
     curTab = st.tab || 'base';
     show(curTab);
     setInterval(function () { liveBase(); renderTop(); }, 1000);
@@ -5539,11 +5553,14 @@ if (typeof module !== 'undefined') module.exports = TF;
       finishBattle();
     } else if (fresh) {
       intro();
-    } else if (away > 10 * 60000) {
-      welcomeBack(away);
+    } else if (away > 10 * 60000 && TF.storedInfo(st, now()) && hasStored()) {
+      welcomeBack(away); // 回収のあとに着任の画面
+    } else {
+      showHeroJoin();
     }
     save();
   }
+  function hasStored() { var info = TF.storedInfo(st, now()); return ((info.supply ? info.supply.stored : 0) + (info.steel ? info.steel.stored : 0)) > 0; }
   window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, map: MapView, bestFarm: function () { farmCache = null; return bestFarm(); } };
   boot();
 })();
