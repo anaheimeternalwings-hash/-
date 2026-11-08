@@ -278,8 +278,15 @@ function midState(over) {
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d.phase === 'fight' && d.clock > 3; }, null, { timeout: 15000 });
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
     // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる(下のボタンに隠れていない所)
-    // なぞる直前に、まだ生きている自軍の部隊を選ぶ(戦闘中なので先にやられることがある)
+    // なぞる直前に、まだ生きている自軍の部隊を選ぶ(戦闘中なので、なぞっている間にやられたら別の部隊でやり直す)
     async function dragTo(rel, skip) {
+      for (let tries = 0; ; tries++) {
+        const u = await dragOnce(rel, skip);
+        const now = await page.evaluate(id => window.__game.battle.debug().units.find(x => x.id === id), u.id);
+        if (now.alive || tries >= 3) return u;
+      }
+    }
+    async function dragOnce(rel, skip) {
       await page.waitForTimeout(300);
       const u = await page.evaluate(no => window.__game.battle.debug().units.find(x => x.side === 0 && x.alive && !x.reserve && x.id !== no), skip); // 動いた後の今の位置
       const p = await page.evaluate(([wx, r]) => {
