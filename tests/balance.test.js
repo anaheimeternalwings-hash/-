@@ -100,22 +100,60 @@ check('敗北しても資源・施設・指揮官は失われず、経験値は�
   assert(r.exp > 0 && (st.heroes.oni.exp > exp || st.heroes.oni.lv > lv));
   assert.strictEqual(st.cleared, 0);
 });
-check('指揮官4人はステージを進めると着任する', () => {
+check('指揮官10人はステージを進めると着任する', () => {
   const st = TF.newState(0);
   assert.deepStrictEqual(Object.keys(st.heroes), ['oni']);
   const joined = [];
-  for (let s = 1; s <= 20; s++) { const r = TF.applyResult(st, s, true, st.form); r.newHeroes.forEach(h => joined.push([h, s])); }
-  assert.strictEqual(Object.keys(st.heroes).length, 4);
-  assert.deepStrictEqual(joined.map(x => x[0]), ['tetsu', 'taka', 'rai']);
+  for (let s = 1; s <= 80; s++) { const r = TF.applyResult(st, s, true, st.form); r.newHeroes.forEach(h => joined.push(h + '@' + s)); }
+  assert.strictEqual(Object.keys(st.heroes).length, 10);
+  assert.deepStrictEqual(joined, ['tetsu@3', 'taka@8', 'rai@15', 'sakura@22', 'hayate@30', 'kiri@40', 'kuro@50', 'amagi@62', 'ayase@75']);
 });
-check('指揮官は得意兵種を率いると強くなり、レベルアップで強くなる', () => {
+check('指揮官は得意兵種を率いると強くなり、レベルアップで強くなる。それぞれ特徴が違う(攻撃型・耐久型・伸び方・進軍・射程・会心)', () => {
   TF.HEROES.forEach(h => {
-    assert(TF.heroMult(1, true) > TF.heroMult(1, false));
-    assert(TF.heroMult(10, false) > TF.heroMult(1, false));
+    assert(TF.heroMult(1, true, h.id) > TF.heroMult(1, false, h.id), h.id);
+    assert(TF.heroMult(10, false, h.id) > TF.heroMult(1, false, h.id), h.id);
+    assert(TF.heroTraits(h.id).length >= 2, h.id + ' の特徴が少ない');
   });
+  assert.strictEqual(new Set(TF.HEROES.map(h => JSON.stringify(TF.heroTraits(h.id)))).size, TF.HEROES.length, '特徴が同じ指揮官がいる');
+  // 攻撃型と耐久型: 同じ兵種・同じレベルでも、攻撃と耐久の比が違う
+  const st = TF.newState(0);
+  st.heroes = { taka: { lv: 10, exp: 0 }, kuro: { lv: 10, exp: 0 }, hayate: { lv: 10, exp: 0 } };
+  const a = TF.squadStats(st, 'inf', 'taka'), d = TF.squadStats(st, 'inf', 'kuro'), n = TF.squadStats(st, 'inf', null);
+  assert(a.atk / a.maxHp > n.atk / n.maxHp * 1.2 && d.atk / d.maxHp < n.atk / n.maxHp * 0.8, '攻撃型・耐久型の差がない');
+  assert(a.rngB > 0 && a.critB > 0, '射程・会心の特徴が部隊に付かない');
+  assert(TF.squadStats(st, 'tank', 'hayate').spd > 1.2, '進軍の速さが部隊に付かない');
+  // 進軍が速い指揮官の部隊は早く着く
+  const mk = o => Object.assign({ type: 'tank', maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: 0 }, o);
+  const arr = q => TF.createBattle([q], [mk({})], 3, { terrain: TF.flatTerrain() }).U[0].arrT;
+  assert(arr(mk({ spd: 1.35 })) < arr(mk({})) * 0.8, '進軍が速くならない');
 });
-check('固有スキル: 突撃・装甲・一撃必中・一斉射撃', () => {
-  assert.deepStrictEqual(TF.HEROES.map(h => TF.SKILL[h.skill].name), ['突撃', '装甲', '一撃必中', '一斉射撃']);
+check('固有スキル: 10人それぞれ違うスキル(突撃・装甲・一撃必中・一斉射撃・応急手当・電撃戦・煙幕・鉄壁反撃・爆撃要請・弱点看破)', () => {
+  assert.deepStrictEqual(TF.HEROES.map(h => TF.SKILL[h.skill].name), ['突撃', '装甲', '一撃必中', '一斉射撃', '応急手当', '電撃戦', '煙幕', '鉄壁反撃', '爆撃要請', '弱点看破']);
+  assert.strictEqual(new Set(TF.HEROES.map(h => h.skill)).size, 10);
+  TF.HEROES.forEach(h => { const k = TF.SKILL[h.skill]; assert(k.desc && k.short && k.cd > 0 && k.first > 0, h.skill); });
+});
+check('新しいスキルの効果: 回復・連射・煙幕・撃ち返し・密集地の爆撃・弱点(どれも指揮官なしの同じ戦闘と比べて効く)', () => {
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 20000, atk: 300, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  function run(hero) {
+    const b = TF.createBattle([mk('inf', 3, { hero }), mk('inf', 2), mk('tank', 4)], [mk('inf', 3), mk('inf', 3), mk('tank', 4), mk('inf', 2)], 11, { record: true });
+    b.step(25);
+    return b;
+  }
+  const base = run(null);
+  const atks = (b, side) => b.ev.filter(e => e.k === 'atk' && b.U[e.s].side === side);
+  const sk = (b) => b.ev.filter(e => e.k === 'skill' && e.s === 0);
+  const heal = run('sakura');
+  assert(sk(heal).some(e => e.heals && e.heals.length && e.heals.every(h => h.heal > 0)), '応急手当で回復しない');
+  assert(atks(run('hayate'), 0).length > atks(base, 0).length * 1.1, '電撃戦で攻撃が速くならない');
+  assert(atks(run('kiri'), 1).filter(e => e.miss).length > atks(base, 1).filter(e => e.miss).length * 2, '煙幕で敵の攻撃が外れやすくならない');
+  const rf = run('kuro');
+  assert(rf.ev.some(e => e.k === 'refl' && e.dmg > 0 && rf.U[e.d].side === 1), '鉄壁反撃で撃ち返さない');
+  assert(!base.ev.some(e => e.k === 'refl'));
+  const air = sk(run('amagi')).find(e => e.sk === 'air');
+  assert(air && air.hits.length >= 2, '爆撃要請がまとめて当たらない');
+  const mb = run('ayase'), mkEv = sk(mb).find(e => e.sk === 'mark');
+  const foes = mb.U.filter(u => u.side === 1);
+  assert(mkEv && mb.U[mkEv.d].atk === Math.max(...foes.map(u => u.atk)), '弱点看破がいちばん強い敵を狙わない');
 });
 check('ステージは上限なく続く(ステージ5000でも敵・報酬が有限で戦闘できる)', () => {
   [1, 10, 100, 1000, 5000].forEach(s => {
@@ -753,8 +791,11 @@ const t0 = Date.now();
 
 const greedy = playthrough({ target: TARGET, maxBattles: 20000 });
 report('堅実なプレイヤー(相性を見て強化)', greedy);
-const random = playthrough({ target: TARGET, maxBattles: 20000, strategy: 'random' });
-report('気まぐれなプレイヤー(欲しい強化をランダムに決めて貯める)', random);
+// 気まぐれなプレイヤーは、乱数しだいで買う強化が大きく変わる(詰まり方も乱数で大きく違う)ので、3通りの乱数で調べる
+const randoms = [0, 1, 2].map(k => playthrough({ target: TARGET, maxBattles: 20000, strategy: 'random', seedOff: k }));
+randoms.forEach((r, k) => report('気まぐれなプレイヤー(欲しい強化をランダムに決めて貯める)・乱数' + (k + 1), r));
+const random = randoms[0];
+const randomStuck = randoms.map(r => r.stuckMax).sort((a, b) => a - b);
 const mono = playthrough({ target: Math.min(TARGET, 100), maxBattles: 20000, strategy: 'mono' });
 report('戦車ひと筋のプレイヤー(相性を無視)', mono);
 const idle = playthrough({ target: Math.min(TARGET, 80), maxBattles: 20000, production: true, sessionBattles: 30, idleMs: 4 * 3600e3 });
@@ -763,7 +804,7 @@ report('放置派(30戦ごとに4時間放置・生産施設あり)', idle);
 
 console.log('\n[判定]');
 check('どの方針でも目標ステージに到達する(永久に詰まらない)', () => {
-  [greedy, random].forEach(r => assert.strictEqual(r.st.cleared, TARGET));
+  [greedy].concat(randoms).forEach(r => assert.strictEqual(r.st.cleared, TARGET));
   assert.strictEqual(mono.st.cleared, Math.min(TARGET, 100));
   assert.strictEqual(idle.st.cleared, Math.min(TARGET, 80));
 });
@@ -771,13 +812,13 @@ check('序盤(ステージ1〜10)は合計30戦以内で進める', () => {
   let n = 0; for (let s = 1; s <= 10; s++) n += greedy.perStage[s];
   assert(n <= 30, `${n}戦`);
 });
-check('詰まっても前のステージで稼げば進める: 最大の詰まりが 堅実40戦/気まぐれ60戦/相性無視150戦 以内', () => {
+check('詰まっても前のステージで稼げば進める: 最大の詰まりが 堅実40戦/気まぐれ60戦(3通りの中央値。どの乱数でも120戦)/相性無視150戦 以内', () => {
   assert(greedy.stuckMax <= 40, `堅実 ${greedy.stuckMax}`);
-  assert(random.stuckMax <= 60, `気まぐれ ${random.stuckMax}`);
+  assert(randomStuck[1] <= 60 && randomStuck[2] <= 120, `気まぐれ ${randomStuck.join('/')}`);
   assert(mono.stuckMax <= 150, `相性無視 ${mono.stuckMax}`);
 });
 check('稼ぎに使うステージは十分勝てる(予想勝率40%以上)', () => {
-  [greedy, random, mono, idle].forEach(r => assert(r.farmMin >= 0.4, r.farmMin));
+  [greedy, mono, idle].concat(randoms).forEach(r => assert(r.farmMin >= 0.4, r.farmMin));
 });
 check('進むほど詰まりが際限なく重くならない(20ステージごとの平均が8戦以内)', () => {
   segments(greedy, 20).forEach(g => assert(g.avg <= 8, `s${g.from}: ${g.avg.toFixed(1)}`));
@@ -791,7 +832,7 @@ check('生産施設と放置で、同じステージまでの戦闘回数が減�
   assert(idle.battles < active80.battles, `${idle.battles} vs ${active80.battles}`);
 });
 check('戦闘はほぼ決着がつく(時間切れ1%未満)', () => {
-  [greedy, random, mono].forEach(r => assert(r.timeouts / r.battles < 0.01));
+  [greedy, mono].concat(randoms).forEach(r => assert(r.timeouts / r.battles < 0.01));
 });
 
 console.log(`\n(${((Date.now() - t0) / 1000).toFixed(0)}秒)`);

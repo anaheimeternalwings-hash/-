@@ -187,6 +187,8 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .portrait.sm{width:40px;height:40px;border-radius:10px;border-width:1px}
 .portrait.xs{width:28px;height:28px;border-radius:8px;border-width:1px}
 .portrait.locked svg{filter:brightness(0) opacity(.5)}
+.traits{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.traits span{font-size:11px;padding:1px 7px;border-radius:9px;background:#26301f;border:1px solid #3d4a33;color:var(--khaki)}
 .hero .nm{font-size:17px;font-weight:800}
 .hero .ttl{font-size:11px;color:var(--khaki)}
 .skill{margin-top:6px;background:#1a2116;border-radius:10px;padding:6px 8px;font-size:12px}
@@ -503,21 +505,48 @@ var TF = (function () {
   var TYPE_BLD = { inf: 'barracks', at: 'atpost', tank: 'factory', art: 'artpost' };
 
   // ====== 指揮官 ======
+  // それぞれ特徴がある: atk/hp = 率いる部隊の攻撃・耐久の傾向、base/grow = Lv1の強さとレベルごとの伸び、
+  // favMul = 得意兵種を率いたときの倍率、spd = 進軍(移動)の速さ、rng = 射程の追加(列)、crit = 会心率の追加
   var HEROES = [
-    { id: 'oni',   name: '鬼塚 剛',     title: '鬼軍曹',       fav: 'inf',  skill: 'charge',  unlock: 0 },
-    { id: 'tetsu', name: '鉄崎 ミナ',   title: '鋼鉄の戦車長', fav: 'tank', skill: 'armor',   unlock: 3 },
-    { id: 'taka',  name: '白鷹 レン',   title: '必中の狙撃手', fav: 'at',   skill: 'snipe',   unlock: 8 },
-    { id: 'rai',   name: '雷門 ハヤト', title: '砲撃の雷神',   fav: 'art',  skill: 'barrage', unlock: 15 }
+    { id: 'oni',    name: '鬼塚 剛',     title: '鬼軍曹',         fav: 'inf',  skill: 'charge',  unlock: 0,  atk: 1.08, hp: 0.97, base: 1.06, grow: 0.030, favMul: 1.25, crit: 0.05 },
+    { id: 'tetsu',  name: '鉄崎 ミナ',   title: '鋼鉄の戦車長',   fav: 'tank', skill: 'armor',   unlock: 3,  atk: 0.92, hp: 1.12, base: 1.05, grow: 0.030, favMul: 1.25 },
+    { id: 'taka',   name: '白鷹 レン',   title: '必中の狙撃手',   fav: 'at',   skill: 'snipe',   unlock: 8,  atk: 1.15, hp: 0.88, base: 1.04, grow: 0.030, favMul: 1.25, rng: 0.5, crit: 0.10 },
+    { id: 'rai',    name: '雷門 ハヤト', title: '砲撃の雷神',     fav: 'art',  skill: 'barrage', unlock: 15, atk: 1.08, hp: 0.95, base: 1.05, grow: 0.030, favMul: 1.25, spd: 0.9 },
+    { id: 'sakura', name: '桜井 ユイ',   title: '野戦病院の天使', fav: 'inf',  skill: 'heal',    unlock: 22, atk: 0.90, hp: 1.12, base: 1.05, grow: 0.030, favMul: 1.20 },
+    { id: 'hayate', name: '疾風 カイ',   title: '電撃戦の申し子', fav: 'tank', skill: 'blitz',   unlock: 30, atk: 1.06, hp: 0.94, base: 1.05, grow: 0.032, favMul: 1.25, spd: 1.35 },
+    { id: 'kiri',   name: '霧島 シズカ', title: '煙幕の策士',     fav: 'at',   skill: 'smoke',   unlock: 40, atk: 1.00, hp: 1.04, base: 1.09, grow: 0.030, favMul: 1.12, spd: 1.1 },
+    { id: 'kuro',   name: '黒岩 ゲン',   title: '不動の守護者',   fav: 'inf',  skill: 'reflect', unlock: 50, atk: 0.82, hp: 1.26, base: 1.05, grow: 0.030, favMul: 1.25, spd: 0.85 },
+    { id: 'amagi',  name: '天城 アキラ', title: '空軍連絡将校',   fav: 'art',  skill: 'air',     unlock: 62, atk: 1.00, hp: 1.00, base: 1.00, grow: 0.036, favMul: 1.30 },
+    { id: 'ayase',  name: '綾瀬 リコ',   title: '情報参謀',       fav: 'tank', skill: 'mark',    unlock: 75, atk: 1.03, hp: 0.97, base: 1.04, grow: 0.030, favMul: 1.20, rng: 0.5, crit: 0.05 }
   ];
   var HERO = {};
   HEROES.forEach(function (h) { HERO[h.id] = h; });
 
+  // 固有スキル(指揮官ごとに1つ。手動ではボタンで、AUTOでは充填されると発動)
   var SKILL = {
-    charge:  { name: '突撃',     first: 3, cd: 11, dur: 6, mul: 1.5, desc: '味方全体の攻撃力を6秒間 +50%' },
-    armor:   { name: '装甲',     first: 4, cd: 12, dur: 6, mul: 0.5, desc: '味方全体の被ダメージを6秒間 半減' },
-    snipe:   { name: '一撃必中', first: 5, cd: 9,  mul: 4.0,         desc: '相性の良い敵1体に、攻撃力400%の必中ダメージ' },
-    barrage: { name: '一斉射撃', first: 6, cd: 12, mul: 1.2,         desc: '敵全体に、攻撃力120%の砲撃ダメージ' }
+    charge:  { name: '突撃',     first: 3, cd: 11, dur: 6, mul: 1.5,  short: '味方全体 攻撃力+50%',     desc: '味方全体の攻撃力を6秒間 +50%' },
+    armor:   { name: '装甲',     first: 4, cd: 12, dur: 6, mul: 0.5,  short: '味方全体 被ダメージ半減', desc: '味方全体の被ダメージを6秒間 半減' },
+    snipe:   { name: '一撃必中', first: 5, cd: 9,  mul: 4.0,          short: '必中の一撃',             desc: '相性の良い敵1体に、攻撃力400%の必中ダメージ' },
+    barrage: { name: '一斉射撃', first: 6, cd: 12, mul: 1.2,          short: '敵全体へ砲撃',           desc: '敵全体に、攻撃力120%の砲撃ダメージ' },
+    heal:    { name: '応急手当', first: 5, cd: 11, mul: 0.22, n: 3,   short: '味方3部隊の兵力を回復',   desc: '傷の深い味方3部隊の兵力を最大の22%回復(全滅した部隊は戻らない)' },
+    blitz:   { name: '電撃戦',   first: 3, cd: 12, dur: 5, mul: 0.6,  short: '味方全体 連射',           desc: '味方全体の攻撃の間隔を5秒間 0.6倍に(すばやく連射)' },
+    smoke:   { name: '煙幕',     first: 4, cd: 12, dur: 6, mul: 0.45, short: '敵の攻撃が外れやすい',     desc: '敵全体の攻撃が6秒間 45%多く外れる' },
+    reflect: { name: '鉄壁反撃', first: 4, cd: 13, dur: 6, mul: 0.4,  short: '受けたダメージを撃ち返す', desc: '6秒間、味方が撃たれると、受けたダメージの40%を撃った敵に返す' },
+    air:     { name: '爆撃要請', first: 6, cd: 13, mul: 3.0, w: 1.2,  short: '敵の密集地を爆撃',         desc: '敵がいちばん集まっている場所(左右1.2列)を爆撃。攻撃力300%' },
+    mark:    { name: '弱点看破', first: 3, cd: 10, dur: 8, mul: 0.6,  short: '最強の敵の弱点を暴く',     desc: 'いちばん攻撃力の高い敵1部隊は、8秒間 受けるダメージ+60%' }
   };
+  // 指揮官の特徴(画面の説明用)
+  function heroTraits(id) {
+    var h = HERO[id], out = [];
+    if (h.atk > 1.02) out.push('攻撃型(攻撃×' + h.atk.toFixed(2) + ')'); else if (h.atk < 0.98) out.push('攻撃×' + h.atk.toFixed(2));
+    if (h.hp > 1.02) out.push('耐久型(耐久×' + h.hp.toFixed(2) + ')'); else if (h.hp < 0.98) out.push('耐久×' + h.hp.toFixed(2));
+    if (h.grow > 0.031) out.push('大器晩成(よく伸びる)'); else if (h.grow < 0.029) out.push('早熟(Lv1から強い)');
+    if (h.favMul < 1.2) out.push('万能(得意兵種以外でも強い)'); else if (h.favMul > 1.26) out.push('得意兵種で特に強い(×' + h.favMul + ')');
+    if (h.spd > 1) out.push('進軍が速い(+' + Math.round((h.spd - 1) * 100) + '%)'); else if (h.spd < 1) out.push('進軍が遅い(' + Math.round((h.spd - 1) * 100) + '%)');
+    if (h.rng) out.push('射程+' + h.rng + '列');
+    if (h.crit) out.push('会心率+' + Math.round(h.crit * 100) + '%');
+    return out;
+  }
 
   // ====== 武装 ======
   // 兵種ごとに 武器(攻撃力)・防護(耐久)・特殊(苦手な敵へのダメージ) の3系統。5レベルごとに新型を開発する
@@ -668,6 +697,7 @@ var TF = (function () {
     // 配置の奥行き(adv): 出撃線(0)から射撃位置(1)へどれだけ前に置いたか。ふだん(おまかせ・敵)は advDef で、app はそのときの所要時間。
     // 自由配置では advMin〜advMax の範囲に置け、前に置くほど早く着く(所要時間は (1-adv)/(1-advDef) 倍)
     advDef: 0.4, advMin: -0.1, advMax: 0.6,
+    hrA: 0.11,
     // 射程(左右に何列先まで撃てるか)。射程の外の敵は狙えず、射程内に敵がいなければ近い敵のほうへ横に動く(動く間は撃てない)
     rng: { inf: 2, at: 2.5, tank: 3, art: 99 },
     // 拠点: 敵部隊を撃破すると前線が進んで拠点を占領。占領した拠点は前線基地になり(増援+1・ポイント回復が速く)、
@@ -795,10 +825,14 @@ var TF = (function () {
   function unlockedTypes(st) { return TYPES.filter(function (t) { return typeUnlocked(st, t); }); }
   function unitMult(st, t) { var l = lv(st, TYPE_BLD[t]); return l > 0 ? 1 + K.unitPerLv * (l - 1) : 0; }
   function labMult(st) { return 1 + K.labPerLv * lv(st, 'lab'); }
-  function heroMult(hlv, fav) { return (K.heroBase + K.heroPerLv * (hlv - 1)) * (fav ? K.favMul : 1); }
+  // 指揮官の倍率(攻撃・耐久の傾向を除いた共通部分)。id を渡すとその指揮官の伸び方・得意兵種の倍率を使う
+  function heroMult(hlv, fav, id) {
+    var h = id ? HERO[id] : null;
+    return ((h ? h.base : K.heroBase) + (h ? h.grow : K.heroPerLv) * (hlv - 1)) * (fav ? (h ? h.favMul : K.favMul) : 1);
+  }
   function squadMult(st, t, heroId) {
     var m = unitMult(st, t) * labMult(st);
-    if (heroId && st.heroes[heroId]) m *= heroMult(st.heroes[heroId].lv, HERO[heroId].fav === t);
+    if (heroId && st.heroes[heroId]) { var h = HERO[heroId]; m *= heroMult(st.heroes[heroId].lv, h.fav === t, heroId) * Math.sqrt(h.atk * h.hp); }
     return m;
   }
   function powerOf(hp, atk, cd) { return Math.round(Math.sqrt(hp * atk / cd) * 2.645); }
@@ -814,7 +848,11 @@ var TF = (function () {
   function squadStats(st, t, heroId) {
     var o = armOpt(st, t);
     o.hero = heroId;
-    return makeSquad(t, squadMult(st, t, heroId), o);
+    var h = heroId && st.heroes[heroId] ? HERO[heroId] : null;
+    if (h) { var g = Math.sqrt(h.atk * h.hp); o.atkMul = (o.atkMul || 1) * h.atk / g; o.hpMul = (o.hpMul || 1) * h.hp / g; }
+    var q = makeSquad(t, squadMult(st, t, heroId), o);
+    if (h) { if (h.spd) q.spd = h.spd; if (h.rng) q.rngB = h.rng; if (h.crit) q.critB = h.crit; }
+    return q;
   }
 
   // ====== 武装の開発・強化 ======
@@ -946,7 +984,13 @@ var TF = (function () {
   }
   function enemyTotal(s) {
     var ease = s < 12 ? 0.75 + 0.25 * (s - 1) / 11 : 1; // 序盤はやさしく
-    return (K.enB + K.enA * Math.pow(s, K.enP) + K.enC * s * s) * ease * armRef(s);
+    return (K.enB + K.enA * Math.pow(s, K.enP) + K.enC * s * s) * ease * armRef(s) * heroRef(s);
+  }
+  // 指揮官が増えると、指揮官つきの部隊が増えて強くなる。最初の4人より後に着任する指揮官1人ごとに、敵も少し強くする
+  function heroRef(s) {
+    var n = 0;
+    for (var i = 4; i < HEROES.length; i++) if (HEROES[i].unlock < s) n++;
+    return 1 + K.hrA * n;
   }
   function stagePool(s) {
     if (s <= 1) return ['inf'];
@@ -1163,10 +1207,12 @@ var TF = (function () {
         stance: 0, reserve: !!at, vs: q.vs || null, lane: ln, arrT: at || 0,
         // lx: 横の位置(列の番号。自由配置では小数)。adv: 配置の奥行き(前に置くほど早く着く)
         lx: ln === null ? null : !at && lane === undefined && typeof q.lx === 'number' ? q.lx : ln,
-        adv: at || typeof q.adv !== 'number' ? K.advDef : q.adv
+        adv: at || typeof q.adv !== 'number' ? K.advDef : q.adv,
+        // 指揮官の特徴: 進軍の速さ・射程の追加・会心率の追加
+        spd: q.spd || 1, rngB: q.rngB || 0, crit: K.crit + (q.critB || 0)
       };
       var ap = approach(side, u.type, u.lx, at ? K.advDef : u.adv, at ? Math.max(0.4, K.resApp - K.fwdApp * fwd(side)) : 1);
-      if (ap > 0) { u.arrT = (at || 0) + ap; u.next += ap; }
+      if (ap > 0) { ap /= u.spd; u.arrT = (at || 0) + ap; u.next += ap; }
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       U.push(u); live[side].push(u);
       return u;
@@ -1175,6 +1221,8 @@ var TF = (function () {
     for (i = 0; i < pList.length; i++) spawn(pList[i], 0, i);
     for (i = 0; i < eList.length; i++) spawn(eList[i], 1, i);
     var atkUntil = [-1, -1], atkMulv = [1, 1], armUntil = [-1, -1];
+    // 新しいスキルの効果: 連射(電撃戦)・煙幕(その側の攻撃が外れやすい)・反撃(撃たれた側が撃ち返す)・弱点(狙われた部隊)
+    var hasteUntil = [-1, -1], smokeUntil = [-1, -1], reflUntil = [-1, -1], markId = [-1, -1], markUntil = [-1, -1];
     var ev = opt.record ? [] : null;
     var t = 0, winner = -1, done = false, maxT = K.maxT;
     var auto = opt.auto !== false; // false: 自軍のスキル・増援・配置は手動
@@ -1296,22 +1344,26 @@ var TF = (function () {
       if (t < armUntil[f.side]) raw *= SKILL.armor.mul;
       if (u.stance) raw *= u.stance < 0 && u.type === 'art' ? 1 : K.stDeal[u.stance];
       if (f.stance) raw *= K.stTake[f.stance];
-      var dmg = Math.max(1, Math.round(raw));
+      if (markId[f.side] === f.id && t < markUntil[f.side]) raw *= 1 + SKILL.mark.mul;
+      return damage(f, Math.max(1, Math.round(raw)), u.side);
+    }
+    // ダメージを与える(撃破したら列から外し、拠点の前線を進める)。戻り値: 負数=撃破
+    function damage(f, dmg, bySide) {
       f.hp -= dmg;
       if (f.hp <= 0) {
         f.hp = 0; f.alive = false;
         var arr = live[f.side];
         arr.splice(arr.indexOf(f), 1);
-        if (PO) killQ.push(u.side);
-        return -dmg; // 負数=撃破
+        if (PO) killQ.push(bySide);
+        return -dmg;
       }
       return dmg;
     }
     // 射程の外の敵しかいないとき: いちばん近い敵が射程に入るところまで横に動く(戻り値 true = 動いた)
     function reposition(u, f) {
-      var rg = K.rng[u.type] || 99, d = f.lx - u.lx, go = d - (d > 0 ? 1 : -1) * Math.min(Math.abs(d), rg * 0.6);
+      var rg = (K.rng[u.type] || 99) + u.rngB, d = f.lx - u.lx, go = d - (d > 0 ? 1 : -1) * Math.min(Math.abs(d), rg * 0.6);
       var nl = Math.max(0, Math.min(K.laneN - 1, u.lx + go)), from = u.lane;
-      var dur = K.side[u.type] * (TR ? sideCost(TR, u.type, u.lx, nl, fightY(u.side, u.type, u.adv, PO ? fIdx : 3)) : Math.abs(nl - u.lx));
+      var dur = K.side[u.type] * (TR ? sideCost(TR, u.type, u.lx, nl, fightY(u.side, u.type, u.adv, PO ? fIdx : 3)) : Math.abs(nl - u.lx)) / u.spd;
       u.lx = nl; u.lane = Math.round(nl); u.trF = -1;
       u.arrT = t + dur; u.next = t + Math.max(0.1, dur);
       if (ev) ev.push({ t: t, k: 'lane', s: u.id, lane: u.lane, lx: nl, from: from, dur: dur, auto: 1 });
@@ -1320,7 +1372,7 @@ var TF = (function () {
     function attack(u) {
       var foes = live[1 - u.side], n = foes.length;
       if (!n) return;
-      var f, j, rg = (K.rng[u.type] || 99) + 1e-9, dj;
+      var f, j, rg = (K.rng[u.type] || 99) + u.rngB + 1e-9, dj;
       if (u.order !== null && U[u.order].alive) {
         f = U[u.order]; // 指示された目標を集中攻撃(射程の外なら近づく)
         if (laneDist(u, f) > rg) return reposition(u, f);
@@ -1343,11 +1395,16 @@ var TF = (function () {
           if (r <= 0) break;
         }
       }
-      if (rnd() < K.miss) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
-      var crit = rnd() < K.crit, vm = u.vs && u.vs[f.type] || 1;
+      if (rnd() < K.miss + (t < smokeUntil[u.side] ? SKILL.smoke.mul : 0)) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
+      var crit = rnd() < u.crit, vm = u.vs && u.vs[f.type] || 1;
       var ld = u.type === 'art' ? 1 : laneW(K.laneDmg, laneDist(u, f));
       var h = hit(u, f, u.atk * AFF[u.type][f.type] * vm * ld * (0.9 + rnd() * 0.2) * (crit ? K.critMul : 1));
       if (ev) { var e1 = { t: t, k: 'atk', s: u.id, d: f.id, dmg: Math.abs(h), crit: crit ? 1 : 0, kill: h < 0 ? 1 : 0 }; if (vm > 1) e1.sp = 1; ev.push(e1); }
+      // 鉄壁反撃: 撃たれた側が、受けたダメージの一部を撃った部隊に返す
+      if (t < reflUntil[f.side] && u.alive) {
+        var back = damage(u, Math.max(1, Math.round(Math.abs(h) * SKILL.reflect.mul)), f.side);
+        if (ev) ev.push({ t: t, k: 'refl', s: f.id, d: u.id, dmg: Math.abs(back), kill: back < 0 ? 1 : 0 });
+      }
     }
     function cast(u) {
       var id = u.sk, sk = SKILL[id], foes = live[1 - u.side], j, h;
@@ -1374,8 +1431,51 @@ var TF = (function () {
           hits.push({ d: targets[j].id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 });
         }
         if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, hits: hits });
+      } else if (id === 'heal') {
+        // 応急手当: 兵力の減りがいちばん大きい味方から順に回復
+        var al = live[u.side].slice().sort(function (a, b) { return (b.maxHp - b.hp) - (a.maxHp - a.hp) || a.id - b.id; }), heals = [];
+        for (j = 0; j < al.length && j < sk.n; j++) {
+          var g = Math.min(al[j].maxHp - al[j].hp, Math.round(al[j].maxHp * sk.mul));
+          if (g <= 0) continue;
+          al[j].hp += g; heals.push({ d: al[j].id, heal: g });
+        }
+        if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, heals: heals });
+      } else if (id === 'blitz') {
+        hasteUntil[u.side] = t + sk.dur;
+        if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, dur: sk.dur });
+      } else if (id === 'smoke') {
+        smokeUntil[1 - u.side] = t + sk.dur;
+        if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, dur: sk.dur });
+      } else if (id === 'reflect') {
+        reflUntil[u.side] = t + sk.dur;
+        if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, dur: sk.dur });
+      } else if (id === 'air') {
+        // 爆撃要請: 左右 w 列の中の敵の兵力がいちばん多い場所を爆撃
+        if (!foes.length) return;
+        var c = foes[0], cs = -1;
+        foes.forEach(function (f0) {
+          var sum = 0;
+          foes.forEach(function (f1) { if (laneDist(f0, f1) <= sk.w) sum += f1.hp; });
+          if (sum > cs) { cs = sum; c = f0; }
+        });
+        var tg = foes.filter(function (f1) { return laneDist(c, f1) <= sk.w; }), ah = [];
+        for (j = 0; j < tg.length; j++) {
+          h = hit(u, tg[j], u.atk * sk.mul * (0.9 + rnd() * 0.2));
+          ah.push({ d: tg[j].id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 });
+        }
+        if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, hits: ah, lx: c.lx });
+      } else if (id === 'mark') {
+        // 弱点看破: いちばん攻撃力の高い敵(指示があればその敵)
+        if (!foes.length) return;
+        var mk = foes[0];
+        if (u.order !== null && U[u.order].alive) mk = U[u.order];
+        else foes.forEach(function (f1) { if (f1.atk > mk.atk) mk = f1; });
+        markId[1 - u.side] = mk.id; markUntil[1 - u.side] = t + sk.dur;
+        if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, d: mk.id, dur: sk.dur });
       }
     }
+    // 応急手当は、傷ついた味方がいないときは使わずに待つ(AUTO・敵)
+    function healNeeded(side) { return live[side].some(function (x) { return x.hp < x.maxHp * 0.8; }); }
     function manualSkill(u) { return !auto && u.side === 0; }
     // 時刻 T までの行動をすべて処理する
     function step(T) {
@@ -1395,8 +1495,9 @@ var TF = (function () {
         t = bt;
         if (sup >= 0) { useCharge(sup, charges[sup][0]); supNext[sup] = charges[sup].length ? t + K.supGap : Infinity; continue; }
         if (dep >= 0) { deploy(dep, dep === 0 ? bestReserveType() : null); continue; }
+        if (isSk && actor.sk === 'heal' && !healNeeded(actor.side)) { actor.skNext = t + 1; continue; }
         if (isSk) { cast(actor); actor.skLast = t; actor.skNext += SKILL[actor.sk].cd; }
-        else if (attack(actor) !== true) actor.next += actor.cd;
+        else if (attack(actor) !== true) actor.next += actor.cd * (t < hasteUntil[actor.side] ? SKILL.blitz.mul : 1);
         flushKills();
         if (!live[1 - actor.side].length) { winner = actor.side; done = true; }
       }
@@ -1466,7 +1567,7 @@ var TF = (function () {
         var from = u.lane, fx = u.lx, nl = Math.round(lane), dur = 0;
         if (fx !== null && fx !== undefined && Math.abs(lane - fx) < 1e-6) return false;
         // 横への移動には時間がかかる(地形が悪いと遅い)。移動中は撃てない
-        if (TR && fx !== null && fx !== undefined) dur = K.side[u.type] * sideCost(TR, u.type, fx, lane, fightY(0, u.type, u.adv, PO ? fIdx : 3));
+        if (TR && fx !== null && fx !== undefined) dur = K.side[u.type] * sideCost(TR, u.type, fx, lane, fightY(0, u.type, u.adv, PO ? fIdx : 3)) / u.spd;
         u.lane = nl; u.lx = lane; u.trF = -1;
         if (dur > 0) { u.arrT = Math.max(u.arrT, tt + dur); u.next = Math.max(u.next, u.arrT); }
         if (ev) ev.push({ t: tt, k: 'lane', s: u.id, lane: u.lane, lx: lane, from: from, dur: dur });
@@ -1627,7 +1728,7 @@ var TF = (function () {
 
   return {
     K: K, TYPES: TYPES, UNIT: UNIT, AFF: AFF, BLD: BLD, BLD_ORDER: BLD_ORDER, TYPE_BLD: TYPE_BLD,
-    HEROES: HEROES, HERO: HERO, SKILL: SKILL, UNIT_POW: UNIT_POW,
+    HEROES: HEROES, HERO: HERO, SKILL: SKILL, UNIT_POW: UNIT_POW, heroTraits: heroTraits,
     rngFrom: rngFrom, hashInt: hashInt,
     lv: lv, slots: slots, slotsFor: slotsFor, maxLevel: maxLevel, upgradeCost: upgradeCost, canUpgrade: canUpgrade,
     doUpgrade: doUpgrade, prodRate: prodRate, capHours: capHours, settle: settle, storedInfo: storedInfo, collect: collect,
@@ -2034,8 +2135,40 @@ if (typeof module !== 'undefined') module.exports = TF;
     rai: { bg: '#5a4110', uni: '#5b4a33', skin: '#e3b48c',
       head: '<path d="M21 30c-1-5 0-9 2-12M43 30c1-5 0-9-2-12" stroke="#2a211b" stroke-width="3"/><path d="M15 21c0-6 8-11 17-11s17 5 17 11z" fill="#3a3f2e"/><rect x="18" y="20" width="28" height="4" fill="#c9a33c"/><path d="M14 24h36c0 2-3 4-8 4H22c-5 0-8-2-8-4z" fill="#111"/><path d="M33 11l-4 6h3l-2 5 5-7h-3l2-4z" fill="#f1c453"/>',
       face: '<path d="M24 32.5l6 .6M40 32.5l-6 .6" stroke="#2a211b" stroke-width="2" stroke-linecap="round"/><rect x="25.5" y="35.4" width="4" height="2.4" rx="1.2" fill="#1d1a16"/><rect x="34.5" y="35.4" width="4" height="2.4" rx="1.2" fill="#1d1a16"/><path d="M27 44q5 4 10 0" stroke="#7a3a2a" stroke-width="1.8" fill="#fff" stroke-linecap="round"/>',
-      extra: '<rect x="8" y="53" width="10" height="3" rx="1" fill="#c9a33c"/><rect x="46" y="53" width="10" height="3" rx="1" fill="#c9a33c"/>' }
+      extra: '<rect x="8" y="53" width="10" height="3" rx="1" fill="#c9a33c"/><rect x="46" y="53" width="10" height="3" rx="1" fill="#c9a33c"/>' },
+    // 衛生兵: 赤十字の帽子・桃色の髪
+    sakura: { bg: '#6a2d44', uni: '#e9e4d6', skin: '#f3d0b4',
+      head: '<path d="M19 33c-2-12 4-21 13-21s15 9 13 21c-1-5-3-8-5-9-4 3-11 4-17 2-2 2-3 4-4 7z" fill="#e58aa8"/><path d="M18 22c1-8 7-12 14-12s13 4 14 12z" fill="#fff"/><path d="M18 21.5h28v3H18z" fill="#e3ded0"/><rect x="30" y="12.5" width="4" height="9" fill="#d23a3a"/><rect x="27.5" y="15" width="9" height="4" fill="#d23a3a"/><path d="M44 30c3 4 4 10 2 15-1-4-2-8-4-10z" fill="#e58aa8"/>',
+      face: '<path d="M25.5 33.4q2.5-1.4 5 0M33.5 33.4q2.5-1.4 5 0" stroke="#8a4a5a" stroke-width="1.2" fill="none" stroke-linecap="round"/><ellipse cx="28" cy="37" rx="1.9" ry="2.3" fill="#3a2230"/><ellipse cx="36" cy="37" rx="1.9" ry="2.3" fill="#3a2230"/><circle cx="28.6" cy="36.2" r=".7" fill="#fff"/><circle cx="36.6" cy="36.2" r=".7" fill="#fff"/><ellipse cx="25" cy="41" rx="2" ry="1" fill="#f0a0a8" opacity=".6"/><ellipse cx="39" cy="41" rx="2" ry="1" fill="#f0a0a8" opacity=".6"/><path d="M29.5 45q2.5 2 5 0" stroke="#c0505a" stroke-width="1.6" fill="none" stroke-linecap="round"/>',
+      extra: '<rect x="13" y="52" width="9" height="9" rx="1.5" fill="#fff"/><rect x="16.5" y="53.5" width="2" height="6" fill="#d23a3a"/><rect x="14.5" y="55.5" width="6" height="2" fill="#d23a3a"/>' },
+    // 電撃戦: ゴーグル・逆立った髪・赤いマフラー
+    hayate: { bg: '#2b3f66', uni: '#3f4a3a', skin: '#ecc19c',
+      head: '<path d="M18 28l-2-12 6 5 2-10 5 8 3-11 3 11 5-8 2 10 6-5-2 12z" fill="#2a2a33"/><rect x="18" y="24" width="28" height="5" rx="2.5" fill="#5a4a36"/><circle cx="26" cy="26.5" r="4" fill="#ffd36b" stroke="#3a3026" stroke-width="1.6"/><circle cx="38" cy="26.5" r="4" fill="#ffd36b" stroke="#3a3026" stroke-width="1.6"/>',
+      face: '<path d="M25 33l5 1M39 33l-5 1" stroke="#2a2a33" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="28" cy="36.8" rx="1.8" ry="2.2" fill="#1d1a16"/><ellipse cx="36" cy="36.8" rx="1.8" ry="2.2" fill="#1d1a16"/><path d="M28 44q4 3 8 0" stroke="#7a3a2a" stroke-width="1.8" fill="none" stroke-linecap="round"/>',
+      neck: '<path d="M21 47c5-2 17-2 22 0l-1 4H22z" fill="#c8352d"/><path d="M42 48l8 6-3 2-7-5z" fill="#c8352d"/>' },
+    // 煙幕の策士: 黒い長髪・ガスマスクを首に
+    kiri: { bg: '#3a3f46', uni: '#4b5246', skin: '#efd2b8',
+      head: '<path d="M17 50c-3-20 2-38 15-38s18 18 15 38c-2-8-3-14-4-20-5 2-12 2-18-1-3 5-5 12-8 21z" fill="#16181d"/><path d="M20 22c3-6 8-9 13-9 6 0 10 3 12 8-6-2-15-2-25 1z" fill="#24272e"/>',
+      face: '<path d="M25 33.8h5M34 33.8h5" stroke="#2a2a33" stroke-width="1.2" stroke-linecap="round"/><path d="M25.5 37.3q2.5-1.8 5 0M33.5 37.3q2.5-1.8 5 0" stroke="#1d1a16" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M30 44.5h4" stroke="#9a5a58" stroke-width="1.5" stroke-linecap="round"/>',
+      neck: '<ellipse cx="32" cy="51" rx="9" ry="5" fill="#5d6458"/><circle cx="27" cy="51" r="2.6" fill="#2f342c"/><circle cx="37" cy="51" r="2.6" fill="#2f342c"/><rect x="29.5" y="52" width="5" height="5" rx="1" fill="#2f342c"/>' },
+    // 不動の守護者: 大柄・ひげ・大きな鉄帽
+    kuro: { bg: '#3d3226', uni: '#5a5240', skin: '#c99872',
+      head: '<path d="M14 30C14 14 22 8 32 8s18 6 18 22l3 1v3H11v-3z" fill="#4a4e44"/><path d="M11 31h42v3H11z" fill="#383b33"/><path d="M20 20h24" stroke="#5c6155" stroke-width="2"/>',
+      face: '<path d="M23 34l7 .5M41 34l-7 .5" stroke="#2a211b" stroke-width="3" stroke-linecap="round"/><rect x="25.5" y="36" width="4" height="2" rx="1" fill="#1d1a16"/><rect x="34.5" y="36" width="4" height="2" rx="1" fill="#1d1a16"/><path d="M21 41c2 9 6 12 11 12s9-3 11-12c-3 3-7 4-11 4s-8-1-11-4z" fill="#3a2a1e"/><path d="M28 44h8" stroke="#2a1c12" stroke-width="2" stroke-linecap="round"/>',
+      extra: '<path d="M4 64c1-8 6-14 14-16l-2 16zM60 64c-1-8-6-14-14-16l2 16z" fill="#4a4336"/>' },
+    // 空軍連絡将校: 飛行帽・サングラス
+    amagi: { bg: '#1f4a66', uni: '#4d5a6a', skin: '#ebc4a0',
+      head: '<path d="M18 33C17 18 23 11 32 11s15 7 14 22l-3-1c0-9-4-14-11-14s-11 5-11 14z" fill="#6b4a2e"/><path d="M17 31c-2 5-2 10 0 14 2-1 3-3 3-6zM47 31c2 5 2 10 0 14-2-1-3-3-3-6z" fill="#6b4a2e"/><path d="M24 14l8-3 8 3-8 2z" fill="#f1c453"/>',
+      face: '<rect x="22.5" y="33.5" width="8.5" height="5" rx="2.5" fill="#1b2a36"/><rect x="33" y="33.5" width="8.5" height="5" rx="2.5" fill="#1b2a36"/><path d="M31 35.5h2" stroke="#1b2a36" stroke-width="1.4"/><path d="M24 34.5l3 1M35 34.5l3 1" stroke="#8fd3ff" stroke-width=".8" opacity=".8"/><path d="M28.5 44.5q3.5 2.6 7 0" stroke="#7a3a2a" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
+      extra: '<path d="M20 55l6-2 6 3 6-3 6 2-6 2h-12z" fill="#f1c453"/>' },
+    // 情報参謀: 眼鏡・ベレー帽・短い髪
+    ayase: { bg: '#40305a', uni: '#3f4552', skin: '#f2cfb0',
+      head: '<path d="M19 34c-1-12 4-20 13-20s14 8 13 20c-1-4-2-7-4-8-3 2-9 3-15 2-3 1-5 3-7 6z" fill="#5a3a2a"/><path d="M17 20c2-6 9-9 17-8 7 1 12 4 12 8-4 2-11 3-17 3-6 0-10-1-12-3z" fill="#7a2f4a"/><circle cx="41" cy="15" r="1.8" fill="#7a2f4a"/><circle cx="24" cy="20" r="2" fill="#f1c453"/>',
+      face: '<circle cx="27.5" cy="36.5" r="3.6" fill="none" stroke="#2a2a33" stroke-width="1.3"/><circle cx="36.5" cy="36.5" r="3.6" fill="none" stroke="#2a2a33" stroke-width="1.3"/><path d="M31.1 36.5h1.8" stroke="#2a2a33" stroke-width="1.3"/><ellipse cx="27.5" cy="36.8" rx="1.4" ry="1.8" fill="#1d1a16"/><ellipse cx="36.5" cy="36.8" rx="1.4" ry="1.8" fill="#1d1a16"/><path d="M29.5 45q2.5 1.4 5 0" stroke="#b5473e" stroke-width="1.5" fill="none" stroke-linecap="round"/>',
+      extra: '<rect x="40" y="52" width="9" height="11" rx="1" fill="#d9d2c0"/><path d="M42 55h5M42 57.5h5M42 60h3" stroke="#8a8270" stroke-width=".8"/>' }
   };
+  // 指揮官が率いる部隊の強さの倍率(攻撃と耐久をならした値)
+  function heroPow(id, lv, fav) { var h = TF.HERO[id]; return TF.heroMult(lv, fav, id) * Math.sqrt(h.atk * h.hp); }
   function heroSvg(id) {
     var a = HERO_ART[id];
     return '<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="' + a.bg + '"/><circle cx="32" cy="26" r="28" fill="#fff" opacity=".07"/>' +
@@ -2324,15 +2457,18 @@ if (typeof module !== 'undefined') module.exports = TF;
     TF.HEROES.forEach(function (hd) {
       var h = st.heroes[hd.id], sk = TF.SKILL[hd.skill];
       if (!h) {
-        html += '<div class="card hero"><div class="portrait locked">' + heroSvg(hd.id) + '</div><div class="grow"><div class="nm" style="color:var(--dim)">??? </div><div class="ttl">' + hd.title + '</div>' +
-          '<div class="small" style="margin-top:4px">ステージ' + hd.unlock + 'をクリアすると着任</div><div class="skill">固有スキル <b>' + sk.name + '</b>: ' + sk.desc + '</div></div></div>';
+        html += '<div class="card hero"><div class="portrait locked">' + heroSvg(hd.id) + '</div><div class="grow"><div class="nm" style="color:var(--dim)">??? </div><div class="ttl">' + hd.title + ' ・ 得意: ' + TF.UNIT[hd.fav].name + '</div>' +
+          '<div class="small" style="margin-top:4px">ステージ' + hd.unlock + 'をクリアすると着任</div>' +
+          '<div class="traits">' + TF.heroTraits(hd.id).map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>' +
+          '<div class="skill">固有スキル <b>' + sk.name + '</b>: ' + sk.desc + '</div></div></div>';
         return;
       }
       var need = TF.expNeed(h.lv);
       html += '<div class="card hero"><div class="portrait">' + heroSvg(hd.id) + '</div><div class="grow"><div class="row"><span class="nm">' + hd.name + '</span><span class="pill gold">Lv' + h.lv + '</span></div>' +
         '<div class="ttl">' + hd.title + ' ・ 得意: ' + TF.UNIT[hd.fav].name + '</div>' +
         '<div class="row" style="margin-top:4px"><div class="bar grow"><i style="width:' + (h.exp / need * 100).toFixed(1) + '%;background:linear-gradient(90deg,#c99a2e,#f1c453)"></i></div><span class="small num">' + fmt(h.exp) + '/' + fmt(need) + '</span></div>' +
-        '<div class="stats" style="margin-top:2px"><span>率いる部隊 <b>×' + TF.heroMult(h.lv, false).toFixed(2) + '</b></span><span>得意兵種なら <b>×' + TF.heroMult(h.lv, true).toFixed(2) + '</b></span></div>' +
+        '<div class="stats" style="margin-top:2px"><span>率いる部隊 <b>×' + heroPow(hd.id, h.lv, false).toFixed(2) + '</b></span><span>得意兵種なら <b>×' + heroPow(hd.id, h.lv, true).toFixed(2) + '</b></span></div>' +
+        '<div class="traits">' + TF.heroTraits(hd.id).map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>' +
         '<div class="skill">固有スキル <b>' + sk.name + '</b>: ' + sk.desc + '</div>' +
         '<div class="small" style="margin-top:4px">' + (assigned[hd.id] ? '部隊' + assigned[hd.id] + 'を指揮中' : '待機中(出撃画面で配属)') + '</div></div></div>';
     });
@@ -2574,7 +2710,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       st.form.forEach(function (x, j) { if (x.hero === hd.id) where = j; });
       var sel = where === i;
       html += '<button class="bitem" data-act="set-hero" data-i="' + i + '" data-h="' + hd.id + '" style="text-align:left;' + (sel ? 'border-color:var(--ally)' : '') + '"><div class="portrait sm">' + heroSvg(hd.id) + '</div><div class="grow"><div class="nm">' + hd.name + ' <span class="pill gold">Lv' + h.lv + '</span></div>' +
-        '<div class="small">得意: ' + TF.UNIT[hd.fav].name + (hd.fav === f.type ? ' <b style="color:var(--gold)">★得意兵種</b>' : '') + ' / ' + TF.SKILL[hd.skill].name + '</div></div>' +
+        '<div class="small">得意: ' + TF.UNIT[hd.fav].name + (hd.fav === f.type ? ' <b style="color:var(--gold)">★得意兵種</b>' : '') + ' / スキル「' + TF.SKILL[hd.skill].name + '」</div>' +
+        '<div class="small" style="color:var(--khaki)">' + TF.heroTraits(hd.id).slice(0, 3).join('・') + '</div></div>' +
         (sel ? '<span class="pill blue">選択中</span>' : where >= 0 ? '<span class="pill">部隊' + (where + 1) + 'から移動</span>' : '') + '</button>';
     });
     html += '</div><button class="btn wide" style="margin-top:14px" data-act="sheet-close">決定</button>';
@@ -2864,6 +3001,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     openModal('<div class="result"><div class="sub" style="color:var(--gold);font-weight:800;letter-spacing:.2em">新たな指揮官が着任!</div>' +
       '<div style="display:grid;place-items:center;margin:8px 0"><div class="portrait" style="width:120px;height:120px;border-radius:24px;border-color:var(--gold)">' + heroSvg(id) + '</div></div>' +
       '<h2 class="win" style="font-size:26px">' + hd.name + '</h2><div class="sub">' + hd.title + ' ・ Lv' + st.heroes[id].lv + ' ・ 得意: ' + TF.UNIT[hd.fav].name + '</div>' +
+      '<div class="traits" style="justify-content:center">' + TF.heroTraits(id).map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>' +
       '<div class="skill" style="font-size:13px">固有スキル <b>' + sk.name + '</b>: ' + sk.desc + '</div>' +
       '<div class="small" style="margin-top:8px">' + (st.form.some(function (f) { return f.hero === id; }) ? '空いていた部隊に配属しました。' : '出撃画面で部隊に配属しよう。') + '得意兵種を率いると大きく強くなります。</div>' +
       '<div class="btns"><button class="btn wide" data-act="hero-ok">了解!</button></div></div>');
@@ -3887,6 +4025,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     function applyEventInstant(ev) {
       if (ev.k === 'spawn') { spawnVisual(ev); return; }
       if (ev.k === 'lane') { laneMoveVisual(ev, true); return; }
+      if (ev.k === 'refl') { applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); return; }
+      if (ev.k === 'skill' && ev.heals) { ev.heals.forEach(function (h) { var hu = B.units[h.d]; if (hu) { hu.hp = Math.min(hu.maxHp, hu.hp + h.heal); reviveFigs(hu); } }); return; }
       if (ev.k === 'post') { postEvent(ev, true); return; }
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
       else if (ev.hits) ev.hits.forEach(function (h) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); });
@@ -4275,6 +4415,13 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (ev.k === 'sup') { supportEvent(ev); return; }
       var s = B.units[ev.s];
       if (ev.k === 'lane') { laneMoveVisual(ev, false); return; }
+      if (ev.k === 'refl') {
+        // 鉄壁反撃: 撃たれた部隊から撃った部隊へ光が返る
+        var rt = B.units[ev.d];
+        B.beams.push({ x0: s.wx, y0: s.wy, x1: rt.wx, y1: rt.wy, life: 0.25, max: 0.25, c: 'refl' });
+        B.imps.push({ at: B.clock + 0.1, d: ev.d, dmg: ev.dmg, kill: ev.kill, kind: 'at', wx: rt.wx, wy: rt.wy });
+        return;
+      }
       if (ev.k === 'atk') {
         s.aim = ev.d; s.aimT = B.clock;
         var d = B.units[ev.d], fl = FLIGHT[s.type];
@@ -4291,9 +4438,31 @@ if (typeof module !== 'undefined') module.exports = TF;
         spawnVisual(ev);
       } else if (ev.k === 'skill') {
         var hd = TF.HERO[s.hero], sk = TF.SKILL[ev.sk];
-        B.banner = { t: 0, name: hd.name, skill: sk.name, side: s.side, sub: ev.sk === 'charge' ? '味方全体 攻撃力+50%' : ev.sk === 'armor' ? '味方全体 被ダメージ半減' : ev.sk === 'snipe' ? '必中の一撃' : '敵全体へ砲撃' };
+        B.banner = { t: 0, name: hd.name, skill: sk.name, side: s.side, sub: sk.short };
         if (ev.sk === 'charge') B.buff[s.side].atk = B.clock + ev.dur;
         else if (ev.sk === 'armor') B.buff[s.side].arm = B.clock + ev.dur;
+        else if (ev.sk === 'blitz') B.buff[s.side].haste = B.clock + ev.dur;
+        else if (ev.sk === 'smoke') { B.buff[1 - s.side].smoke = B.clock + ev.dur; B.units.forEach(function (v) { if (v.side !== s.side && !v.dead) for (var q = 0; q < 5; q++) part(v.wx + (Math.random() - 0.5) * 24, v.wy + (Math.random() - 0.5) * 10, { vx: (Math.random() - 0.5) * 10, vy: -6, life: 2.2, max: 2.2, r: 5 + Math.random() * 4, c: 'smoke' }); }); }
+        else if (ev.sk === 'reflect') B.buff[s.side].refl = B.clock + ev.dur;
+        else if (ev.sk === 'mark') { B.mark = B.mark || [null, null]; B.mark[1 - s.side] = { d: ev.d, until: B.clock + ev.dur }; text(B.units[ev.d].wx, B.units[ev.d].wy, '弱点発見!', '#ff8a7a', 15, 44); }
+        else if (ev.sk === 'heal') {
+          ev.heals.forEach(function (h) {
+            var hu = B.units[h.d];
+            if (!hu) return;
+            hu.hp = Math.min(hu.maxHp, hu.hp + h.heal); reviveFigs(hu);
+            text(hu.wx, hu.wy, '+' + fmt(Math.round(h.heal / hu.maxHp * hu.troop)) + '人', '#9cffb0', 15, 38);
+            for (var q = 0; q < 6; q++) part(hu.wx + (Math.random() - 0.5) * 14, hu.wy, { vx: (Math.random() - 0.5) * 8, vy: -22 - Math.random() * 14, life: 0.9, r: 1.1, c: 'heal' });
+          });
+        } else if (ev.sk === 'air') {
+          // 爆撃機が横切りながら、密集地に爆弾を落とす
+          var ax0 = LANES[0] - 70, ax1 = LANES[LANES.length - 1] + 70, ys = ev.hits.map(function (h) { return B.units[h.d].wy; }), my = ys.length ? ys.reduce(function (a, b) { return a + b; }, 0) / ys.length : B.front;
+          B.air.push({ kind: 'air', side: s.side, x0: ax0, y0: my, x1: ax1, y1: my, t0: B.clock, t1: B.clock + 1.6 });
+          ev.hits.forEach(function (h) {
+            var dd = B.units[h.d], w = figWorld(dd), ts = B.clock + 0.3 + (dd.wx - ax0) / (ax1 - ax0) * 1.4;
+            B.imps.push({ at: ts, d: h.d, dmg: 0, kind: 'rocket', wx: w.x - 4, wy: w.y, big: true, fx: true });
+            B.imps.push({ at: ts + 0.12, d: h.d, dmg: h.dmg, kill: h.kill, kind: 'rocket', wx: w.x, wy: w.y, big: true, crit: 1 });
+          });
+        }
         else if (ev.sk === 'snipe') {
           ev.hits.forEach(function (h) {
             var d2 = B.units[h.d];
@@ -4354,6 +4523,12 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.texts.push({ wx: wx, wy: wy, lift: (lift || 26) + Math.min(n, 3) * 16, rise: 0, jx: (Math.random() - 0.5) * 10, s: s, c: color, size: size || 15, life: 1.0, max: 1.0 });
     }
     // 兵力(HP)に合わせて、倒れた兵士・壊れた車両を地面に残す
+    // 回復したら、倒れていた兵士が立ち上がる
+    function reviveFigs(u) {
+      if (u.dead || u.hp <= 0) return;
+      var want = Math.max(1, Math.ceil(u.hp / u.maxHp * u.figs.length)), alive = aliveFigs(u).length;
+      for (var i = 0; i < u.figs.length && alive < want; i++) if (!u.figs[i].alive) { u.figs[i].alive = true; alive++; }
+    }
     function syncFigs(u, quiet) {
       var want = u.hp <= 0 ? 0 : Math.max(1, Math.ceil(u.hp / u.maxHp * u.figs.length));
       var alive = aliveFigs(u);
@@ -4498,6 +4673,25 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.fillStyle = 'rgba(255,255,255,.25)';
         cx.beginPath(); cx.ellipse(c.x, c.y - 4 * c.k, bw, bw * 0.5, 0, 0, Math.PI * 2); cx.fill();
       }
+      if (!u.dead && B.buff[u.side].haste > B.clock) {
+        // 電撃戦: 足元に黄色い流線
+        cx.strokeStyle = 'rgba(255,226,90,' + (0.55 + 0.3 * Math.sin(B.clock * 20)) + ')'; cx.lineWidth = 2;
+        for (var hs = -1; hs <= 1; hs++) { cx.beginPath(); cx.moveTo(c.x - bw * 1.3, c.y + hs * 3); cx.lineTo(c.x - bw * 0.6, c.y + hs * 3); cx.stroke(); }
+      }
+      if (!u.dead && B.buff[u.side].refl > B.clock) {
+        // 鉄壁反撃: とげのある金色の輪
+        cx.save(); cx.strokeStyle = 'rgba(255,214,100,.85)'; cx.lineWidth = 1.6; cx.beginPath();
+        for (var sp = 0; sp < 16; sp++) { var an = sp / 16 * Math.PI * 2 + B.clock, rr = sp % 2 ? bw * 1.05 : bw * 1.3; cx.lineTo(c.x + Math.cos(an) * rr, c.y - 3 * c.k + Math.sin(an) * rr * 0.45); }
+        cx.closePath(); cx.stroke(); cx.restore();
+      }
+      if (!u.dead && B.mark && B.mark[u.side] && B.mark[u.side].d === u.id && B.mark[u.side].until > B.clock) {
+        // 弱点看破: 赤い照準
+        var mr = Math.max(14, bw * 1.2), my2 = c.y - 6 * c.k;
+        cx.save(); cx.strokeStyle = 'rgba(255,70,60,' + (0.7 + 0.25 * Math.sin(B.clock * 9)) + ')'; cx.lineWidth = 2;
+        cx.beginPath(); cx.arc(c.x, my2, mr, 0, Math.PI * 2); cx.stroke();
+        cx.beginPath(); cx.moveTo(c.x - mr - 5, my2); cx.lineTo(c.x - mr + 5, my2); cx.moveTo(c.x + mr - 5, my2); cx.lineTo(c.x + mr + 5, my2); cx.moveTo(c.x, my2 - mr - 5); cx.lineTo(c.x, my2 - mr + 5); cx.stroke(); cx.restore();
+      }
+      if (!u.dead && B.buff[u.side].smoke > B.clock && Math.random() < 0.08) part(u.wx + (Math.random() - 0.5) * 20, u.wy, { vx: (Math.random() - 0.5) * 8, vy: -5, life: 1.8, max: 1.8, r: 4 + Math.random() * 3, c: 'smoke' });
       if (!u.dead && B.buff[u.side].arm > B.clock) {
         cx.save();
         cx.globalAlpha = 0.55 + 0.25 * Math.sin(B.clock * 8);
@@ -4601,6 +4795,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (x < -40 || x > W + 40 || y < -40 || y > H + 40) return;
         var a = Math.max(0, p.life / p.max);
         if (p.c === 'fire') { cx.fillStyle = 'rgba(255,' + Math.round(120 + 120 * a) + ',' + Math.round(40 * a) + ',' + (a * 0.9) + ')'; cx.beginPath(); cx.arc(x, y, r * (0.6 + 0.6 * (1 - a)), 0, Math.PI * 2); cx.fill(); }
+        else if (p.c === 'heal') { cx.fillStyle = 'rgba(140,255,160,' + (a * 0.9) + ')'; cx.font = '900 ' + Math.max(8, Math.round(r * 6)) + 'px sans-serif'; cx.textAlign = 'center'; cx.fillText('+', x, y); }
         else if (p.c === 'smoke' || p.c === 'dust') { cx.fillStyle = (p.c === 'dust' ? 'rgba(200,185,150,' : 'rgba(70,70,64,') + (a * 0.5) + ')'; cx.beginPath(); cx.arc(x, y, r * (1 + (1 - a)), 0, Math.PI * 2); cx.fill(); }
         else if (p.c === 'debris') { cx.fillStyle = 'rgba(60,50,40,' + a + ')'; cx.fillRect(x, y, r * 1.6 + 0.8, r * 1.6 + 0.8); }
         else if (p.c === 'shock') {
@@ -4673,7 +4868,12 @@ if (typeof module !== 'undefined') module.exports = TF;
     function drawBanner() {
       var b = B.banner; if (!b) return;
       var k = b.t < 0.18 ? b.t / 0.18 : b.t > 1.0 ? 1 - (b.t - 1.0) / 0.2 : 1;
-      var h = 58, y = H - h - 14;
+      // 下のスキルボタンに隠れないよう、その上に出す
+      if (b.y === undefined) {
+        var sbEl = $('skillBar'), cvr = cv.getBoundingClientRect(), sbr = sbEl && !sbEl.classList.contains('hidden') ? sbEl.getBoundingClientRect() : null;
+        b.y = Math.min(H - 58 - 14, sbr && sbr.height ? sbr.top - cvr.top - 58 - 8 : H);
+      }
+      var h = 58, y = b.y;
       var off = (1 - Math.min(1, b.t / 0.18)) * W * (b.side ? 1 : -1);
       cx.save(); cx.globalAlpha = Math.max(0, k);
       var g = cx.createLinearGradient(0, 0, W, 0);
@@ -4739,7 +4939,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         var a = bm.life / bm.max, pa = proj(bm.x0, bm.y0), pb = proj(bm.x1, bm.y1);
         cx.strokeStyle = 'rgba(255,240,180,' + a + ')'; cx.lineWidth = 6 * a + 1;
         cx.beginPath(); cx.moveTo(pa.x, pa.y - 6); cx.lineTo(pb.x, pb.y - 6); cx.stroke();
-        cx.strokeStyle = 'rgba(255,80,60,' + a + ')'; cx.lineWidth = 2;
+        cx.strokeStyle = bm.c === 'refl' ? 'rgba(255,214,100,' + a + ')' : 'rgba(255,80,60,' + a + ')'; cx.lineWidth = 2;
         cx.beginPath(); cx.moveTo(pa.x, pa.y - 6); cx.lineTo(pb.x, pb.y - 6); cx.stroke();
       });
       drawOrders();
@@ -5294,6 +5494,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
       },
       // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標
+      lastSkill: function () { if (!B) return null; var e = B.ev.slice(0, B.ei).filter(function (x) { return x.k === 'skill' && B.units[x.s] && B.units[x.s].side === 0; }).pop(); return e ? e.sk : null; },
       worldToScreen: function (x, y) { if (!B) return null; var p = proj(x, y); return { x: p.x, y: p.y }; },
       debugForm: function () { return B && B.phase === 'deploy' ? deployForm() : null; },
       frontPoint: function (x, rel) { if (!B) return null; var p = proj(x, frontAt(x) + rel); return { x: p.x, y: p.y }; } };

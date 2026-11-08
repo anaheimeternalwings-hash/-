@@ -797,10 +797,14 @@ function midState(over) {
     }, midState()));
   }
 
-  await test('部隊の画面に兵種ごとの射程が出る。アイテム一覧の✕は下までスクロールしても見えている', () => withPage('iPhone SE', async page => {
+  await test('部隊の画面に兵種ごとの射程と10人の指揮官(特徴・スキル)が出る。アイテム一覧の✕は下までスクロールしても見えている', () => withPage('iPhone SE', async page => {
     await page.click('[data-act="tab"][data-tab="army"]');
     const txt = await page.textContent('#scr-army');
     assert(txt.includes('射程') && txt.includes('左右2列'), '射程が出ない');
+    // 指揮官は10人(まだの指揮官も、着任するステージ・特徴・スキルが見える)
+    assert.strictEqual(await page.locator('#scr-army .card.hero').count(), 10, '指揮官が10人いない');
+    assert(await page.locator('#scr-army .card.hero .traits span').count() >= 20, '指揮官の特徴が出ない');
+    assert(txt.includes('応急手当') && txt.includes('弱点看破') && txt.includes('ステージ75'), 'まだの指揮官の情報が出ない');
     await page.click('#top [data-act="items"]');
     await page.waitForSelector('#sheetWrap:not(.hidden) .itemlist');
     await page.evaluate(() => { const s = document.getElementById('sheet'); s.scrollTop = s.scrollHeight; });
