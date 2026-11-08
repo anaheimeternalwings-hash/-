@@ -243,10 +243,12 @@ function midState(over) {
     await page.waitForSelector('#battle:not(.hidden)');
     assert(!(await page.isVisible('#btnAuto.on')), 'AUTOがONのまま');
     await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
-    // 自軍の部隊から敵の部隊へドラッグ
+    // 自軍の部隊から敵の部隊へドラッグ(見えている敵だけ狙える。索敵範囲に入るまで待つ)
+    await page.waitForFunction(() => window.__game.battle.debug().units.some(u => u.side === 1 && u.alive && u.vis), null, { timeout: 15000 });
+    await page.waitForTimeout(300);
     const dbg = await page.evaluate(() => window.__game.battle.debug());
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
-    const a = dbg.units.find(u => u.side === 0 && u.alive), e = dbg.units.filter(u => u.side === 1 && u.alive).pop();
+    const a = dbg.units.find(u => u.side === 0 && u.alive), e = dbg.units.filter(u => u.side === 1 && u.alive && u.vis).pop();
     await page.mouse.move(box.x + a.x, box.y + a.y - 6);
     await page.mouse.down();
     for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + a.x + (e.x - a.x) * i / 6, box.y + a.y - 6 + (e.y - a.y) * i / 6);
