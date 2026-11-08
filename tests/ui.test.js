@@ -278,9 +278,10 @@ function midState(over) {
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d.phase === 'fight' && d.clock > 3; }, null, { timeout: 15000 });
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
     // 敵の部隊の上に落とすと攻撃指示になるので、敵から離れた地点を探してなぞる(下のボタンに隠れていない所)
-    async function dragTo(u0, rel) {
+    // なぞる直前に、まだ生きている自軍の部隊を選ぶ(戦闘中なので先にやられることがある)
+    async function dragTo(rel, skip) {
       await page.waitForTimeout(300);
-      const u = await page.evaluate(id => window.__game.battle.debug().units.find(x => x.id === id), u0.id); // 動いた後の今の位置
+      const u = await page.evaluate(no => window.__game.battle.debug().units.find(x => x.side === 0 && x.alive && !x.reserve && x.id !== no), skip); // 動いた後の今の位置
       const p = await page.evaluate(([wx, r]) => {
         const d = window.__game.battle.debug(), foes = d.units.filter(f => f.side === 1 && f.alive);
         const cv = document.getElementById('bcv').getBoundingClientRect(), lim = document.getElementById('skillBar').getBoundingClientRect().top - cv.top - 12;
@@ -296,12 +297,11 @@ function midState(over) {
       await page.mouse.down();
       for (let i = 1; i <= 8; i++) await page.mouse.move(box.x + u.x + (p.x - u.x) * i / 8, box.y + u.y - 6 + (p.y - u.y + 6) * i / 8);
       await page.mouse.up();
+      return u;
     }
+    const a = await dragTo(14, -1);
+    const b = await dragTo(-60, a.id);
     let d = await page.evaluate(() => window.__game.battle.debug());
-    const [a, b] = d.units.filter(u => u.side === 0 && u.alive);
-    await dragTo(a, 14);
-    await dragTo(b, -60);
-    d = await page.evaluate(() => window.__game.battle.debug());
     const ua = d.units.find(u => u.id === a.id), ub = d.units.find(u => u.id === b.id);
     assert.strictEqual(ua.stance, 1, '前進にならない');
     assert.strictEqual(ub.stance, -1, '後退にならない');

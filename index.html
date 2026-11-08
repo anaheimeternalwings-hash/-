@@ -3457,12 +3457,26 @@ if (typeof module !== 'undefined') module.exports = TF;
       var i = fx | 0, j = fy | 0, ax = fx - i, ay = fy - j, n = g.nx, h = g.h, o = j * n + i;
       return (h[o] * (1 - ax) + h[o + 1] * ax) * (1 - ay) + (h[o + n] * (1 - ax) + h[o + n + 1] * ax) * ay;
     }
-    // 画面上の点 → 地面上の点
-    function unproj(sx, sy) {
+    // 画面上の点 → 平らな地面上の点(カメラの移動・地面の描画用)
+    function unprojFlat(sx, sy) {
       var a = (CY - sy) / FP, den = SN - a * CS;
       if (den < 0.04) den = 0.04;
       var dy = a * CAM.D / den, zc = CAM.D + dy * CS;
       return { x: CAM.x + (sx - W / 2) * zc / FP, y: CAM.y + dy, zc: zc };
+    }
+    // 画面上の点 → 地面上の点(丘の上なら、その高さぶん手前の地点。指で触った場所そのもの)
+    function unproj(sx, sy) {
+      var w = unprojFlat(sx, sy);
+      if (!ELEV) return w;
+      for (var i = 0; i < 6; i++) {
+        var e = elevAt(w.x, w.y);
+        if (e <= 0 && i === 0) return w;
+        var n = unprojFlat(sx, sy + e * FP / Math.max(30, w.zc));
+        n.x = w.x + (n.x - w.x) * 0.7; n.y = w.y + (n.y - w.y) * 0.7; n.zc = w.zc + (n.zc - w.zc) * 0.7;
+        if (Math.abs(n.y - w.y) < 0.05 && Math.abs(n.x - w.x) < 0.05) return n;
+        w = n;
+      }
+      return w;
     }
     function clampCam() {
       CAM.z = Math.max(ZMIN, Math.min(ZMAX, CAM.z));
@@ -3785,7 +3799,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       g.imageSmoothingEnabled = true;
       var band = 3;
       for (var sy = 0; sy < H; sy += band) {
-        var top = unproj(W / 2, sy), bot = unproj(W / 2, sy + band), mid = unproj(W / 2, sy + band / 2);
+        var top = unprojFlat(W / 2, sy), bot = unprojFlat(W / 2, sy + band), mid = unprojFlat(W / 2, sy + band / 2);
         var half = (W / 2) * mid.zc / FP;
         var x0 = (mid.x - half - MAP.x0) * TEXPPU, x1 = (mid.x + half - MAP.x0) * TEXPPU;
         var y0 = (MAP.y1 - top.y) * TEXPPU, y1 = (MAP.y1 - bot.y) * TEXPPU;
@@ -4175,6 +4189,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     var CAMD = { y: DEP.y1 + 18 }; // 配置のときの視点(下は配置の操作パネルに隠れるので、自軍の出撃線を画面の中ほどに)
     function updateCam(rdt) {
       if (B.userCam) return;
+      // 部隊をなぞっている間と、指を離してすぐは視点を動かさない(狙った場所がずれないように)
+      if (B.phase !== 'deploy' && (B.drag || (B.camHold && performance.now() < B.camHold))) return;
       if (B.ending) B.camTY = B.front + 4;
       else if (Math.abs(B.front + 14 - B.camTY) > 14) B.camTY = B.front + 14; // 前線が大きく動いたときだけ追う
       var k = Math.min(1, rdt * (B.ending ? 2.4 : B.phase === 'intro' ? (B.introT < 0.9 ? 0.35 : 1.3) : 1.6));
@@ -5394,7 +5410,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         // 2本指: 拡大・縮小(指示やスクロールは取り消し)
         B.drag = null; B.pan = null;
         var pi = pinchInfo();
-        B.pinch = { d0: pi.d, z0: CAM.z, world: unproj(pi.x, pi.y) };
+        B.pinch = { d0: pi.d, z0: CAM.z, world: unprojFlat(pi.x, pi.y) };
         return;
       }
       if (B.ending) return;
@@ -5404,7 +5420,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       var u = !B.auto && B.phase !== 'deploy' ? pickSquad(pt, 0) : null;
       if (u) { B.drag = { u: u, x0: pt.x, y0: pt.y, x: pt.x, y: pt.y, moved: false, hover: null }; return; }
-      B.pan = { world: unproj(pt.x, pt.y), x0: pt.x, y0: pt.y, moved: false };
+      B.pan = { world: unprojFlat(pt.x, pt.y), x0: pt.x, y0: pt.y, moved: false };
     }
     function onMove(e) {
       if (!B || !B.ptrs[e.pointerId]) return;
@@ -5415,7 +5431,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         var pi = pinchInfo();
         CAM.z = B.pinch.z0 * pi.d / B.pinch.d0;
         clampCam();
-        var now = unproj(pi.x, pi.y);
+        var now = unprojFlat(pi.x, pi.y);
         CAM.x += B.pinch.world.x - now.x; CAM.y += B.pinch.world.y - now.y;
         clampCam();
         userCamOn();
@@ -5431,7 +5447,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.pan) {
         if (!B.pan.moved && Math.hypot(pt.x - B.pan.x0, pt.y - B.pan.y0) < 8) return;
         B.pan.moved = true;
-        var w = unproj(pt.x, pt.y);
+        var w = unprojFlat(pt.x, pt.y);
         CAM.x += B.pan.world.x - w.x; CAM.y += B.pan.world.y - w.y;
         clampCam();
         userCamOn();
@@ -5445,6 +5461,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.drag) {
         var d = B.drag;
         B.drag = null;
+        B.camHold = performance.now() + 2000;
         if (d.u.dead) return;
         if (d.deploy) {
           if (!d.moved) { showHint('部隊をドラッグして、配置エリアの好きな場所に置けます', 1.8); return; }
@@ -5484,10 +5501,10 @@ if (typeof module !== 'undefined') module.exports = TF;
       c.addEventListener('wheel', function (e) {
         if (!B) return;
         e.preventDefault();
-        var pt = localPt(e), before = unproj(pt.x, pt.y);
+        var pt = localPt(e), before = unprojFlat(pt.x, pt.y);
         CAM.z *= e.deltaY < 0 ? 1.1 : 1 / 1.1;
         clampCam();
-        var after = unproj(pt.x, pt.y);
+        var after = unprojFlat(pt.x, pt.y);
         CAM.x += before.x - after.x; CAM.y += before.y - after.y;
         clampCam();
         userCamOn();
@@ -5551,7 +5568,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, deployCard: deployCard, launchSupport: launchSupport, deployGo: deployGo, deployAuto: deployAuto, active: function () { return !!B; },
       debug: function () {
         if (!B) return null;
-        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, fog: !!B.fog, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
+        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, fog: !!B.fog, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
           captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
           walls: B.walls.filter(function (w) { return w.ok; }).length, wallsTotal: B.walls.length,
           ruins: B.blds.filter(function (b) { return b.ruin; }).length,
@@ -5572,7 +5589,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       lastSkill: function () { if (!B) return null; var e = B.ev.slice(0, B.ei).filter(function (x) { return x.k === 'skill' && B.units[x.s] && B.units[x.s].side === 0; }).pop(); return e ? e.sk : null; },
       worldToScreen: function (x, y) { if (!B) return null; var p = proj(x, y); return { x: p.x, y: p.y }; },
       debugForm: function () { return B && B.phase === 'deploy' ? deployForm() : null; },
-      frontPoint: function (x, rel) { if (!B) return null; var p = proj(x, frontAt(x) + rel); return { x: p.x, y: p.y }; } };
+      frontPoint: function (x, rel) { if (!B) return null; var p = proj(x, frontAt(x) + rel); return { x: p.x, y: p.y }; },
+      // テスト用: 画面の点 → 地面の点と、前線からの距離
+      screenToWorld: function (sx, sy) { if (!B) return null; var w = unproj(sx, sy); return { x: w.x, y: w.y, rel: w.y - frontAt(w.x) }; } };
   })();
 
   // ====== アプリのアイコン(ホーム画面用PNGを生成) ======
