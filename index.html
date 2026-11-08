@@ -1193,8 +1193,19 @@ var TF = (function () {
       }
       return { wr: w / k, sc: sc / k };
     }
-    var cur = [];
-    for (var i = 0; i < n; i++) cur.push(refTypes[0]);
+    // 基準軍もプレイヤーと同じ編成の上限を守る(兵種が1つしかないうちは別)
+    function capOk(arr) {
+      if (refTypes.length < 2) return true;
+      var c = {};
+      for (var q = 0; q < arr.length; q++) { c[arr[q]] = (c[arr[q]] || 0) + 1; if (c[arr[q]] > K.typeCap[arr[q]]) return false; }
+      return true;
+    }
+    var cur = [], cc = {};
+    for (var i = 0; i < n; i++) {
+      var pick = refTypes[0];
+      if (refTypes.length > 1) for (var r0 = 0; r0 < refTypes.length; r0++) { if ((cc[refTypes[r0]] || 0) < K.typeCap[refTypes[r0]]) { pick = refTypes[r0]; break; } }
+      cc[pick] = (cc[pick] || 0) + 1; cur.push(pick);
+    }
     if (refTypes.length > 1) {
       var best = evalAt(cur, 1, 8).sc;
       for (var pass = 0; pass < 2; pass++) {
@@ -1203,6 +1214,7 @@ var TF = (function () {
           for (var k = 0; k < refTypes.length; k++) {
             if (cur[i] === refTypes[k]) continue;
             var cand = cur.slice(); cand[i] = refTypes[k];
+            if (!capOk(cand)) continue;
             var sc = evalAt(cand, 1, 8).sc;
             if (sc > best + 1e-6) { best = sc; cur = cand; improved = true; }
           }
