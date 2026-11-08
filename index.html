@@ -268,6 +268,11 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .skb.ready{border-color:var(--gold);background:#3a3415;animation:pulse 1s infinite}
 .skb.ready .st{color:var(--gold);font-weight:900}
 .skb.dead{opacity:.35}
+/* 指揮官が多いとき(6人以上): 顔とスキル名だけの小さいボタン */
+.skillbar.many{gap:4px;padding:6px 6px 0}
+.skillbar.many .skb{flex-direction:column;justify-content:center;gap:1px;padding:4px 2px 7px;min-height:56px;text-align:center}
+.skillbar.many .skb .st{display:none}
+.skillbar.many .skb .nm{font-size:10px}
 .deploybar{position:absolute;left:6px;right:6px;bottom:6px;z-index:4;background:rgba(14,19,12,.9);border:1px solid #4a5a3a;border-radius:14px;padding:7px 9px;color:var(--text);font-size:11.5px;line-height:1.4}
 .deploybar .tt{font-weight:900;font-size:14px;color:var(--gold)}
 .deploybar .trn{display:flex;flex-wrap:nowrap;gap:4px;margin:6px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -982,6 +987,22 @@ var TF = (function () {
     });
     return out;
   }
+  // 敵の布陣は戦闘が始まるまで見えない(敵もこちらの布陣は見えない)。
+  // 見えないときの列の選び方: 自分の側の地形(戦う場所の効果・通り道の速さ)だけで決め、同じ列に集まりすぎないようにする
+  function blindScore(T, side, t, L, cnt) {
+    var own = fightTerr(T, side, t, L), sp = t === 'art' ? 1 : K.app[t] / terrMove('plain', t) / Math.max(0.05, arrivalTime(T, side, t, L));
+    return 0.6 * (terrAtk(own, t) / terrTake(own, t) - 1) + 0.25 * (sp - 1) - 0.35 * cnt[L] - Math.abs(L - (K.laneN - 1) / 2) * 0.03;
+  }
+  function blindLanes(types, T) {
+    var cnt = [], out = [];
+    for (var L = 0; L < K.laneN; L++) cnt.push(0);
+    types.forEach(function (t) {
+      var best = (K.laneN - 1) >> 1, bs = -1e9;
+      for (var L2 = 0; L2 < K.laneN; L2++) { var sc = blindScore(T, 0, t, L2, cnt); if (sc > bs) { bs = sc; best = L2; } }
+      cnt[best]++; out.push(best);
+    });
+    return out;
+  }
   function enemyTotal(s) {
     var ease = s < 12 ? 0.75 + 0.25 * (s - 1) / 11 : 1; // 序盤はやさしく
     return (K.enB + K.enA * Math.pow(s, K.enP) + K.enC * s * s) * ease * armRef(s) * heroRef(s);
@@ -1004,7 +1025,9 @@ var TF = (function () {
   function refBreakEven(eSquads, refTypes, terrain) {
     var n = eSquads.length, sopt = terrain ? { terrain: terrain } : undefined;
     function evalAt(arr, x, k) {
-      var p = arr.map(function (t, j) { var q = makeSquad(t, x); if (terrain) q.lane = eSquads[j % n].lane; return q; });
+      // 基準軍も敵の布陣は見えないので、地形だけで列を決める
+      var bl = terrain ? blindLanes(arr, terrain) : null;
+      var p = arr.map(function (t, j) { var q = makeSquad(t, x); if (bl) q.lane = bl[j]; return q; });
       var w = 0, sc = 0;
       for (var i = 0; i < k; i++) {
         var r = simulate(p, eSquads, 5000 + i * 7919, false, sopt);
@@ -1138,17 +1161,10 @@ var TF = (function () {
     out.forEach(function (f) { if (f.lane !== null && f.lane !== undefined) cnt[f.lane]++; });
     var order = out.map(function (f, i) { return i; }).filter(function (i) { return out[i].lane === null || out[i].lane === undefined; });
     order.sort(function (a, b) { return squadMult(st, out[b].type, out[b].hero) * UNIT_POW[out[b].type] - squadMult(st, out[a].type, out[a].hero) * UNIT_POW[out[a].type]; });
+    // 敵の布陣は見えないので、地形だけで決める(強い部隊から順に、良い地形の列へ。集まりすぎないように)
     order.forEach(function (i) {
       var t = out[i].type, best = (K.laneN - 1) >> 1, bs = -1e9;
-      for (var L2 = 0; L2 < K.laneN; L2++) {
-        var sc = 0, own = fightTerr(T, 0, t, L2), sp = t === 'art' ? 1 : K.app[t] / terrMove('plain', t) / Math.max(0.05, arrivalTime(T, 0, t, L2));
-        info.enemies.forEach(function (e) {
-          var d = Math.abs(e.lane - L2), w = (t === 'art' ? K.laneAimArt : K.laneAim)[d];
-          sc += w * e.power * (AFF[t][e.type] * terrTake(fightTerr(T, 1, e.type, e.lane), e.type) - AFF[e.type][t] * terrTake(own, t) * 0.8);
-        });
-        sc = sc / (info.power || 1) + 0.6 * (terrAtk(own, t) / terrTake(own, t) - 1) + 0.25 * (sp - 1) - 0.35 * cnt[L2];
-        if (sc > bs) { bs = sc; best = L2; }
-      }
+      for (var L2 = 0; L2 < K.laneN; L2++) { var sc = blindScore(T, 0, t, L2, cnt); if (sc > bs) { bs = sc; best = L2; } }
       out[i].lane = best; cnt[best]++;
     });
     return out;
@@ -1632,6 +1648,18 @@ var TF = (function () {
     return { winRate: wins / n, score: sc / n };
   }
   function predict(st, form, s, n) { return evalForm(st, normalizeForm(st, form), s, n || 100, 424242); }
+  // 配置画面の予想勝率: 敵の布陣は見えないので、地形に合わせた敵の布陣をいくつか想定して平均する(本当の布陣は使わない)
+  function predictBlind(st, form, s, n) {
+    var info = stageInfo(s), types = info.enemies.map(function (e) { return e.type; }), KN = 4, wins = 0, tot = 0;
+    var p = formSquads(st, autoLanes(st, normalizeForm(st, form), s)), res = { reserves: battleReserves(st, s), posts: true, terrain: info.terrain };
+    var per = Math.max(1, Math.ceil((n || 40) / KN));
+    for (var k = 0; k < KN; k++) {
+      var lanes = enemyLanes(types, info.terrain, s * 7 + 1009 * (k + 1));
+      var e = info.enemies.map(function (q, i) { var c = {}; for (var key in q) c[key] = q[key]; c.lane = lanes[i]; return c; });
+      for (var i = 0; i < per; i++) { var r = simulate(p, e, 424242 + i * 7919 + k * 31, false, res); tot++; if (r.win) wins++; }
+    }
+    return { winRate: wins / tot };
+  }
 
   // おまかせ編成: 兵種の組み合わせ(重複組合せ)を総当たりし、上位を精査して決める
   function autoFormation(st, s, nSims) {
@@ -1742,7 +1770,7 @@ var TF = (function () {
     freeSlots: freeSlots, typeUnlocked: typeUnlocked, unlockedTypes: unlockedTypes, unitMult: unitMult, labMult: labMult,
     heroMult: heroMult, squadMult: squadMult, squadStats: squadStats, makeSquad: makeSquad, expNeed: expNeed, addHeroExp: addHeroExp,
     enemyCount: enemyCount, enemyTotal: enemyTotal, stageInfo: stageInfo, stageReward: stageReward, normalizeForm: normalizeForm, formSquads: formSquads,
-    assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, autoFormation: autoFormation,
+    assignHeroes: assignHeroes, simulate: simulate, createBattle: createBattle, battleReserves: battleReserves, reserveCount: reserveCount, enemyReserveCount: enemyReserveCount, evalForm: evalForm, predict: predict, predictBlind: predictBlind, blindLanes: blindLanes, autoFormation: autoFormation,
     prepareBattle: prepareBattle, applyResult: applyResult, newState: newState,
     POST_KIND: POST_KIND, POST_ORDER: POST_ORDER, SUPPORT: SUPPORT,
     TERRAIN: TERRAIN, TERRAIN_KEYS: TERRAIN_KEYS, terrAtk: terrAtk, terrTake: terrTake, terrMove: terrMove, laneW: laneW,
@@ -3893,7 +3921,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         biome: biomeOf(prep.info.place), seed: prep.info.s * 131,
         projs: [], imps: [], parts: [], texts: [], marks: [], pillars: [], beams: [], sights: [], air: [], supKey: null,
         banner: null, shake: 0, buff: [{ atk: -1, arm: -1 }, { atk: -1, arm: -1 }],
-        phase: opts.deploy ? 'deploy' : 'intro', introT: 0, ending: 0, endT: 0, front: F0, colOff: LANES.map(function () { return 0; }), wave: 0, camTY: F0 + 14,
+        phase: opts.deploy ? 'deploy' : 'intro', introT: 0, ending: 0, fog: true, endT: 0, front: F0, colOff: LANES.map(function () { return 0; }), wave: 0, camTY: F0 + 14,
         prep: prep, seedB: seed, onDeploy: opts.onDeploy || null
       };
       SPR = null; // 武装の見た目を反映し直す
@@ -4025,7 +4053,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     function skip() {
       if (!B || B.ending) return;
       if (B.phase === 'deploy') deployGo();
-      B.phase = 'fight';
+      B.phase = 'fight'; B.fog = false;
       B.eng.setAuto(true, B.clock);
       B.eng.step(Infinity); // 残りは自動で決着
       while (B.ei < B.ev.length) applyEventInstant(B.ev[B.ei++]);
@@ -4048,6 +4076,13 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.userCam = false; $('camReset').classList.add('hidden');
     }
     function fxNow() { return B.introT + B.clock + B.endT; }
+    // 戦闘開始: 見えなかった敵の布陣が判明する
+    function revealEnemies() {
+      if (!B.fog) return;
+      B.fog = false;
+      B.units.forEach(function (u, i) { if (u.side === 1 && !u.dead) B.pillars.push({ wx: u.wx, wy: u.wy, side: 1, t: fxNow() + 0.06 * i, big: 1.1 }); });
+      text(CXW, B.front + 40, '敵の布陣が判明!', '#ffb3a8', 17, 40);
+    }
     // 部隊が戦う場所の地形の効果(攻撃・守り)を、部隊の上に出す
     function terrNote(u) {
       var e = B.eng.U[u.id], pi = B.eng.postInfo ? B.eng.postInfo() : null;
@@ -4173,7 +4208,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         // 配置中: 時間は進めない
       } else if (B.phase === 'intro') {
         B.introT += gdt;
-        if (B.introT > 2.4) { B.phase = 'fight'; marchNotes(); }
+        if (B.introT > 2.4) { B.phase = 'fight'; revealEnemies(); marchNotes(); }
       } else if (!B.ending) {
         B.clock += gdt;
         B.eng.step(B.clock);
@@ -4661,6 +4696,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
     }
     function drawSquad(u) {
+      if (B.fog && u.side === 1) return; // 戦闘開始までは敵の布陣は見えない
       var spr = SPR[u.side][u.type], ally = u.side === 0;
       var c = proj(u.wx, u.wy);
       if (c.y < -60 || c.y > H + 60 || c.x < -90 || c.x > W + 90) return;
@@ -4727,7 +4763,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.restore();
     }
     function drawLabel(u) {
-      if (u.dead) return;
+      if (u.dead || (B.fog && u.side === 1)) return;
       var p = proj(u.wx, u.wy + u.farOy * u.big);
       if (p.y < -40 || p.y > H + 60 || p.x < -60 || p.x > W + 60) return;
       var sz = Math.max(0.7, Math.min(1.15, 0.6 + 0.4 * p.s));
@@ -4928,6 +4964,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       cx.save();
       if (B.shake > 0) cx.translate((Math.random() - 0.5) * B.shake, (Math.random() - 0.5) * B.shake);
       drawFront();
+      drawFog();
       drawPosts();
       drawMarks();
       var order = B.units.slice().sort(function (a, b) { return b.wy - a.wy; });
@@ -4972,6 +5009,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (B.ending) drawEnding();
       drawCardGhost();
       drawDeploy();
+      drawFogLabel();
     }
 
     // ---- 手動操作・スキル ----
@@ -4986,10 +5024,13 @@ if (typeof module !== 'undefined') module.exports = TF;
       var bar = $('skillBar');
       var hs = B.units.filter(function (u) { return u.side === 0 && u.hero; });
       bar.classList.toggle('hidden', !hs.length);
+      bar.classList.toggle('many', hs.length >= 6);
+      // ボタンに出すスキルの短い名前(2文字)
+      var TAG = { charge: '突撃', armor: '装甲', snipe: '必中', barrage: '一斉', heal: '手当', blitz: '電撃', smoke: '煙幕', reflect: '反撃', air: '爆撃', mark: '看破' };
       bar.innerHTML = hs.map(function (u) {
         var hd = TF.HERO[u.hero];
         return '<button class="skb" data-act="skill" data-u="' + u.id + '" id="skb' + u.id + '"><div class="portrait xs">' + heroSvg(u.hero) + '</div>' +
-          '<span class="tx"><span class="nm">' + ({ charge: '突撃', armor: '装甲', snipe: '必中', barrage: '一斉' })[hd.skill] + '</span><span class="st" id="skst' + u.id + '">準備中</span></span></button>';
+          '<span class="tx"><span class="nm">' + (TAG[hd.skill] || TF.SKILL[hd.skill].name) + '</span><span class="st" id="skst' + u.id + '">準備中</span></span></button>';
       }).join('');
       B.skCache = {};
     }
@@ -5127,16 +5168,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     // 空き地へドラッグ: その場所へ移動。前線より前なら前進、ずっと後ろなら後退
     // ---- 戦闘前の配置 ----
     // 列の有利・不利(おまかせ配置と同じ考え方): 相性の良い敵が近く、地形が合うほど高い
+    // 列の有利・不利: 敵の布陣は見えないので、自分の側の地形(戦う場所の効果と通り道の速さ)だけで決める
     function laneScore(t, L) {
-      var info = B.info, T = info.terrain, sc = 0;
-      B.units.forEach(function (e) {
-        if (e.side !== 1 || e.dead) return;
-        var el = laneOfUnit(e), d = Math.abs(el - L), w = (t === 'art' ? TF.K.laneAimArt : TF.K.laneAim)[d];
-        sc += w * e.maxHp * (TF.AFF[t][e.type] * TF.terrTake(TF.fightTerr(T, 1, e.type, el), e.type) - TF.AFF[e.type][t] * TF.terrTake(TF.fightTerr(T, 0, t, L), t) * 0.8);
-      });
-      var tot = 0; B.units.forEach(function (e) { if (e.side === 1) tot += e.maxHp; });
-      var own = TF.fightTerr(T, 0, t, L), sp = t === 'art' ? 1 : TF.K.app[t] / TF.terrMove('plain', t) / Math.max(0.05, TF.arrivalTime(T, 0, t, L));
-      return sc / (tot || 1) + 0.6 * (TF.terrAtk(own, t) / TF.terrTake(own, t) - 1) + 0.25 * (sp - 1);
+      var T = B.info.terrain, own = TF.fightTerr(T, 0, t, L), sp = t === 'art' ? 1 : TF.K.app[t] / TF.terrMove('plain', t) / Math.max(0.05, TF.arrivalTime(T, 0, t, L));
+      return 0.6 * (TF.terrAtk(own, t) / TF.terrTake(own, t) - 1) + 0.25 * (sp - 1);
     }
     function deployForm() {
       return B.units.filter(function (u) { return u.side === 0; }).map(function (u) {
@@ -5173,8 +5208,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       clearTimeout(predT);
       predT = setTimeout(function () {
         if (!B || B.phase !== 'deploy') return;
-        var wr = TF.predict(st, deployForm(), B.info.s, 40).winRate, pct = Math.round(wr * 100), wi = wrInfo(wr);
-        el.innerHTML = '<span style="color:' + wi[1] + '">予想勝率 ' + pct + '%(' + wi[0] + ')</span>';
+        // 敵の布陣は見えないので、いくつかの布陣を想定した予想(本当の布陣は使わない)
+        var wr = TF.predictBlind(st, deployForm(), B.info.s, 40).winRate, pct = Math.round(wr * 100), wi = wrInfo(wr);
+        el.innerHTML = '<span style="color:' + wi[1] + ';white-space:nowrap">予想勝率 ' + pct + '%</span><span class="small" style="display:block;color:var(--dim);font-weight:600"><b style="color:' + wi[1] + '">' + wi[0] + '</b>・敵の布陣は想定</span>';
       }, 120);
     }
     function startDeploy() {
@@ -5182,7 +5218,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var T = B.info.terrain, seen = {};
       seen.plain = 1; (T.blobs || []).forEach(function (b) { seen[b.k] = 1; });
       var bar = $('deployBar');
-      bar.innerHTML = '<div><span class="tt">部隊の配置</span> 好きな場所へドラッグ(緑=有利・赤=不利・×=進む速さ。前ほど早く撃ち始める)</div>' +
+      bar.innerHTML = '<div><span class="tt">部隊の配置</span> 好きな場所へドラッグ(緑=地形が有利・赤=不利・×=進む速さ。前ほど早く撃ち始める)。敵の布陣は戦闘開始まで見えません</div>' +
         '<div class="trn">' + TF.TERRAIN_KEYS.filter(function (k) { return seen[k]; }).map(function (k) { return '<button data-act="terrain-info" data-k="' + k + '"><b>' + TF.TERRAIN[k].name + '</b>' + esc(TF.TERRAIN[k].short) + '</button>'; }).join('') + '</div>' +
         '<div class="row2"><span class="wrp grow" id="dpWr"></span><button class="btn sub" data-act="deploy-auto">おまかせ配置</button><button class="btn" data-act="deploy-go">戦闘開始 ▶</button></div>' +
         '<label><input type="checkbox" data-act="deploy-skipnext"' + (st.flags && st.flags.skipDeploy ? ' checked' : '') + '> 次から配置を省略(おまかせ配置で始める)</label>';
@@ -5229,6 +5265,33 @@ if (typeof module !== 'undefined') module.exports = TF;
       var rl = r >= TF.K.laneN ? '射程: 戦場全体' : '射程 ±' + TF.K.rng[type] + '列', rw = cx.measureText(rl).width + 10;
       cx.fillStyle = 'rgba(10,14,9,.75)'; cx.fillRect(m.x - rw / 2, m.y - 16, rw, 15);
       cx.fillStyle = '#ffe08a'; cx.fillText(rl, m.x, m.y - 2);
+      cx.restore();
+    }
+    // 敵の布陣が見えない間: 敵の側に霧をかける
+    function drawFog() {
+      if (!B.fog) return;
+      var y0 = B.front + 4, y1 = fyW(1.35), x0 = fxW(-1.2), x1 = fxW(TF.K.laneN + 0.2);
+      var a = proj(x0, y0), b = proj(x1, y0), c = projFlat(x1, y1), d = projFlat(x0, y1);
+      cx.save();
+      var g = cx.createLinearGradient(0, a.y, 0, Math.min(c.y, d.y));
+      g.addColorStop(0, 'rgba(225,230,236,.18)'); g.addColorStop(0.25, 'rgba(205,212,220,.55)'); g.addColorStop(1, 'rgba(190,198,208,.7)');
+      cx.fillStyle = g; cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.lineTo(c.x, c.y); cx.lineTo(d.x, d.y); cx.closePath(); cx.fill();
+      // ゆっくり流れる霧のかたまり
+      for (var i = 0; i < 9; i++) {
+        var fx = x0 + ((i * 97 + fxNow() * 6) % (x1 - x0)), fy = y0 + 25 + (i * 53 % 1) * 0 + (i % 3) * 30, p = projFlat(fx, fy);
+        cx.fillStyle = 'rgba(235,238,242,.22)'; cx.beginPath(); cx.ellipse(p.x, p.y, 60 * p.s, 18 * p.s, 0, 0, Math.PI * 2); cx.fill();
+      }
+      cx.restore();
+    }
+    // 霧の説明(地形の名前より上に描く)
+    function drawFogLabel() {
+      if (!B.fog) return;
+      cx.save();
+      var m = projFlat(CXW, B.front + 55);
+      cx.font = '800 13px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      var tx = '敵の布陣は戦闘開始まで見えません', tw = cx.measureText(tx).width + 16;
+      cx.fillStyle = 'rgba(10,14,9,.7)'; cx.fillRect(m.x - tw / 2, m.y - 11, tw, 22);
+      cx.fillStyle = '#e6ebf0'; cx.fillText(tx, m.x, m.y);
       cx.restore();
     }
     function drawDeploy() {
@@ -5488,7 +5551,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, deployCard: deployCard, launchSupport: launchSupport, deployGo: deployGo, deployAuto: deployAuto, active: function () { return !!B; },
       debug: function () {
         if (!B) return null;
-        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
+        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, fog: !!B.fog, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
           captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
           walls: B.walls.filter(function (w) { return w.ok; }).length, wallsTotal: B.walls.length,
           ruins: B.blds.filter(function (b) { return b.ruin; }).length,

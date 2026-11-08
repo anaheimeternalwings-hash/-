@@ -484,6 +484,20 @@ check('ステージ: 地形マップ(森林・市街地・丘陵・湿地の区�
   assert(new Set(out.map(x => x.lane)).size >= 3, '列に散らばらない');
   assert.strictEqual(TF.normalizeForm(st, [{ type: 'inf', hero: null, lane: null }])[0].lane, null, '列なしが0列になった');
 });
+check('布陣は見えない: おまかせ配置・配置中の予想勝率は敵の本当の布陣を使わない。敵の布陣もこちらの配置に左右されない', () => {
+  const st = TF.newState(0);
+  st.bld.hq.lv = 12; st.bld.atpost = { lv: 5, slot: 3 }; st.bld.factory = { lv: 5, slot: 5 };
+  const s = 30, info = TF.stageInfo(s), f = TF.normalizeForm(st, []);
+  const a = JSON.stringify(TF.autoLanes(st, f, s)), pa = TF.predictBlind(st, f, s, 20).winRate;
+  const saved = info.enemies.map(e => e.lane);
+  info.enemies.forEach(e => { e.lane = (e.lane + 3) % K.laneN; });
+  const b = JSON.stringify(TF.autoLanes(st, f, s)), pb = TF.predictBlind(st, f, s, 20).winRate;
+  info.enemies.forEach((e, i) => { e.lane = saved[i]; });
+  assert.strictEqual(a, b, 'おまかせ配置が敵の布陣に左右された');
+  assert.strictEqual(pa, pb, '配置中の予想勝率が敵の本当の布陣に左右された');
+  const p1 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 0 })), s), p2 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 6 })), s);
+  assert.deepStrictEqual(p1.e.map(e => e.lane), p2.e.map(e => e.lane), '敵の布陣がこちらの配置で変わった');
+});
 check('列の移動: 手動のときだけ戦闘中に別の列へ動かせる。地形と列があっても少しずつ進めた結果は一括計算と同じ', () => {
   const st = TF.newState(0);
   st.bld.hq.lv = 12; st.bld.atpost = { lv: 8, slot: 3 }; st.bld.factory = { lv: 8, slot: 5 }; st.bld.barracks.lv = 8;

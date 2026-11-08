@@ -393,7 +393,7 @@ function midState(over) {
     bld: { hq: { lv: 10, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
-  await test('配置: 出撃すると広大な戦場(7列)で部隊を配置。地形が表示され、ドラッグで好きな場所(列の間・前後も)に置ける。戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
+  await test('配置: 出撃すると広大な戦場(7列)で部隊を配置。敵の布陣は戦闘開始まで見えない。ドラッグで好きな場所(列の間・前後も)に置ける。戦闘開始でその配置のまま戦う', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="auto"]');
     await page.click('[data-act="sortie"]');
@@ -402,6 +402,9 @@ function midState(over) {
     const txt = await page.textContent('#deployBar');
     let d = await page.evaluate(() => window.__game.battle.debug());
     assert(d.terrain.blobs.length >= 6, '地形の区域がない');
+    // 敵の布陣は戦闘開始まで見えない(霧)。予想勝率は敵の布陣を想定したもの
+    assert.strictEqual(d.fog, true, '配置中に敵の布陣が見えている');
+    await page.waitForFunction(() => (document.getElementById('dpWr') || {}).textContent.includes('想定'), null, { timeout: 8000 });
     const names = await page.evaluate(() => Object.keys(window.__game.TF.TERRAIN).map(k => window.__game.TF.TERRAIN[k].name));
     assert(names.some(n => txt.includes(n)), '地形の説明が出ない');
     const allies = d.units.filter(u => u.side === 0);
@@ -440,6 +443,7 @@ function midState(over) {
     // 戦闘開始: その配置のまま戦い、途中で閉じても同じ配置で決着できるよう保存される
     await page.click('[data-act="deploy-go"]');
     await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight'; }, null, { timeout: 8000 });
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && x.phase === 'fight' && !x.fog; }, null, { timeout: 8000 });
     d = await page.evaluate(() => window.__game.battle.debug());
     assert.strictEqual(d.lanes[i0], moved, '配置が戦闘に反映されない');
     const pend = await page.evaluate(() => window.__game.state.pending.form);
