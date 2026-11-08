@@ -769,6 +769,31 @@ function midState(over) {
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 8000 });
   }, midState({ cleared: 14, sel: 15 })));
 
+  await test('編成の上限: 兵種ごとに編成できる数を超える兵種は選べない(歩兵4・対戦車兵3・戦車3・砲兵2)', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="slot"][data-i="3"]');
+    await page.waitForSelector('.sheet [data-act="set-type"]');
+    assert(await page.isDisabled('.sheet [data-act="set-type"][data-t="tank"]'), '4部隊目の戦車が選べる');
+    assert((await page.textContent('.sheet [data-act="set-type"][data-t="tank"]')).includes('上限'), '上限の説明が出ない');
+    assert(!(await page.isDisabled('.sheet [data-act="set-type"][data-t="inf"]')), '歩兵が選べない');
+    assert((await page.textContent('.sheet')).includes('編成できる数'), '上限の一覧が出ない');
+  }, midState({ cleared: 40, sel: 41, form: ['tank', 'tank', 'tank', 'inf', 'inf', 'at'].map(t => ({ type: t, hero: null })),
+    bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } } })));
+
+  await test('敵将: 敵将のいるステージは出撃画面にスキルが出て、戦闘には「将」の部隊がいる。結果画面で敵の作戦が明かされる', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    const tx = await page.textContent('#ecmdInfo');
+    assert(tx.includes('敵将「') && tx.includes('予告'), '敵将の説明が出ない ' + tx);
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight'; }, null, { timeout: 15000 });
+    const d = await page.evaluate(() => window.__game.battle.debug());
+    assert(d.units.some(u => u.side === 1 && u.ecmd), '敵将の部隊がいない');
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+    assert((await page.textContent('#resTactic')).includes('敵の作戦'), '敵の作戦が出ない');
+  }, midState({ cleared: 13, sel: 14 })));
+
   await test('出撃画面の「稼ぎにおすすめ」: 勝率80%以上のステージを選んで編成する', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="farm-find"]');

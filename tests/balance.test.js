@@ -461,6 +461,115 @@ check('地形はマップ上の区域: 同じ列でも前後で地形が違い�
   const inForest = firstDmg(3), onPlain = firstDmg(5);
   assert(inForest < onPlain * 0.8, '森にいる敵が守られない ' + inForest + ' ' + onPlain);
 });
+check('敵将: ボス戦(ステージ12以降)と一部のステージに敵将がいて、戦況をひっくり返すスキルを使う。発動の前に予告があり、予告中は位置がわかり、倒せば止められる。戦闘は最大3分', () => {
+  assert.strictEqual(K.maxT, 180, '戦闘の時間');
+  const keys = Object.keys(TF.ECMD);
+  assert(keys.length >= 6);
+  keys.forEach(k => { const c = TF.ECMD[k]; assert(c.name && c.skill && c.desc && c.warn >= 5 && c.cd >= 30 && c.first > c.warn, k); });
+  let n = 0, tot = 0;
+  for (let s = 1; s <= 300; s++) {
+    const c = TF.stageCmd(s);
+    if (s < 12) assert.strictEqual(c, null, 'ステージ' + s + 'に敵将');
+    else if (s % 10 === 0) assert(c, 'ボス戦' + s + 'に敵将がいない');
+    else { tot++; if (c) n++; }
+    if (c) assert(TF.ECMD[c].unlock <= s);
+  }
+  assert(n / tot > 0.15 && n / tot < 0.45, '敵将の出る割合 ' + n / tot);
+  const info = TF.stageInfo(30);
+  assert(info.ecmd && info.enemies[info.ecmdIdx].ecmd === info.ecmd && info.enemies[info.ecmdIdx].boss, 'ボスが敵将でない');
+  // スキルの効果(地形あり・敵将は遠くで待ち構える)
+  const T = TF.flatTerrain();
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 2000, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  const cmd = (k, o) => mk('at', 6, Object.assign({ maxHp: 1e9, atk: 1, adv: 0, hold: true, ecmd: k }, o || {}));
+  const run = (p, e, until, o) => { const b = TF.createBattle(p, e, 3, Object.assign({ record: true, terrain: T }, o || {})); b.step(until); return b; };
+  const castOf = b => b.ev.find(e => e.k === 'eskCast');
+  // 予告してから発動する
+  let b = run([mk('inf', 1, { maxHp: 5000, atk: 1, adv: 0.3 })], [cmd('thunder')], 40);
+  const w = b.ev.find(e => e.k === 'eskWarn'), c0 = castOf(b);
+  assert(w && c0 && Math.abs(c0.t - w.t - TF.ECMD.thunder.warn) < 1e-6, '予告がない');
+  // 亡者の行進: 倒された部隊がよみがえる
+  b = run([mk('tank', 3, { maxHp: 1e9, atk: 400, adv: 0.95 }), mk('inf', 2, { maxHp: 1e9, atk: 300, adv: 0.95 })], [mk('inf', 3, { maxHp: 600, adv: 0.2 }), mk('inf', 2, { maxHp: 600, adv: 0.2 }), cmd('ghost')], 40);
+  let c = castOf(b);
+  assert(c && c.revive.length === 2, '亡者の行進');
+  // 不落要塞: 敵の被ダメージが大きく減る
+  b = run([mk('tank', 3, { maxHp: 1e9, atk: 100, adv: 0.95 })], [mk('inf', 3, { maxHp: 1e9, adv: 0.2 }), cmd('wall')], 40);
+  c = castOf(b);
+  const hits = b.ev.filter(e => e.k === 'atk' && e.s === 0 && !e.miss), av = a => a.reduce((x, y) => x + y, 0) / a.length;
+  assert(c && av(hits.filter(e => e.t > c.t && e.t < c.t + 12).map(e => e.dmg)) < av(hits.filter(e => e.t < c.t).map(e => e.dmg)) * 0.35, '不落要塞');
+  // 戦術ミサイル: 集まった部隊すべてに兵力の半分
+  b = run([mk('inf', 1, { maxHp: 5000, atk: 1, adv: 0.3 }), mk('inf', 1, { maxHp: 5000, atk: 1, adv: 0.3 }), mk('tank', 1, { maxHp: 5000, atk: 1, adv: 0.3 })], [cmd('thunder')], 40);
+  c = castOf(b);
+  assert(c && c.hits.length === 3 && c.hits.every(h => h.dmg === 2500), '戦術ミサイル');
+  // 電子妨害: しばらく自軍は何も見えず、撃てない
+  b = run([mk('tank', 3, { maxHp: 1e9, atk: 10, adv: 0.95 })], [mk('inf', 3, { maxHp: 1e9, adv: 0.2, atk: 1 }), cmd('viper')], 60);
+  c = castOf(b);
+  assert(c && !b.ev.some(e => e.k === 'atk' && e.s === 0 && e.t > c.t + 0.01 && e.t < c.t + TF.ECMD.viper.dur - 0.1) && b.ev.some(e => e.k === 'atk' && e.s === 0 && e.t < c.t), '電子妨害');
+  // 寝返り工作: 指揮官のいない、いちばん強い部隊が敵になる
+  b = run([mk('tank', 1, { maxHp: 9000, atk: 5, adv: 0.2 }), mk('inf', 0, { maxHp: 3000, atk: 5, adv: 0.2 }), mk('inf', 2, { maxHp: 3000, atk: 5, adv: 0.2, hero: 'oni' })], [cmd('witch')], 40);
+  c = castOf(b);
+  assert(c && c.d === 0 && b.U[0].side === 1 && b.U[2].side === 0, '寝返り工作');
+  // 斬首作戦: 指揮官のいる部隊だけが大きなダメージ
+  b = run([mk('tank', 1, { maxHp: 9000, atk: 5, adv: 0.2, hero: 'oni' }), mk('inf', 0, { maxHp: 3000, atk: 5, adv: 0.2 })], [cmd('reaper')], 40);
+  c = castOf(b);
+  assert(c && c.hits.length === 1 && c.hits[0].d === 0 && c.hits[0].dmg === 5400, '斬首作戦');
+  // 予告中は位置がわかり、倒せば発動しない(見つからない距離で待つ戦車が、予告で見えた敵将を倒す)
+  b = TF.createBattle([mk('tank', 3, { maxHp: 1e9, atk: 400, adv: 0.95 })], [cmd('thunder', { maxHp: 1500 })], 3, { record: true, terrain: T, auto: false });
+  b.moveTo(0, 5.5, 0.3, 0.1);
+  b.step(40);
+  const wn = b.ev.find(e => e.k === 'eskWarn'), first = b.ev.find(e => e.k === 'atk' && e.d === 1);
+  assert(wn && first && first.t >= wn.t, '予告の前から見えていた');
+  assert(!b.U[1].alive && !castOf(b), '予告中に倒しても発動した');
+});
+check('編成の上限: 兵種ごとに編成できる部隊の数に上限がある(歩兵4・対戦車兵3・戦車3・砲兵2)。おまかせ編成も上限を守る', () => {
+  assert.deepStrictEqual(K.typeCap, { inf: 4, at: 3, tank: 3, art: 2 });
+  const st = TF.newState(0);
+  Object.assign(st.bld, { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } });
+  const count = f => f.reduce((c, x) => (c[x.type] = (c[x.type] || 0) + 1, c), {});
+  const f = TF.normalizeForm(st, Array(8).fill(0).map(() => ({ type: 'tank' })));
+  assert.strictEqual(f.length, 8);
+  TF.TYPES.forEach(t => assert((count(f)[t] || 0) <= K.typeCap[t], '上限を超えた ' + t));
+  for (const s of [20, 41, 60]) { const a = TF.autoFormation(st, s, 4), c = count(a); TF.TYPES.forEach(t => assert((c[t] || 0) <= K.typeCap[t], 'おまかせ ' + s + ' ' + t)); }
+  // 兵種が少ないうちは、ほかに置ける兵種がなければ上限を超えてよい(枠が余らない)
+  const st0 = TF.newState(0); st0.bld.hq.lv = 12;
+  assert.strictEqual(TF.normalizeForm(st0, []).length, TF.slotsFor(12));
+});
+check('敵の連携: ステージごとに作戦(待ち伏せ・総攻撃・陽動・挟み撃ち)があり、囮が正面に出て、別動隊が端を回って後衛(砲兵)を襲う。見えている敵の1つに集中攻撃する', () => {
+  const seen = new Set();
+  for (let s = 1; s <= 100; s++) seen.add(TF.stageTactic(s));
+  assert.deepStrictEqual([...seen].sort(), Object.keys(TF.TACTICS).sort());
+  let s = 15; while (TF.stageTactic(s) !== 'pincer') s++;
+  const info = TF.stageInfo(s), roles = info.enemies.map(e => e.role || null);
+  assert(roles.includes('decoy') && roles.filter(r => r === 'flank').length === 2, '挟み撃ちの役割 ' + roles);
+  // 自軍(砲兵あり)と戦わせ、回り込んだ部隊が自軍の後ろまで来て砲兵を撃つ
+  const st = TF.newState(0);
+  Object.assign(st.bld, { hq: { lv: 12, slot: 4 }, barracks: { lv: 10, slot: 1 }, atpost: { lv: 10, slot: 3 }, factory: { lv: 10, slot: 5 }, artpost: { lv: 10, slot: 7 }, lab: { lv: 8, slot: 8 } });
+  const pb = TF.prepareBattle(st, ['inf', 'inf', 'inf', 'tank', 'tank', 'at', 'art', 'art'].map(t => ({ type: t })), s);
+  let reached = 0, artHits = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const b = TF.createBattle(pb.p, pb.e, seed, { record: true, terrain: pb.terrain, reserves: pb.reserves, posts: true });
+    const fl = b.U.filter(u => u.side === 1 && u.role === 'flank').map(u => u.id), arts = b.U.filter(u => u.side === 0 && u.type === 'art').map(u => u.id);
+    for (let tt = 1; tt <= 20; tt += 1) { b.step(tt); if (fl.some(id => b.U[id].alive && b.pos(id, tt).y < -0.6)) { reached++; break; } }
+    b.step(Infinity);
+    artHits += b.ev.filter(e => e.k === 'atk' && fl.includes(e.s) && arts.includes(e.d)).length;
+  }
+  assert(reached >= 4, '回り込んで後ろまで来ない ' + reached);
+  assert(artHits > 0, '回り込んだ部隊が砲兵を撃たない');
+  // 集中攻撃: 敵の弾は、見えている自軍の部隊の一部に集まる(自軍よりも偏る)
+  let sTop = 0, pTop = 0;
+  for (let seed = 1; seed <= 6; seed++) {
+    const b = TF.createBattle(pb.p, pb.e, seed, { record: true, terrain: pb.terrain, reserves: pb.reserves, posts: true });
+    b.step(Infinity);
+    for (const side of [1, 0]) {
+      const by = {};
+      b.ev.filter(e => e.k === 'atk' && b.U[e.s].side === side && e.t < 12).forEach(e => { const k = Math.floor(e.t / 2) + ':' + e.d; by[k] = (by[k] || 0) + 1; });
+      const win = {}; Object.keys(by).forEach(k => { const w = k.split(':')[0]; win[w] = win[w] || []; win[w].push(by[k]); });
+      const share = Object.values(win).map(a => Math.max(...a) / a.reduce((x, y) => x + y, 0));
+      const m = share.reduce((x, y) => x + y, 0) / Math.max(1, share.length);
+      if (side === 1) sTop += m; else pTop += m;
+    }
+  }
+  assert(sTop > pTop, '敵の集中攻撃が自軍より偏らない ' + sTop.toFixed(2) + ' ' + pTop.toFixed(2));
+});
 check('マップの型: ステージごとに地形の並び方が変わる(9ステージで9種類すべて・となりのステージとは違う型)。拠点の場所も毎回違う', () => {
   const keys = Object.keys(TF.LAYOUTS);
   assert(keys.length >= 9);
@@ -516,7 +625,7 @@ check('布陣は見えない: おまかせ配置・配置中の予想勝率は�
   const p1 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 0 })), s), p2 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 6 })), s);
   assert.deepStrictEqual(p1.e.map(e => e.lane), p2.e.map(e => e.lane), '敵の布陣がこちらの配置で変わった');
 });
-check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、範囲に入るまで敵味方とも見えない。見えない敵は狙わず、撃つと遠くからでも見つかる。時間がたつだけでは見つからず、部隊を動かして探す', () => {
+check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、範囲に入るまで敵味方とも見えない。見えない敵は狙わない。攻撃している間は位置が見える(砲兵は観測している敵だけ撃てる)。時間がたつだけでは見つからず、部隊を動かして探す', () => {
   // 索敵範囲は兵種ごと(歩兵がいちばん広く、砲兵がいちばん狭い)。見つかりやすさも兵種ごと(対戦車兵がいちばん見つかりにくく、戦車がいちばん目立つ)
   assert(K.det.inf > K.det.at && K.det.at > K.det.tank && K.det.tank > K.det.art && K.det.art > 0);
   assert(K.sig.at < K.sig.inf && K.sig.inf < K.sig.art && K.sig.art < K.sig.tank);
@@ -544,7 +653,7 @@ check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、�
   b = TF.createBattle([mk('art', 0), mk('inf', 5)], [mk('inf', 5)], 7, { record: true, terrain: T });
   b.step(2.9);
   assert(b.ev.some(e => e.k === 'atk' && e.s === 0), '味方が見つけた敵を砲兵が撃たない');
-  // 撃った部隊は、ふだんの2倍の距離から見つかる(となりの列の敵歩兵からは、撃つ前の砲兵は見えない)
+  // 攻撃している部隊は位置が見える(となりの列の敵歩兵からは、撃つ前の砲兵は見えない)
   b = TF.createBattle([mk('art', 0), mk('inf', 1)], [mk('inf', 1)], 7, { record: true, terrain: T });
   let shot = null;
   for (let tt = 0.05; tt < 2.9 && !shot; tt += 0.05) {
@@ -553,6 +662,17 @@ check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、�
     if (!shot) assert(!b.seen(1, 0, tt), '撃つ前の砲兵が見えている');
   }
   assert(shot && b.seen(1, 0, shot.t + 0.01), '撃った砲兵が見つからない');
+  // 攻撃して位置がばれた敵は近くの部隊が狙えるが、砲兵は味方が索敵範囲で見つけている(観測している)敵しか撃てない
+  {
+    const m2 = (t, lane, o) => mk(t, lane, Object.assign({ maxHp: 1e9 }, o || {}));
+    const ob = TF.createBattle([m2('art', 0, { adv: 0.1 }), m2('tank', 3, { adv: 0.95 })], [m2('inf', 3, { adv: 0, hold: true }), m2('art', 6, { adv: 0 })], 5, { record: true, terrain: T, auto: false });
+    ob.moveTo(1, 3, 0.25, 0.1);
+    ob.step(20);
+    assert(ob.ev.some(e => e.k === 'atk' && e.s >= 2), '敵が撃っていない');
+    assert(ob.seen(0, 2, 20) && ob.seen(0, 3, 20), '攻撃している敵が見えない');
+    assert(ob.ev.some(e => e.k === 'atk' && e.s === 1), '位置がばれた敵を戦車が撃たない');
+    assert(!ob.ev.some(e => e.k === 'atk' && e.s === 0), '観測していない敵を砲兵が撃った');
+  }
   // 見つかりにくさ: 同じ距離でも、戦車は見えて対戦車兵は見えない
   const pair = ft => { const c = TF.createBattle([mk('inf', 3, { adv: 0.9 })], [mk(ft, 3, { adv: 0.2, hold: true })], 7, { terrain: T }); return c; };
   {

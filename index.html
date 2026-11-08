@@ -220,6 +220,7 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .slot .t{font-size:12px;font-weight:800;line-height:1.2}
 .slot .p{font-size:11px;color:var(--sub)}
 .slot .wk{font-size:10px;color:#ffc7b8;line-height:1.25}
+.slot .cmdb{position:absolute;top:-7px;right:2px;font-size:10px;font-weight:900;color:#fff;background:#c0281c;border-radius:6px;padding:0 6px}
 .slot .boss{position:absolute;top:-7px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:900;color:#2a1c00;background:var(--gold);border-radius:6px;padding:0 6px}
 .slot.bossc{border-color:var(--gold)!important;box-shadow:0 0 0 1px var(--gold) inset}
 .slot .hr{display:flex;align-items:center;gap:3px;font-size:10px;color:var(--khaki);max-width:100%}
@@ -273,6 +274,9 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 .skillbar.many .skb{flex-direction:column;justify-content:center;gap:1px;padding:4px 2px 7px;min-height:56px;text-align:center}
 .skillbar.many .skb .st{display:none}
 .skillbar.many .skb .nm{font-size:10px}
+.ecmd{margin:6px 8px 4px;padding:7px 9px;border-radius:10px;background:rgba(150,30,22,.22);border:1px solid #a83a2c;font-size:12px;line-height:1.45;color:var(--text)}
+.ecmd b{color:#ff9f8f}
+.ecmd .small{color:var(--dim);margin-top:2px}
 .deploybar{position:absolute;left:6px;right:6px;bottom:6px;z-index:4;background:rgba(14,19,12,.9);border:1px solid #4a5a3a;border-radius:14px;padding:7px 9px;color:var(--text);font-size:11.5px;line-height:1.4}
 .deploybar .tt{font-weight:900;font-size:14px;color:var(--gold)}
 .deploybar .trn{display:flex;flex-wrap:nowrap;gap:4px;margin:6px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
@@ -694,7 +698,7 @@ var TF = (function () {
   var K = {
     unitPerLv: 0.12, labPerLv: 0.08, heroBase: 1.05, heroPerLv: 0.03, favMul: 1.25,
     miss: 0.06, crit: 0.10, critMul: 1.5,
-    maxT: 60,
+    maxT: 180, // 戦闘は最大3分
     startMoney: 500, startSteel: 300,
     // 戦場は7列(レーン)。部隊はおもに同じ列の敵を狙い、離れた列への攻撃は弱まる(砲兵はどの列にも届く)
     laneN: 7, laneAim: [1, 0.35, 0.12, 0.05, 0.03, 0.02, 0.01], laneDmg: [1, 0.85, 0.72, 0.62, 0.55, 0.5, 0.45], laneAimArt: [1, 0.8, 0.65, 0.55, 0.5, 0.45, 0.4],
@@ -712,8 +716,8 @@ var TF = (function () {
     rng: { inf: 2, at: 2.5, tank: 3, art: 99 },
     // 索敵範囲(列の幅を1とした距離。奥行きは出撃線〜前線の1が detY 列ぶん)。どちらの側も、自分の部隊の索敵範囲に入るまで敵が見えず、
     // 見えない敵は狙えない。見つかりやすさ sig は兵種ごと(敵が見える距離 = 見る側の索敵範囲 × 見られる側の見つかりやすさ)。
-    // 撃った部隊は fireT 秒のあいだ fireSpot 倍の距離から見つかる。時間がたつだけでは見つからない(部隊を動かして探す)
-    det: { inf: 1.3, at: 1.0, tank: 0.9, art: 0.6 }, sig: { inf: 0.8, at: 0.6, tank: 1.25, art: 1.1 }, detY: 1.75, fireT: 2.5, fireSpot: 2, idleT: 0.3,
+    // 攻撃している部隊は位置が見える(撃ってから fireT 秒)。時間がたつだけでは見つからない(部隊を動かして探す)
+    det: { inf: 1.3, at: 1.0, tank: 0.9, art: 0.6 }, sig: { inf: 0.8, at: 0.6, tank: 1.25, art: 1.1 }, detY: 1.75, fireT: 2.5, idleT: 0.3,
     // 拠点: 敵部隊を撃破すると前線が進んで拠点を占領。占領した拠点は前線基地になり(増援+1・ポイント回復が速く)、
     // 特殊ユニットを1回発進できる(攻撃ヘリ・対地攻撃機・自爆ドローン)。味方がやられると拠点を奪われる
     postRate: 0.3, postRes: 1, supDelay: 1.2, supGap: 1.5, supMul: 0.6, supHeli: 0.9, supHeliTank: 1.5, supHeliN: 4, supAir: 0.8, supDrone: 3.0,
@@ -721,6 +725,11 @@ var TF = (function () {
     resRate: 1, resCost: 5, resStart: 2, resMax: 10, resMul: 0.6,
     // 配置: 前進(与/被ダメージ↑・狙われやすい)、後退(与/被ダメージ↓・狙われにくい。砲兵は与ダメージが下がらない)
     stDeal: { '1': 1.25, '-1': 0.75 }, stTake: { '1': 1.25, '-1': 0.6 }, stAim: { '1': 1.6, '-1': 0.5 },
+    ecmdRate: 0.3, ecmdFocus: 6,
+    // 兵種ごとに編成できる部隊の数の上限(ほかに置ける兵種がないときだけ超えてよい)
+    typeCap: { inf: 4, at: 3, tank: 3, art: 2 },
+    // 敵の連携: 集中攻撃(同じ目標を狙いやすい倍率・目標を選び直す間隔)
+    focusW: 5, focusT: 4,
     normW: 1, lossExp: 0.5, firstMul: 2, bossMul: 2, bossHp: 2.6, bossAtk: 1.4, bossTotal: 1.08, normMin: 0.6, normMax: 2.4,
     typeAdj: { inf: 1.04, at: 0.95, tank: 0.97, art: 1.18 },
     baseCapH: 2, depotCapH: 1, depotMaxLv: 22,
@@ -955,6 +964,26 @@ var TF = (function () {
     inf:  '歩兵大隊', at: '対戦車防衛線', tank: '機甲師団', art: '砲兵連隊', mix: '混成部隊'
   };
   var BOSS_NAMES = { inf: '精鋭突撃隊', at: '重対戦車隊', tank: '重戦車', art: '列車砲' };
+  // ====== 敵将(敵の指揮官) ======
+  // ボス戦と一部のステージに出てくる。1人で戦況をひっくり返すほどのスキルを持つ。
+  // 発動の warn 秒前に予告があり、その間は位置が見える。予告中に倒せば発動しない
+  var ECMD = {
+    ghost:   { name: '亡霊',   skill: '亡者の行進', unlock: 12, first: 16, cd: 45, warn: 8, desc: '倒された敵の部隊をすべて兵力50%でよみがえらせる' },
+    wall:    { name: '鉄壁',   skill: '不落要塞',   unlock: 12, first: 14, cd: 40, warn: 8, dur: 12, mul: 0.2, heal: 0.25, desc: '12秒間、敵全体の被ダメージを5分の1にし、兵力を25%回復する' },
+    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 15, cd: 40, warn: 8, r: 1.6, dmg: 0.5, desc: '自軍がいちばん集まった場所(半径1.6列)の部隊すべてに、兵力の50%のダメージ' },
+    viper:   { name: '毒蛇',   skill: '電子妨害',   unlock: 40, first: 14, cd: 40, warn: 8, dur: 12, desc: '12秒間、自軍の索敵がすべて使えなくなる(敵がまったく見えず、撃てない)' },
+    witch:   { name: '魔女',   skill: '寝返り工作', unlock: 55, first: 18, cd: 50, warn: 8, desc: '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする' },
+    reaper:  { name: '死神',   skill: '斬首作戦',   unlock: 70, first: 16, cd: 45, warn: 8, dmg: 0.6, desc: '指揮官のいる自軍の部隊すべてに、兵力の60%のダメージ' }
+  };
+  var ECMD_KEYS = Object.keys(ECMD);
+  // ステージの敵将: ボス戦はかならず、ふつうのステージは12から3割ほど。出てくる敵将はステージが進むと増える
+  function stageCmd(s) {
+    if (s < 12) return null;
+    var boss = s % 10 === 0, r = rngFrom(hashInt(s * 5059 + 13));
+    if (!boss && r() >= K.ecmdRate) return null;
+    var ok = ECMD_KEYS.filter(function (k) { return ECMD[k].unlock <= s; });
+    return ok[Math.floor(r() * ok.length)];
+  }
   function enemyCount(s) { return s <= 3 ? 2 : s <= 8 ? 3 : s <= 18 ? 4 : s <= 30 ? 5 : s <= 50 ? 6 : s <= 80 ? 7 : 8; }
   // ステージの地形マップ。場所の名前で出やすい地形が変わる(平原が多い場所は区域が少ない)。
   // 区域は自軍側・敵側に交互に置き、前線をまたぐものもある
@@ -1098,7 +1127,37 @@ var TF = (function () {
     });
     return out;
   }
-  function enemyPlace(types, T, s) { return placeUnits(types, T, 1, rngFrom(hashInt(s * 9173 + 41))); }
+  // 敵の作戦: 待ち伏せ(地形の良い所で待つ)・総攻撃(そろって前進)・陽動(囮が正面で引きつけ、別動隊が片側から後衛へ回り込む)・
+  // 挟み撃ち(囮が正面、両側から回り込む)。どの作戦でも、見えている敵のうち1つに集中攻撃する
+  var TACTICS = { ambush: '待ち伏せ', assault: '総攻撃', decoy: '陽動', pincer: '挟み撃ち' };
+  function stageTactic(s) {
+    if (s < 6) return 'ambush';
+    var k = ['ambush', 'assault', 'decoy', 'pincer'];
+    if (s < 15) k = ['ambush', 'assault', 'decoy'];
+    return k[hashInt(s * 2711 + 5) % k.length];
+  }
+  function enemyPlace(types, T, s) {
+    var out = placeUnits(types, T, 1, rngFrom(hashInt(s * 9173 + 41))), tac = stageTactic(s), r = rngFrom(hashInt(s * 337 + 9));
+    // 動ける部隊(砲兵以外)を速い順に
+    var mv = types.map(function (t, i) { return i; }).filter(function (i) { return types[i] !== 'art'; });
+    mv.sort(function (a, b) { return K.spd[types[b]] - K.spd[types[a]] || a - b; });
+    function setRole(i, role, x, adv) { out[i].role = role; out[i].hold = role === 'hold'; if (x !== undefined) { out[i].lx = x; out[i].lane = Math.round(x); } if (adv !== undefined) out[i].adv = adv; }
+    if (tac === 'assault') mv.forEach(function (i) { setRole(i, 'assault'); });
+    else if (tac === 'decoy' && mv.length >= 3) {
+      var side = r() < 0.5 ? 0.2 : 5.8, dc = mv[mv.length - 1];
+      mv.forEach(function (i) { if (types[i] === 'inf' || types[i] === 'tank') { if (types[dc] === 'at') dc = i; } });
+      setRole(dc, 'decoy', 3, K.eAdvMax);
+      mv.filter(function (i) { return i !== dc; }).slice(0, 2).forEach(function (i, k) { setRole(i, 'flank', side + (side < 3 ? 1 : -1) * k * 0.6, K.eAdvMax * 0.5); });
+    } else if (tac === 'pincer' && mv.length >= 3) {
+      var dc2 = mv[mv.length - 1];
+      setRole(dc2, 'decoy', 3, K.eAdvMax);
+      var fl = mv.filter(function (i) { return i !== dc2; }).slice(0, 2);
+      if (fl[0] !== undefined) setRole(fl[0], 'flank', 0.2, K.eAdvMax * 0.5);
+      if (fl[1] !== undefined) setRole(fl[1], 'flank', 5.8, K.eAdvMax * 0.5);
+    }
+    out.forEach(function (o) { o.tactic = tac; });
+    return out;
+  }
   // 敵の布陣は見えないので、自軍のおまかせ配置は地形だけで決める
   function blindPlace(types, T) { return placeUnits(types, T, 0, null); }
   function enemyTotal(s) {
@@ -1194,8 +1253,16 @@ var TF = (function () {
     unitE.forEach(function (e) { sumV += e.power / (100 * UNIT_POW[e.type]); });
     // 地形と敵の配置を先に決め、その条件で難しさを均す
     var terrain = stageTerrain(s), places = enemyPlace(types, terrain, s);
-    function setPlace(e, i) { e.lane = places[i].lane; e.lx = places[i].lx; e.adv = places[i].adv; if (places[i].hold) e.hold = true; }
+    function setPlace(e, i) { e.lane = places[i].lane; e.lx = places[i].lx; e.adv = places[i].adv; if (places[i].hold) e.hold = true; if (places[i].role) e.role = places[i].role; }
     unitE.forEach(setPlace);
+    // 敵将: ボスの部隊(ボス戦でなければ、いちばん強い部隊)が率いる
+    var cmd = stageCmd(s), cmdIdx = -1;
+    if (cmd) {
+      cmdIdx = bossIdx >= 0 ? bossIdx : 0;
+      unitE.forEach(function (e, i) { if (e.power > unitE[cmdIdx].power) cmdIdx = i; });
+      if (bossIdx >= 0) cmdIdx = bossIdx;
+      unitE[cmdIdx].ecmd = cmd;
+    }
     var be = refBreakEven(unitE, refTypesFor(s), terrain);
     // 指揮官スキル込みの実戦では兵種ごとに少し難易度がずれるので、自動テストの結果から補正する
     var tf = 0;
@@ -1210,10 +1277,11 @@ var TF = (function () {
     var reward = stageReward(s);
     var place = PLACES[hashInt(s * 31 + 7) % PLACES.length];
     enemies.forEach(setPlace);
+    if (cmd) enemies[cmdIdx].ecmd = cmd;
     var info = {
       s: s, place: place, theme: boss ? 'ボス戦' : THEMES[theme], main: main, boss: boss,
       bossName: boss ? BOSS_NAMES[types[bossIdx]] : null, norm: norm, be: be,
-      enemies: enemies, reward: reward, terrain: terrain,
+      enemies: enemies, reward: reward, terrain: terrain, ecmd: cmd, ecmdIdx: cmdIdx, tactic: places.length ? places[0].tactic : 'ambush',
       power: enemies.reduce(function (a, e) { return a + e.power; }, 0)
     };
     stageCache[s] = info;
@@ -1226,9 +1294,13 @@ var TF = (function () {
     var types = unlockedTypes(st);
     var out = [];
     var used = {};
+    var cnt = {};
     for (var i = 0; i < n; i++) {
       var f = form && form[i] ? form[i] : null;
       var t = f && types.indexOf(f.type) >= 0 ? f.type : types[0];
+      // 兵種の上限: 超えるときは、まだ置ける兵種に替える
+      if ((cnt[t] || 0) >= K.typeCap[t]) { var alt = types.filter(function (x) { return (cnt[x] || 0) < K.typeCap[x]; })[0]; if (alt) t = alt; }
+      cnt[t] = (cnt[t] || 0) + 1;
       var h = f && f.hero && st.heroes[f.hero] && !used[f.hero] ? f.hero : null;
       if (h) used[h] = true;
       var ln = f && typeof f.lane === 'number' && f.lane >= 0 && f.lane < K.laneN ? f.lane | 0 : null;
@@ -1351,7 +1423,7 @@ var TF = (function () {
         spd: q.spd || 1, rngB: q.rngB || 0, crit: K.crit + (q.critB || 0)
       };
       // 最初の位置: 配置した場所。増援は後方(占領した拠点があれば、いちばん前の前線基地)から
-      u.revUntil = -1; u.mv = null; u.goal = null; u.hold = !!q.hold && !at;
+      u.revUntil = -1; u.mv = null; u.goal = null; u.hold = !!q.hold && !at; u.role = at ? null : q.role || null; u.wp = 0;
       if (ln === null) { u.x = null; u.y = null; }
       else if (at) {
         var bp = fwdBase(side);
@@ -1359,6 +1431,8 @@ var TF = (function () {
         u.lx = u.x;
       } else { u.x = u.lx; u.y = advY(side, u.adv); }
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
+      // 敵将のスキル(予告 → 発動)
+      if (q.ecmd && ECMD[q.ecmd] && !at) { u.esk = q.ecmd; u.eskNext = ECMD[q.ecmd].first + rnd() * 3; u.eskWarn = false; }
       U.push(u); live[side].push(u);
       return u;
     }
@@ -1368,6 +1442,8 @@ var TF = (function () {
     var atkUntil = [-1, -1], atkMulv = [1, 1], armUntil = [-1, -1];
     // 新しいスキルの効果: 連射(電撃戦)・煙幕(その側の攻撃が外れやすい)・反撃(撃たれた側が撃ち返す)・弱点(狙われた部隊)
     var hasteUntil = [-1, -1], smokeUntil = [-1, -1], reflUntil = [-1, -1], markId = [-1, -1], markUntil = [-1, -1];
+    var fortUntil = [-1, -1], jamUntil = [-1, -1]; // 敵将のスキル: 不落要塞・電子妨害
+    var focus = [-1, -1], focusT = [-1, -1]; // 集中攻撃の目標(敵の側だけが使う)
     var ev = opt.record ? [] : null;
     var t = 0, winner = -1, done = false, maxT = K.maxT;
     var auto = opt.auto !== false; // false: 自軍のスキル・増援・配置は手動
@@ -1404,9 +1480,13 @@ var TF = (function () {
     }
     function detR(u) { return K.det[u.type]; }
     // side の部隊から敵 f が見えるか(どれかの部隊の索敵範囲に入っている。撃ったばかりの部隊は遠くからでも見つかる)
-    function seen(side, f, T) {
+    // observed: 索敵範囲で見つけている(観測している)ときだけ。砲兵はこれでないと撃てない
+    function seen(side, f, T, observed) {
+      if (T < jamUntil[side]) return false; // 電子妨害: 何も見えない
       if (!DET || !hasPos(f)) return true;
-      var fp = posAt(f, T), own = live[side], fm = (T < f.revUntil ? K.fireSpot : 1) * (K.sig[f.type] || 1);
+      if (f.eskWarn) return true; // スキルの予告中の敵将は位置がわかる
+      if (!observed && T < f.revUntil) return true; // 攻撃している間は位置が見える
+      var fp = posAt(f, T), own = live[side], fm = K.sig[f.type] || 1;
       for (var j = 0; j < own.length; j++) {
         var o = own[j];
         if (!hasPos(o)) return true;
@@ -1415,10 +1495,10 @@ var TF = (function () {
       }
       return false;
     }
-    function visFoes(side) {
+    function visFoes(side, observed) {
       var foes = live[1 - side];
       if (!DET) return foes;
-      return foes.filter(function (f) { return seen(side, f, t); });
+      return foes.filter(function (f) { return seen(side, f, t, observed); });
     }
     function reveal(u) { if (DET) u.revUntil = t + K.fireT; }
     // 増援を出す列: 相性の良い敵が近く、味方が少ない列
@@ -1541,6 +1621,7 @@ var TF = (function () {
       }
       if (t < atkUntil[u.side]) raw *= atkMulv[u.side];
       if (t < armUntil[f.side]) raw *= SKILL.armor.mul;
+      if (t < fortUntil[f.side]) raw *= ECMD.wall.mul;
       if (markId[f.side] === f.id && t < markUntil[f.side]) raw *= 1 + SKILL.mark.mul;
       return damage(f, Math.max(1, Math.round(raw)), u.side);
     }
@@ -1548,7 +1629,7 @@ var TF = (function () {
     function damage(f, dmg, bySide) {
       f.hp -= dmg;
       if (f.hp <= 0) {
-        f.hp = 0; f.alive = false;
+        f.hp = 0; f.alive = false; f.eskWarn = false;
         var arr = live[f.side];
         arr.splice(arr.indexOf(f), 1);
         if (PO) killQ.push(bySide);
@@ -1560,7 +1641,8 @@ var TF = (function () {
     function act(u) {
       if (!live[1 - u.side].length) return true;
       settle(u);
-      var foes = visFoes(u.side), rg = (K.rng[u.type] || 99) + u.rngB + 1e-9, j, f;
+      // 砲兵は、味方が索敵範囲で見つけている(観測している)敵だけを撃てる
+      var foes = visFoes(u.side, u.type === 'art'), rg = (K.rng[u.type] || 99) + u.rngB + 1e-9, j, f;
       // 指示された目標を集中攻撃(見えている間。射程の外なら近づく)
       if (u.order !== null) {
         f = U[u.order];
@@ -1575,11 +1657,35 @@ var TF = (function () {
         var gx = u.goal.x - u.x, gy = (u.goal.y - u.y) * DY;
         if (gx * gx + gy * gy > 0.0025) return moveToward(u, u.goal, 0);
       }
-      // 射程内の見えている敵を撃つ(相性の良い敵・近い敵を狙いやすい)
+      // 敵の連携: 集中攻撃の目標(見えている敵のうち、いちばん倒しやすい部隊)を、ときどき選び直す
+      var fo = null;
+      if (u.side === 1 && foes.length) {
+        var cur = focus[1] >= 0 ? U[focus[1]] : null;
+        if (!cur || !cur.alive || cur.side === 1 || foes.indexOf(cur) < 0 || t - focusT[1] > K.focusT) {
+          var fb = null, fs = 1e18;
+          foes.forEach(function (x) { var sc = x.hp * (x.type === 'art' ? 0.6 : 1); if (sc < fs) { fs = sc; fb = x; } });
+          focus[1] = fb ? fb.id : -1; focusT[1] = t; cur = fb;
+        }
+        fo = cur;
+      }
+      // 回り込み: 戦場の端を通って後ろへ回り、後衛(砲兵・後ろにいる部隊)を襲う。着くまでは後衛しか撃たない
+      var sgn = u.side === 0 ? 1 : -1; // 前へ進む向き(相手の陣地の奥が +)
+      function rear(x) { return x.type === 'art' || (hasPos(x) && posAt(x, t).y * sgn > 0.55); }
+      if (u.role === 'flank' && hasPos(u)) {
+        var ex0 = u.lx < 3 ? -0.2 : 6.2, wps = [{ x: ex0, y: 0.1 * sgn }, { x: ex0, y: 0.75 * sgn }, { x: u.lx < 3 ? 1.5 : 4.5, y: 0.85 * sgn }];
+        var rt = foes.filter(function (x) { return rear(x) && distAt(u, x, t) <= rg; });
+        if (rt.length) { var bestR = rt[0]; rt.forEach(function (x) { if ((x.type === 'art') > (bestR.type === 'art') || distAt(u, x, t) < distAt(u, bestR, t)) bestR = x; }); fire(u, bestR); return; }
+        if (u.wp < wps.length) {
+          var wp = wps[u.wp], wx = wp.x - u.x, wy = (wp.y - u.y) * DY;
+          if (wx * wx + wy * wy < 0.02) { u.wp++; u.next = t + 0.05; return true; }
+          return moveToward(u, wp, 0, true);
+        }
+      }
+      // 射程内の見えている敵を撃つ(相性の良い敵・近い敵を狙いやすい。敵は集中攻撃の目標・回り込んだ部隊は後衛を特に狙う)
       var aff = AFF2[u.type], LA = u.type === 'art' ? K.laneAimArt : K.laneAim, tot = 0, ws = [], near = null, nd = 1e9;
       for (j = 0; j < foes.length; j++) {
         var dj = distAt(u, foes[j], t), w = 0;
-        if (dj <= rg) { w = aff[foes[j].type] * laneW(LA, dj); tot += w; }
+        if (dj <= rg) { w = aff[foes[j].type] * laneW(LA, dj) * (foes[j].eskWarn ? K.ecmdFocus : 1) * (foes[j] === fo ? K.focusW : 1) * (u.role === 'flank' && rear(foes[j]) ? 4 : 1); tot += w; }
         ws.push(w);
         var sc = dj / (0.6 + aff[foes[j].type]);
         if (sc < nd) { nd = sc; near = foes[j]; }
@@ -1591,15 +1697,18 @@ var TF = (function () {
       }
       // 場所の指示・砲兵は動かずに待つ
       if (u.goal || u.type === 'art' || !hasPos(u)) { u.next = t + K.idleT; return true; }
-      // 見えている敵へ近づく
+      // 見えている敵へ近づく(敵は集中攻撃の目標へ)
+      if (fo && u.role !== 'flank') near = fo;
       if (near) return moveToward(u, posAt(near, t), Math.min(rg, 3) * 0.85);
+      // 囮: 足並みをそろえず、まっすぐ相手の陣地の真ん中へ出て引きつける
+      if (u.role === 'decoy') return moveToward(u, { x: 3, y: 0.55 * sgn }, 0, true);
       // 待ち構える部隊は、敵が見えるまでその場で待つ
       if (u.hold) { u.next = t + K.idleT; return true; }
       if (DET) markExplored(u);
       // 見えている敵がいない: マップを区画に分け、まだ探していない区画を(前のほうを先に)近い順に探して回る。
       // 味方と足並みをそろえ、1部隊だけ先に行きすぎない(待ち構える部隊・砲兵・場所の指示がある部隊は数えない)
       var sg = u.side === 0 ? 1 : -1, line = 0, nl = 0;
-      live[u.side].forEach(function (o) { if (o.type !== 'art' && !o.hold && !o.goal && hasPos(o)) { line += posAt(o, t).y * sg; nl++; } });
+      live[u.side].forEach(function (o) { if (o.type !== 'art' && !o.hold && !o.goal && o.role !== 'decoy' && o.role !== 'flank' && hasPos(o)) { line += posAt(o, t).y * sg; nl++; } });
       var lim = nl ? line / nl + K.lineLead : 1, g = searchCell(u, sg);
       if (sg * g.y > lim) {
         if (sg * u.y >= lim - 0.02) { u.next = t + K.idleT; return true; } // 味方を待つ
@@ -1689,6 +1798,50 @@ var TF = (function () {
         if (ev) ev.push({ t: t, k: 'skill', s: u.id, sk: id, d: mk.id, dur: sk.dur });
       }
     }
+    // 敵将のスキル
+    function ecmdCast(u) {
+      var c = ECMD[u.esk], foes = live[1 - u.side], j, out = { t: t, k: 'eskCast', s: u.id, sk: u.esk };
+      if (u.esk === 'ghost') {
+        var rv = [], bp = posAt(u, t);
+        U.forEach(function (x) {
+          if (x.side !== u.side || x.alive || x.reserveOnly) return;
+          x.alive = true; x.hp = Math.max(1, Math.round(x.maxHp * 0.5)); x.order = null; x.goal = null; x.mv = null;
+          if (hasPos(x) && hasPos(u)) { var a = rnd() * 6.283; x.x = Math.max(K.mapX[0], Math.min(K.mapX[1], bp.x + Math.cos(a) * 0.5)); x.y = Math.max(K.mapY[0], Math.min(K.mapY[1], bp.y + Math.sin(a) * 0.25)); x.lx = x.x; }
+          x.next = t + 0.6; live[x.side].push(x); rv.push({ d: x.id, hp: x.hp });
+        });
+        out.revive = rv;
+      } else if (u.esk === 'wall') {
+        fortUntil[u.side] = t + c.dur;
+        var hs = [];
+        live[u.side].forEach(function (x) { var g = Math.min(x.maxHp - x.hp, Math.round(x.maxHp * c.heal)); if (g > 0) { x.hp += g; hs.push({ d: x.id, heal: g }); } });
+        out.dur = c.dur; out.heals = hs;
+      } else if (u.esk === 'thunder') {
+        if (!foes.length) return;
+        var best = foes[0], bs = -1;
+        foes.forEach(function (f0) { var n = 0; foes.forEach(function (f1) { if (distAt(f0, f1, t) <= c.r) n += f1.maxHp; }); if (n > bs) { bs = n; best = f0; } });
+        var tg = foes.filter(function (f1) { return distAt(best, f1, t) <= c.r; }), hits = [];
+        for (j = 0; j < tg.length; j++) { var h = damage(tg[j], Math.max(1, Math.round(tg[j].maxHp * c.dmg * (t < armUntil[tg[j].side] ? SKILL.armor.mul : 1))), u.side); hits.push({ d: tg[j].id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 }); }
+        out.hits = hits; var cp = hasPos(best) ? posAt(best, t) : null; out.x = cp ? cp.x : null; out.y = cp ? cp.y : null;
+      } else if (u.esk === 'viper') {
+        jamUntil[1 - u.side] = t + c.dur; out.dur = c.dur;
+      } else if (u.esk === 'witch') {
+        var cand = foes.filter(function (f) { return !f.hero; });
+        if (!cand.length) cand = foes.slice();
+        if (cand.length <= 1 && foes.length <= 1) return; // 最後の1部隊は寝返らせない(勝負を決めるのは戦闘で)
+        var tu = cand[0];
+        cand.forEach(function (f) { if (f.hp * f.atk > tu.hp * tu.atk) tu = f; });
+        settle(tu);
+        live[tu.side].splice(live[tu.side].indexOf(tu), 1);
+        tu.side = u.side; tu.order = null; tu.goal = null; tu.sk = null; tu.skNext = Infinity; tu.hold = false; tu.next = t + 0.5;
+        live[tu.side].push(tu);
+        out.d = tu.id;
+      } else if (u.esk === 'reaper') {
+        var hh = [];
+        foes.filter(function (f) { return f.hero; }).forEach(function (f) { var h2 = damage(f, Math.max(1, Math.round(f.maxHp * c.dmg)), u.side); hh.push({ d: f.id, dmg: Math.abs(h2), kill: h2 < 0 ? 1 : 0 }); });
+        out.hits = hh;
+      }
+      if (ev) ev.push(out);
+    }
     // 応急手当は、傷ついた味方がいないときは使わずに待つ(AUTO・敵)
     function healNeeded(side) { return live[side].some(function (x) { return x.hp < x.maxHp * 0.8; }); }
     function manualSkill(u) { return !auto && u.side === 0; }
@@ -1701,6 +1854,7 @@ var TF = (function () {
           if (!u.alive) continue;
           if (u.skNext < bt && !manualSkill(u)) { bt = u.skNext; actor = u; isSk = true; }
           if (u.next < bt) { bt = u.next; actor = u; isSk = false; }
+          if (u.esk) { var et = u.eskWarn ? u.eskNext : u.eskNext - ECMD[u.esk].warn; if (et < bt) { bt = et; actor = u; isSk = 'esk'; } }
         }
         if (R) for (var sd = 1; sd >= 0; sd--) { var dt2 = deployTime(sd); if (dt2 < bt) { bt = dt2; dep = sd; actor = null; } }
         var sup = -1;
@@ -1713,6 +1867,11 @@ var TF = (function () {
           useCharge(sup, charges[sup][0]); supNext[sup] = charges[sup].length ? t + K.supGap : Infinity; continue;
         }
         if (dep >= 0) { deploy(dep, dep === 0 ? bestReserveType() : null); continue; }
+        if (isSk === 'esk') {
+          if (!actor.eskWarn) { actor.eskWarn = true; if (ev) ev.push({ t: t, k: 'eskWarn', s: actor.id, sk: actor.esk, at: actor.eskNext }); }
+          else { actor.eskWarn = false; ecmdCast(actor); actor.eskNext = t + ECMD[actor.esk].cd; flushKills(); if (!live[1 - actor.side].length) { winner = actor.side; done = true; } }
+          continue;
+        }
         if (isSk && actor.sk === 'heal' && !healNeeded(actor.side)) { actor.skNext = t + 1; continue; }
         if (isSk && SKILL_AIM[actor.sk] && !visFoes(actor.side).length) { actor.skNext = t + 1; continue; } // 狙う敵が見えるまで待つ
         if (isSk) { cast(actor); actor.skLast = t; actor.skNext += SKILL[actor.sk].cd; }
@@ -1857,7 +2016,7 @@ var TF = (function () {
     var per = Math.max(1, Math.ceil((n || 40) / KN));
     for (var k = 0; k < KN; k++) {
       var pl = enemyPlace(types, info.terrain, s * 7 + 1009 * (k + 1));
-      var e = info.enemies.map(function (q, i) { var c = {}; for (var key in q) c[key] = q[key]; c.lane = pl[i].lane; c.lx = pl[i].lx; c.adv = pl[i].adv; c.hold = pl[i].hold; return c; });
+      var e = info.enemies.map(function (q, i) { var c = {}; for (var key in q) c[key] = q[key]; c.lane = pl[i].lane; c.lx = pl[i].lx; c.adv = pl[i].adv; c.hold = pl[i].hold; c.role = pl[i].role; return c; });
       for (var i = 0; i < per; i++) { var r = simulate(p, e, 424242 + i * 7919 + k * 31, false, res); tot++; if (r.win) wins++; }
     }
     return { winRate: wins / tot };
@@ -1873,6 +2032,9 @@ var TF = (function () {
       if (idx === types.length - 1) { combos.push(acc.concat([left])); return; }
       for (var c = left; c >= 0; c--) rec(idx + 1, left - c, acc.concat([c]));
     })(0, n, []);
+    // 兵種の上限を守る組み合わせだけ(上限を守れないほど兵種が少ないときは、そのまま)
+    var capped = combos.filter(function (cnt) { return cnt.every(function (c, i) { return c <= K.typeCap[types[i]]; }); });
+    if (capped.length) combos = capped;
     var scored = combos.map(function (cnt) {
       var arr = [];
       cnt.forEach(function (c, i) { for (var j = 0; j < c; j++) arr.push(types[i]); });
@@ -1977,7 +2139,7 @@ var TF = (function () {
     POST_KIND: POST_KIND, POST_ORDER: POST_ORDER, SUPPORT: SUPPORT,
     TERRAIN: TERRAIN, TERRAIN_KEYS: TERRAIN_KEYS, terrAtk: terrAtk, terrTake: terrTake, terrMove: terrMove, laneW: laneW,
     terrAt: terrAt, inBlob: inBlob, blobR: blobR, fightTerr: fightTerr, fightY: fightY, advY: advY, arrivalTime: arrivalTime, marchInfo: marchInfo, flatTerrain: flatTerrain,
-    frontY: frontY, POST_POS: POST_POS, LAYOUTS: LAYOUTS, stageLayout: stageLayout, FIRE_Y: FIRE_Y, stageTerrain: stageTerrain, autoLanes: autoLanes, placeUnits: placeUnits, enemyPlace: enemyPlace,
+    frontY: frontY, POST_POS: POST_POS, ECMD: ECMD, stageCmd: stageCmd, TACTICS: TACTICS, stageTactic: stageTactic, LAYOUTS: LAYOUTS, stageLayout: stageLayout, FIRE_Y: FIRE_Y, stageTerrain: stageTerrain, autoLanes: autoLanes, placeUnits: placeUnits, enemyPlace: enemyPlace,
     ARMS: ARMS, ARM_KINDS: ARM_KINDS, ARM_KIND: ARM_KIND, armLv: armLv, armTier: armTier, armName: armName, armMax: armMax, armIsDev: armIsDev,
     armCost: armCost, armEffect: armEffect, armXMax: armXMax,
     partGrade: partGrade, partStages: partStages, partName: partName, partCount: partCount, partDrop: partDrop, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
@@ -2877,9 +3039,15 @@ if (typeof module !== 'undefined') module.exports = TF;
     // 敵
     html += '<div class="side enemy"><div class="hd"><span class="grow">敵部隊' + (info.boss ? ' <span class="pill gold">ボス: ' + esc(info.bossName) + '</span>' : '') + '</span><span class="pw">戦力 ' + fmt(info.power) + '</span></div><div class="slots">';
     info.enemies.forEach(function (e) {
-      html += '<div class="slot' + (e.boss ? ' bossc' : '') + '">' + (e.boss ? '<span class="boss">BOSS</span>' : '') + enemySvg(e.type, s, 'ic') + '<div class="t">' + TF.UNIT[e.type].name + '</div><div class="p num">戦力 ' + fmt(e.power) + '</div><div class="wk">弱点: ' + names(counters(e.type)) + '</div></div>';
+      html += '<div class="slot' + (e.boss ? ' bossc' : '') + '">' + (e.boss ? '<span class="boss">BOSS</span>' : '') + (e.ecmd ? '<span class="cmdb">敵将</span>' : '') + enemySvg(e.type, s, 'ic') + '<div class="t">' + TF.UNIT[e.type].name + '</div><div class="p num">戦力 ' + fmt(e.power) + '</div><div class="wk">弱点: ' + names(counters(e.type)) + '</div></div>';
     });
-    html += '</div></div>';
+    html += '</div>';
+    if (info.ecmd) {
+      var ec = TF.ECMD[info.ecmd];
+      html += '<div class="ecmd" id="ecmdInfo"><b>敵将「' + esc(ec.name) + '」</b> スキル〈' + esc(ec.skill) + '〉: ' + esc(ec.desc) +
+        '<div class="small">発動の' + ec.warn + '秒前に予告があり、そのあいだ敵将の位置がわかります。予告中に倒せば止められます</div></div>';
+    }
+    html += '</div>';
     // 自軍
     var squads = TF.formSquads(st, st.form);
     var myPower = squads.reduce(function (a, q) { return a + q.power; }, 0);
@@ -2932,14 +3100,15 @@ if (typeof module !== 'undefined') module.exports = TF;
     var f = st.form[i];
     var info = TF.stageInfo(st.sel);
     var html = '<div class="grab"></div><button class="close" data-act="sheet-close" aria-label="閉じる">✕</button><h3>部隊' + (i + 1) + 'の編成</h3>';
-    html += '<h2 class="sec">兵種</h2><div class="slots" style="grid-template-columns:repeat(2,1fr)">';
+    html += '<h2 class="sec">兵種</h2><div class="small" style="margin:-4px 2px 6px;color:var(--dim)">編成できる数: ' + TF.TYPES.map(function (t) { return TF.UNIT[t].name + TF.K.typeCap[t]; }).join('・') + '部隊まで</div><div class="slots" style="grid-template-columns:repeat(2,1fr)">';
     TF.TYPES.forEach(function (t) {
-      var on = TF.typeUnlocked(st, t);
+      var used = st.form.filter(function (x, j) { return j !== i && x.type === t; }).length, full = used >= TF.K.typeCap[t];
+      var on = TF.typeUnlocked(st, t) && !full;
       var q = TF.squadStats(st, t, f.hero);
       var mk = matchupMark(t, info.enemies);
       html += '<button class="slot" style="min-height:96px;background:' + (f.type === t ? '#2f5a4e' : '#1b2a25') + ';border:2px solid ' + (f.type === t ? 'var(--ally)' : '#2f5248') + ';border-radius:12px" data-act="set-type" data-i="' + i + '" data-t="' + t + '"' + (on ? '' : ' disabled') + '>' +
         (on ? '<span class="mk ' + mk[0] + '">' + mk[1] + '</span>' : '') + (on ? allySvg(t, 'ic') : unitSvg(t, '#667', 'ic')) + '<div class="t">' + TF.UNIT[t].name + '</div>' +
-        '<div class="p">' + (on ? '戦力 ' + fmt(q.power) : TF.BLD[TF.TYPE_BLD[t]].name + 'が必要') + '</div></button>';
+        '<div class="p">' + (on ? '戦力 ' + fmt(q.power) : full ? '上限(' + TF.K.typeCap[t] + '部隊まで)' : TF.BLD[TF.TYPE_BLD[t]].name + 'が必要') + '</div></button>';
     });
     html += '</div><h2 class="sec">指揮官</h2><div class="blist">';
     html += '<button class="bitem" data-act="set-hero" data-i="' + i + '" data-h="" style="' + (!f.hero ? 'border-color:var(--ally)' : '') + '"><div class="grow" style="text-align:left"><div class="nm">指揮官なし</div></div>' + (!f.hero ? '<span class="pill blue">選択中</span>' : '') + '</button>';
@@ -3200,6 +3369,9 @@ if (typeof module !== 'undefined') module.exports = TF;
     } else {
       html += '<h2 class="lose">' + (p.timeout ? '時間切れ' : '敗北…') + '</h2><div class="sub">兵は失われていません。強化して再挑戦しよう。</div>';
     }
+    // 敵の作戦は戦闘のあとで明かす
+    var tinf = TF.stageInfo(p.s);
+    html += '<div class="small" id="resTactic" style="text-align:center;margin:-2px 0 8px;color:var(--khaki)">敵の作戦: ' + TF.TACTICS[tinf.tactic] + (tinf.ecmd ? ' ・ 敵将「' + TF.ECMD[tinf.ecmd].name + '」' : '') + '</div>';
     if (sum.heroExp.length) {
       html += '<div class="rlist">' + sum.heroExp.map(function (x) {
         return '<div class="rline"><div class="portrait xs">' + heroSvg(x.id) + '</div><span class="grow">' + TF.HERO[x.id].name + ' <span class="small">EXP +' + fmt(x.gain) + '</span></span>' +
@@ -4108,7 +4280,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         units: [], ev: eng.ev, ei: 0, clock: 0, res: null, info: prep.info, speed: speed, cb: cb,
         biome: biomeOf(prep.info.place), seed: prep.info.s * 131,
         projs: [], imps: [], parts: [], texts: [], marks: [], pillars: [], beams: [], sights: [], air: [], supKey: null,
-        banner: null, shake: 0, buff: [{ atk: -1, arm: -1 }, { atk: -1, arm: -1 }],
+        banner: null, shake: 0, buff: [{ atk: -1, arm: -1 }, { atk: -1, arm: -1 }], ewarn: null, jamUntil: -1,
         phase: opts.deploy ? 'deploy' : 'intro', introT: 0, ending: 0, endT: 0, front: F0, colOff: LANES.map(function () { return 0; }), wave: 0, camTY: F0 + 14,
         prep: prep, seedB: seed, onDeploy: opts.onDeploy || null
       };
@@ -4182,7 +4354,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       figs.sort(function (a, b) { return b.oy - a.oy; });
       var farOy = Math.max.apply(null, figs.map(function (f) { return f.oy; }));
       return {
-        id: id, side: side, slot: slot, type: t, maxHp: q.maxHp, hp: q.maxHp, hero: q.hero, boss: boss,
+        id: id, side: side, slot: slot, type: t, maxHp: q.maxHp, hp: q.maxHp, hero: q.hero, boss: boss, ecmd: q.ecmd || null,
         troop: Math.round(TROOP[t] * (1 + B.info.s / 40) * (boss ? 2 : 1) / 50) * 50, figs: figs, farOy: farOy, big: boss && (t === 'tank' || t === 'art') ? 1.35 : 1,
         wx: CXW, wy: 0, col: CXW, row: 0, jx: 0, jy: 0, moving: false, hitT: -9, dead: false, colF: 0, aim: null, aimT: -9
       };
@@ -4249,6 +4421,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (ev.k === 'spawn') { spawnVisual(ev); return; }
       if (ev.k === 'lane') { laneMoveVisual(ev, true); return; }
       if (ev.k === 'refl') { applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); return; }
+      if (ev.k === 'eskWarn' || ev.k === 'eskCast') { ecmdEvent(ev, true); return; }
       if (ev.k === 'skill' && ev.heals) { ev.heals.forEach(function (h) { var hu = B.units[h.d]; if (hu) { hu.hp = Math.min(hu.maxHp, hu.hp + h.heal); reviveFigs(hu); } }); return; }
       if (ev.k === 'post') { postEvent(ev, true); return; }
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
@@ -4266,6 +4439,8 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (u.side !== 1) return;
         var v = B.ending ? true : B.phase !== 'fight' ? false : u.dead ? u.vis : B.eng.seen(0, u.id, B.clock);
         if (v && !u.vis && !u.dead && B.phase === 'fight' && !B.ending) {
+          var eu0 = B.eng.U[u.id], ep0 = B.eng.pos(u.id, B.clock);
+          if (eu0 && eu0.role === 'flank' && ep0 && ep0.y < 0 && !B.flankSaid) { B.flankSaid = true; showHint('敵が側面から回り込んできた! 後衛(砲兵)に注意', 2.6); }
           var nt = B.noteT || (B.noteT = {});
           if (!(nt.spot > B.clock - 0.25)) { nt.spot = B.clock; text(u.wx, u.wy, '発見!', '#ffd27a', 13, 38); }
           part(u.wx, u.wy, { life: 0.5, r: 7, c: 'ring' });
@@ -4639,6 +4814,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (ev.k === 'sup') { supportEvent(ev); return; }
       var s = B.units[ev.s];
       if (ev.k === 'lane') { laneMoveVisual(ev, false); return; }
+      if (ev.k === 'eskWarn' || ev.k === 'eskCast') { ecmdEvent(ev, false); return; }
       if (ev.k === 'refl') {
         // 鉄壁反撃: 撃たれた部隊から撃った部隊へ光が返る
         var rt = B.units[ev.d];
@@ -4648,6 +4824,14 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       if (ev.k === 'atk') {
         s.aim = ev.d; s.aimT = B.clock;
+        if (s.side === 1) {
+          var tg0 = B.units[ev.d];
+          if (tg0 && tg0.side === 0) {
+            tg0.shotBy = (tg0.shotBy || []).filter(function (x) { return B.clock - x.t < 2; });
+            if (!tg0.shotBy.some(function (x) { return x.s === s.id; })) tg0.shotBy.push({ s: s.id, t: B.clock });
+            if (tg0.shotBy.length >= 3 && !(B.clock - (tg0.focusSaid || -9) < 6)) { tg0.focusSaid = B.clock; text(tg0.wx, tg0.wy, '集中攻撃を受けている!', '#ff9a8a', 13, 44); }
+          }
+        }
         var d = B.units[ev.d], fl = FLIGHT[s.type];
         var n = s.type === 'inf' ? 3 : 1;
         for (var i = 0; i < n; i++) {
@@ -4707,6 +4891,55 @@ if (typeof module !== 'undefined') module.exports = TF;
             }
           });
         }
+      }
+    }
+    // 敵将のスキル: 予告(8秒前・位置がばれる)と発動
+    function ecmdEvent(ev, quiet) {
+      var c = TF.ECMD[ev.sk], s = B.units[ev.s];
+      if (ev.k === 'eskWarn') {
+        if (quiet) return;
+        B.ewarn = { s: ev.s, sk: ev.sk, at: ev.at };
+        B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill + 'を準備中', side: 1, sub: 'あと' + c.warn + '秒 ・ 倒せば止められる' };
+        if (s) text(s.wx, s.wy, '敵将を発見!', '#ff8a7a', 16, 46);
+        return;
+      }
+      if (B.ewarn && B.ewarn.s === ev.s) B.ewarn = null;
+      if (!quiet) { B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill, side: 1, sub: c.desc }; B.shake = Math.max(B.shake, 8); }
+      if (ev.sk === 'ghost') {
+        (ev.revive || []).forEach(function (r0) {
+          var u = B.units[r0.d]; if (!u) return;
+          var ep = B.eng.pos(u.id, ev.t);
+          u.dead = false; u.hp = r0.hp; u.vis = false;
+          u.figs.forEach(function (f) { f.alive = false; }); reviveFigs(u);
+          if (ep) { u.wx = fxW(ep.x); u.wy = fyW(ep.y); }
+          if (!quiet) B.pillars.push({ wx: u.wx, wy: u.wy, side: 1, t: fxNow(), big: 1.3 });
+        });
+        if (!quiet) showHint('倒した敵の部隊がよみがえった!', 2);
+      } else if (ev.sk === 'wall') {
+        B.buff[1].fort = B.clock + ev.dur;
+        (ev.heals || []).forEach(function (h) { var u = B.units[h.d]; if (u) { u.hp = Math.min(u.maxHp, u.hp + h.heal); reviveFigs(u); } });
+      } else if (ev.sk === 'thunder') {
+        if (quiet) { (ev.hits || []).forEach(function (h) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); }); return; }
+        var cxw = ev.x !== null && ev.x !== undefined ? fxW(ev.x) : CXW, cyw = ev.y !== null && ev.y !== undefined ? fyW(ev.y) : F0;
+        B.projs.push({ kind: 'rocket', x0: B.mapv.ex, y0: Yd(270), x1: cxw, y1: cyw, t0: B.clock, t1: B.clock + 1.2, side: 1 });
+        B.imps.push({ at: B.clock + 1.2, d: (ev.hits && ev.hits[0] ? ev.hits[0].d : ev.s), dmg: 0, kind: 'rocket', wx: cxw, wy: cyw, big: true, fx: true });
+        (ev.hits || []).forEach(function (h, i) { var u = B.units[h.d]; B.imps.push({ at: B.clock + 1.25 + i * 0.05, d: h.d, dmg: h.dmg, kill: h.kill, kind: 'rocket', wx: u.wx, wy: u.wy, big: true, crit: 1 }); });
+      } else if (ev.sk === 'viper') {
+        B.jamUntil = B.clock + ev.dur;
+      } else if (ev.sk === 'witch') {
+        var tu = B.units[ev.d];
+        if (tu) {
+          tu.side = 1; tu.vis = true; tu.visA = 1; tu.reserve = false;
+          if (!quiet) { text(tu.wx, tu.wy, '寝返った!', '#e2b8ff', 18, 40); B.pillars.push({ wx: tu.wx, wy: tu.wy, side: 1, t: fxNow(), big: 1.4 }); }
+          buildSkillBar();
+        }
+      } else if (ev.sk === 'reaper') {
+        (ev.hits || []).forEach(function (h, i) {
+          var u = B.units[h.d]; if (!u) return;
+          if (quiet) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); return; }
+          B.sights.push({ u: u, until: B.clock + 0.5, t0: B.clock });
+          B.imps.push({ at: B.clock + 0.5 + i * 0.08, d: h.d, dmg: h.dmg, crit: 1, kill: h.kill, kind: 'snipe', wx: u.wx, wy: u.wy });
+        });
       }
     }
     // 粒子は地面上の点に結びつけ、画面上のずれ(ox,oy)で動かす。拡大率が変わっても追従する
@@ -4959,6 +5192,19 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.fillStyle = '#2a2008'; cx.font = '900 ' + Math.round(hr * 1.25) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textBaseline = 'middle';
         cx.fillText(TF.HERO[u.hero].name.charAt(0), hx, hy + 0.5);
       }
+      if (u.ecmd && u.side === 1) {
+        var ex2 = p.x + r * 2.0, ey2 = y - r, er = r * 0.82;
+        cx.fillStyle = '#c0281c'; cx.beginPath(); cx.arc(ex2, ey2, er, 0, Math.PI * 2); cx.fill();
+        cx.strokeStyle = '#ffd9a0'; cx.lineWidth = 2; cx.beginPath(); cx.arc(ex2, ey2, er + 1.5, 0, Math.PI * 2); cx.stroke();
+        cx.fillStyle = '#fff'; cx.font = '900 ' + Math.round(er * 1.2) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textBaseline = 'middle';
+        cx.fillText('将', ex2, ey2 + 0.5);
+        if (B.ewarn && B.ewarn.s === u.id) {
+          var left = Math.max(0, B.ewarn.at - B.clock);
+          cx.font = '900 ' + Math.round(15 * sz) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textBaseline = 'bottom';
+          cx.lineWidth = 4; cx.strokeStyle = 'rgba(40,0,0,.85)'; cx.strokeText('発動まで ' + left.toFixed(1), p.x, y - 2 * r - 18 * sz);
+          cx.fillStyle = '#ff6a5a'; cx.fillText('発動まで ' + left.toFixed(1), p.x, y - 2 * r - 18 * sz);
+        }
+      }
       if (u.dest || u.reserve) {
         var sx = p.x - r * 2.0, sy = y - r;
         cx.fillStyle = u.dest ? '#7fc6ff' : '#9cffb0';
@@ -5065,7 +5311,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var tl = Math.max(0, TF.K.maxT - B.clock);
       cx.textAlign = 'right'; cx.fillStyle = tl < 10 ? '#ff8b78' : '#eef0e4';
       var mine = B.posts.filter(function (p) { return p.owner === 0; }).length;
-      cx.fillText('拠点' + mine + '/' + B.posts.length + '  ' + (B.phase === 'deploy' ? '配置中' : B.phase === 'intro' ? '展開中…' : '残り ' + Math.ceil(tl) + '秒'), W - 12, 7);
+      cx.fillText('拠点' + mine + '/' + B.posts.length + '  ' + (B.phase === 'deploy' ? '配置中' : B.phase === 'intro' ? '展開中…' : '残り ' + Math.floor(Math.ceil(tl) / 60) + ':' + ('0' + Math.ceil(tl) % 60).slice(-2)), W - 12, 7);
       var bw = (W - 36) / 2;
       [[0, 12, '自軍', '#4fd46a'], [1, 24 + bw, '敵軍', '#ff6a5c']].forEach(function (a) {
         var f = sideFrac(a[0]);
@@ -5157,6 +5403,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.beginPath(); cx.moveTo(pa.x, pa.y - 6); cx.lineTo(pb.x, pb.y - 6); cx.stroke();
       });
       drawOrders();
+      drawEcmd();
       drawParts();
       order.forEach(drawLabel);
       B.texts.forEach(function (t) {
@@ -5169,6 +5416,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
       cx.restore();
       drawHud();
+      drawJam();
       drawBanner();
       drawHint();
       if (B.ending) drawEnding();
@@ -5666,6 +5914,33 @@ if (typeof module !== 'undefined') module.exports = TF;
         }
       }
     }
+    // 敵将: 予告中は赤い輪が脈打つ。不落要塞の間は敵に青い盾。電子妨害の間は画面にノイズ
+    function drawEcmd() {
+      if (B.ewarn) {
+        var u = B.units[B.ewarn.s];
+        if (u && !u.dead) {
+          var p = proj(u.wx, u.wy), w = 11 * p.k * u.big, ph = 0.5 + 0.5 * Math.sin(fxNow() * 10);
+          cx.strokeStyle = 'rgba(255,60,40,' + (0.55 + 0.4 * ph) + ')'; cx.lineWidth = 3 + 2 * ph;
+          cx.beginPath(); cx.ellipse(p.x, p.y, w * (1.6 + 0.3 * ph), w * (0.65 + 0.12 * ph), 0, 0, Math.PI * 2); cx.stroke();
+        }
+      }
+      if (B.buff[1].fort > B.clock) B.units.forEach(function (v) {
+        if (v.side !== 1 || v.dead || !v.vis) return;
+        var q = proj(v.wx, v.wy), ww = 11 * q.k * v.big;
+        cx.strokeStyle = 'rgba(120,200,255,.8)'; cx.lineWidth = 2.5;
+        cx.beginPath(); cx.ellipse(q.x, q.y - 4, ww * 1.25, ww * 0.6, 0, 0, Math.PI * 2); cx.stroke();
+      });
+    }
+    function drawJam() {
+      if (!(B.jamUntil > B.clock)) return;
+      cx.save();
+      cx.fillStyle = 'rgba(30,40,30,.18)'; cx.fillRect(0, 0, W, H);
+      for (var i = 0; i < 70; i++) { cx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.25) + ')'; cx.fillRect(Math.random() * W, Math.random() * H, 2 + Math.random() * 30, 1.2); }
+      cx.font = '900 16px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      cx.lineWidth = 4; cx.strokeStyle = 'rgba(0,0,0,.8)'; var tx = '電子妨害中! 敵が見えない(あと' + Math.ceil(B.jamUntil - B.clock) + '秒)';
+      cx.strokeText(tx, W / 2, H * 0.3); cx.fillStyle = '#9cffb0'; cx.fillText(tx, W / 2, H * 0.3);
+      cx.restore();
+    }
     function drawHint() {
       var h = B.hint; if (!h) return;
       var a = Math.min(1, h.t / 0.2, (h.dur - h.t) / 0.3);
@@ -5681,7 +5956,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, deployCard: deployCard, launchSupport: launchSupport, deployGo: deployGo, deployAuto: deployAuto, active: function () { return !!B; },
       debug: function () {
         if (!B) return null;
-        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
+        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, ewarn: B.ewarn ? { s: B.ewarn.s, sk: B.ewarn.sk } : null, jam: B.jamUntil > B.clock, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
           captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
           walls: B.walls.filter(function (w) { return w.ok; }).length, wallsTotal: B.walls.length,
           ruins: B.blds.filter(function (b) { return b.ruin; }).length,
@@ -5695,7 +5970,7 @@ if (typeof module !== 'undefined') module.exports = TF;
           supEvents: B.ev.filter(function (e) { return e.k === 'sup'; }).map(function (e) { return e.side + ':' + e.kind; }),
           postEvents: B.ev.filter(function (e) { return e.k === 'post'; }).map(function (e) { return e.side + ':' + e.i; }),
           startY: START.p, minAllyY: Math.min.apply(null, B.units.filter(function (u) { return u.side === 0; }).map(function (u) { return u.wy; })),
-          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, vis: u.side === 0 || !!u.vis, type: u.type, x: p.x, y: p.y, wx: u.wx, wy: u.wy, ex: eu.mv ? null : eu.x, ey: eu.mv ? null : eu.y, moving: !!u.march, lx: eu.lx, adv: eu.adv, spd: eu.spd, order: eu.order, alive: eu.alive, goal: eu.goal ? { x: eu.goal.x, y: eu.goal.y } : null, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
+          units: B.units.map(function (u) { var eu = B.eng.U[u.id]; var p = proj(u.wx, u.wy); return { id: u.id, side: u.side, ecmd: u.ecmd, vis: u.side === 0 || !!u.vis, type: u.type, x: p.x, y: p.y, wx: u.wx, wy: u.wy, ex: eu.mv ? null : eu.x, ey: eu.mv ? null : eu.y, moving: !!u.march, lx: eu.lx, adv: eu.adv, spd: eu.spd, order: eu.order, alive: eu.alive, goal: eu.goal ? { x: eu.goal.x, y: eu.goal.y } : null, reserve: !!eu.reserve, skNext: eu.sk ? eu.skNext : null }; }),
           skills: B.ev.filter(function (e) { return e.k === 'skill' && B.eng.U[e.s].side === 0; }).length };
       },
       // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標
