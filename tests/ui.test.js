@@ -639,14 +639,16 @@ function midState(over) {
       await page.click('[data-act="tab"][data-tab="army"]');
       await page.click('[data-act="tab"][data-tab="sortie"]');
       await page.click('[data-act="sortie"]');
-      await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.spHits > 0; }, null, { timeout: 20000 });
+      // (戦車は3部隊まで。マップ全体で敵を探してから戦うので、少し時間がかかる)
+      await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && (d.spHits > 0 || d.ending); }, null, { timeout: 60000 });
+      assert((await page.evaluate(() => window.__game.battle.debug().spHits)) > 0, '特効が出ない');
       await page.click('[data-act="skip"]');
       await page.waitForSelector('#modalWrap:not(.hidden) .result');
       if ((await page.textContent('.result h2')).includes('勝利')) {
         assert((await page.textContent('.result')).includes('設計図'));
         assert((await state(page)).bp > bp0, '勝っても設計図が増えない');
       }
-    }, midState({ cleared: 35, sel: 36, bp: 0, speed: 2, arms: { tank: { w: 10, a: 10, x: 10 } },
+    }, midState({ cleared: 18, sel: 19, bp: 0, speed: 4, arms: { tank: { w: 10, a: 10, x: 10 } },
       bld: { hq: { lv: 8, slot: 4 }, barracks: { lv: 14, slot: 1 }, atpost: { lv: 12, slot: 3 }, factory: { lv: 16, slot: 5 }, artpost: { lv: 10, slot: 7 }, lab: { lv: 8, slot: 8 } } }));
   });
 
@@ -846,7 +848,7 @@ function midState(over) {
   await test('部隊の画面に兵種ごとの射程と10人の指揮官(特徴・スキル)が出る。アイテム一覧の✕は下までスクロールしても見えている', () => withPage('iPhone SE', async page => {
     await page.click('[data-act="tab"][data-tab="army"]');
     const txt = await page.textContent('#scr-army');
-    assert(txt.includes('射程') && txt.includes('左右2列'), '射程が出ない');
+    assert(txt.includes('射程') && txt.includes('2列') && txt.includes('索敵') && txt.includes('見つかりにくさ'), '射程・索敵が出ない');
     // 指揮官は10人(まだの指揮官も、着任するステージ・特徴・スキルが見える)
     assert.strictEqual(await page.locator('#scr-army .card.hero').count(), 10, '指揮官が10人いない');
     assert(await page.locator('#scr-army .card.hero .traits span').count() >= 20, '指揮官の特徴が出ない');
