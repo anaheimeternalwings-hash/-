@@ -520,7 +520,7 @@ check('敵将: ボス戦(ステージ12以降)と一部のステージに敵将�
   assert(wn && first && first.t >= wn.t, '予告の前から見えていた');
   assert(!b.U[1].alive && !castOf(b), '予告中に倒しても発動した');
 });
-check('編成の上限: 兵種ごとに編成できる部隊の数に上限がある(歩兵4・対戦車兵3・戦車3・砲兵2)。おまかせ編成も上限を守る', () => {
+check('編成の上限: 兵種ごとに編成できる部隊の数に上限がある(歩兵4・対戦車兵3・戦車3・砲兵2)。おまかせ編成も敵の編成も上限を守る', () => {
   assert.deepStrictEqual(K.typeCap, { inf: 4, at: 3, tank: 3, art: 2 });
   const st = TF.newState(0);
   Object.assign(st.bld, { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } });
@@ -529,6 +529,8 @@ check('編成の上限: 兵種ごとに編成できる部隊の数に上限が�
   assert.strictEqual(f.length, 8);
   TF.TYPES.forEach(t => assert((count(f)[t] || 0) <= K.typeCap[t], '上限を超えた ' + t));
   for (const s of [20, 41, 60]) { const a = TF.autoFormation(st, s, 4), c = count(a); TF.TYPES.forEach(t => assert((c[t] || 0) <= K.typeCap[t], 'おまかせ ' + s + ' ' + t)); }
+  // 敵の編成も同じ上限を守る(兵種がそろった後)
+  for (let s = 9; s <= 200; s++) { const c = count(TF.stageInfo(s).enemies); TF.TYPES.forEach(t => assert((c[t] || 0) <= K.typeCap[t], '敵 ステージ' + s + ' ' + t)); }
   // 兵種が少ないうちは、ほかに置ける兵種がなければ上限を超えてよい(枠が余らない)
   const st0 = TF.newState(0); st0.bld.hq.lv = 12;
   assert.strictEqual(TF.normalizeForm(st0, []).length, TF.slotsFor(12));
