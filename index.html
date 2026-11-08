@@ -2546,7 +2546,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       html += '<div class="act"><div class="costs">' + (c.part ? '<button class="cost partc mat' + (TF.partCount(st, c.part) < 1 ? ' short' : '') + '" data-act="part-go" data-g="' + c.part + '">' + icoPart() + TF.partName(c.part).replace('試作部品', '部品') + ' ' + TF.partCount(st, c.part) + '/1</button>' : '') + (c.bp ? '<button class="cost mat' + ((st.bp || 0) < c.bp ? ' short' : '') + '" data-act="bp-go">' + icoBp() + fmt(c.bp) + '</button>' : '') + costHtml(c) + '</div>' +
         '<button class="btn ' + (dev ? 'dev' : 'green') + '" data-act="arm-up" data-t="' + t + '" data-k="' + k + '"' + (chk.ok ? '' : ' disabled') + '>' + (l === 0 ? '配備' : dev ? '開発' : '強化') + '</button></div>' +
         (chk.ok ? '' : '<div class="why">' + esc(chk.reason) + (chk.cap ? '(武装のレベル上限は 研究所Lv×' + TF.K.armLab + ')' : '') +
-          (chk.needPart ? '<br><span class="small">' + partWhere(chk.needPart) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は' + Math.round(TF.K.partRate * 100) + '%)</span> <button class="pill" data-act="part-go" data-g="' + chk.needPart + '">ボス戦へ ▶</button>' : '') + '</div>') + '</div>';
+          (chk.needPart ? '<br><span class="small">' + partWhere(chk.needPart) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個)</span> <button class="pill" data-act="part-go" data-g="' + chk.needPart + '">ボス戦へ ▶</button>' : '') + '</div>') + '</div>';
     });
     html += '</div><div class="small" style="margin-top:8px;line-height:1.6">研究所 Lv' + lab + ': 武装のレベル上限 ' + TF.armMax(st) + '。最初の型は設計図で配備、' + TF.K.armPer + 'レベルごとの新型の開発には試作部品と設計図が必要。増援の部隊にも武装が反映されます。武装の名前は実在の兵器から取っています(性能はゲーム用の数値です)。</div>';
     $('scr-arms').innerHTML = html;
@@ -2580,7 +2580,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     for (var g = 1; g <= top; g++) {
       var n = TF.partCount(st, g), first = TF.partStages(g)[0];
       html += '<div class="card item part' + (n ? '' : ' zero') + '" id="item-part-' + g + '"><div class="ic">' + icoPart() + '</div><div class="grow"><div class="row"><span class="nm">' + TF.partName(g) + '</span><b class="n num">×' + n + '</b></div>' +
-        '<div class="small">' + partWhere(g) + 'でドロップ(初クリアで' + TF.K.partFirst + '個、以降は勝利の' + Math.round(TF.K.partRate * 100) + '%)。新型の開発に1個使います。</div>' +
+        '<div class="small">' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個)。新型の開発に1個使います。</div>' +
         (use[g] ? '<div class="small use">次に使う開発: ' + use[g].map(esc).join('、') + '</div>' : '') +
         '<button class="pill" data-act="part-go" data-g="' + g + '">' + (st.cleared >= first ? 'ボス戦へ ▶' : 'ステージ' + first + 'へ ▶') + '</button></div></div>';
     }
@@ -2664,7 +2664,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     html += '<div class="winbox card"><div class="wr"><svg class="c" viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.5" fill="none" stroke="#11160f" stroke-width="4"/>' + (pct > 0 ? '<circle cx="18" cy="18" r="15.5" fill="none" stroke="' + wi[1] + '" stroke-width="4" stroke-linecap="round" stroke-dasharray="' + (pct * 0.974).toFixed(1) + ' 100" transform="rotate(-90 18 18)"/>' : '') + '</svg><div><div class="v num" style="color:' + wi[1] + '">' + pct + '%</div><div class="l" style="color:' + wi[1] + '">' + wi[0] + '</div></div></div>' +
       '<div class="grow rewards"><div class="small">予想勝率(自動戦闘で100回模擬戦)</div><div style="font-weight:800">勝利報酬' + (first ? ' <span class="pill gold">初回×' + TF.K.firstMul + '</span>' : '') + '</div>' +
       '<div class="row"><span class="cost">' + icoMoney() + fmt(rw.m * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoSteel() + fmt(rw.s * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoBp() + fmt(rw.bp * (first ? TF.K.firstMul : 1)) + '</span></div>' +
-      (TF.partGrade(s) ? '<div class="row"><span class="cost partc">' + icoPart() + TF.partName(TF.partGrade(s)) + ' ' + (first ? '×' + TF.K.partFirst + ' 確定' : Math.round(TF.K.partRate * 100) + '%でドロップ') + '</span></div>' : '') +
+      (TF.partGrade(s) ? '<div class="row"><span class="cost partc">' + icoPart() + TF.partName(TF.partGrade(s)) + (first ? ' ×' + TF.K.partFirst : '') + '</span></div>' : '') +
       '<div class="small">指揮官EXP +' + fmt(rw.exp) + '(敗北時は半分)</div></div></div>';
     var auto = st.auto !== false;
     html += '<div class="modesel"><span class="lbl">戦闘</span><div class="seg"><button data-act="mode" data-m="auto" class="' + (auto ? 'on' : '') + '">自動</button><button data-act="mode" data-m="manual" class="' + (auto ? '' : 'on') + '">手動(指示・スキル)</button></div></div>';
@@ -2955,7 +2955,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       html += '<div class="rlist"><div class="rline">' + icoMoney() + '<span class="grow">資金</span><b class="num">+' + fmt(sum.m) + '</b></div>' +
         '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num">+' + fmt(sum.s) + '</b></div>' +
         '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num">+' + fmt(sum.bp) + '</b></div>' +
-        (sum.part ? '<div class="rline rare">' + icoPart() + '<span class="grow"><b>' + TF.partName(sum.part.g) + '</b> <span class="small">' + (sum.first ? '(初クリア確定)' : 'レアドロップ!') + '</span></span><b class="num">+' + sum.part.n + '</b></div>' : '') +
+        (sum.part ? '<div class="rline rare">' + icoPart() + '<span class="grow"><b>' + TF.partName(sum.part.g) + '</b></span><b class="num">+' + sum.part.n + '</b></div>' : '') +
         (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') + '</div>';
     } else {
       html += '<h2 class="lose">' + (p.timeout ? '時間切れ' : '敗北…') + '</h2><div class="sub">兵は失われていません。強化して再挑戦しよう。</div>';
@@ -3113,7 +3113,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     tab: function (el) { show(el.dataset.tab); },
     'part-info': function (el) {
       var g = +el.dataset.g;
-      toast(TF.partName(g) + ': ' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個、以降は勝利の' + Math.round(TF.K.partRate * 100) + '%)');
+      toast(TF.partName(g) + ': ' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個)');
     },
     // 素材(試作部品)をタップ → ドロップするボス戦のステージへ
     items: function () { openItems(); },
@@ -3123,7 +3123,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (!s0) {
         s0 = Math.min(st.cleared + 1, list[0]);
         toast(s0 === list[0] ? 'ステージ' + s0 + 'のボスを倒すと' + TF.partName(g) + 'が手に入ります(初クリアで' + TF.K.partFirst + '個)' : partWhere(g) + 'はまだ先です(ステージ' + list[0] + 'まで進もう)');
-      } else toast('ステージ' + s0 + 'のボス戦で' + TF.partName(g) + 'がドロップします(勝つたびに' + Math.round(TF.K.partRate * 100) + '%)');
+      } else toast('ステージ' + s0 + 'のボス戦で' + TF.partName(g) + 'が手に入ります');
       st.sel = s0; save(); show('sortie');
     },
     // 素材(設計図)をタップ → 勝てて稼げるステージへ(設計図は先のステージ・ボス戦ほど多い)
