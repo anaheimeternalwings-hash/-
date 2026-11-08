@@ -144,7 +144,8 @@ h2.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#4a5
 @keyframes up{from{transform:translateY(100%)}}
 .sheet .grab{width:44px;height:5px;border-radius:9px;background:#56654a;margin:2px auto 10px}
 .sheet h3{margin:0;font-size:19px}
-.sheet .close{position:absolute;right:10px;top:10px;width:36px;height:36px;border-radius:50%;background:#1a2116;display:grid;place-items:center;font-size:18px;color:var(--sub)}
+/* 閉じるボタンは、中身をスクロールしても常にシートの上に見えている */
+.sheet .close{position:sticky;top:4px;z-index:5;margin:-14px 0 -22px auto;width:36px;height:36px;border-radius:50%;background:#1a2116;border:1px solid #3a4830;box-shadow:0 2px 8px rgba(0,0,0,.45);display:grid;place-items:center;font-size:18px;color:var(--sub)}
 .modal{position:absolute;left:16px;right:16px;top:50%;transform:translateY(-50%);max-width:440px;margin:0 auto;max-height:86vh;max-height:86dvh;overflow-y:auto;
   background:linear-gradient(#2c3726,#1f271a);border:1px solid #5a6a46;border-radius:20px;padding:20px 16px 16px;animation:pop .28s cubic-bezier(.2,1.4,.4,1);box-shadow:0 20px 50px rgba(0,0,0,.6)}
 @keyframes pop{from{transform:translateY(-50%) scale(.85);opacity:0}}
@@ -587,9 +588,12 @@ var TF = (function () {
     var R = blobR(b, Math.atan2(dy, dx));
     return r2 < R * R;
   }
+  // 丘陵は盛り上がった地形なので、ほかの区域と重なったら丘陵が上になる
   function terrAt(map, x, y) {
     if (!map || !map.blobs) return 'plain';
-    for (var i = map.blobs.length - 1; i >= 0; i--) if (inBlob(map.blobs[i], x, y)) return map.blobs[i].k;
+    var bl = map.blobs, i;
+    for (i = bl.length - 1; i >= 0; i--) if (bl[i].k === 'hill' && inBlob(bl[i], x, y)) return 'hill';
+    for (i = bl.length - 1; i >= 0; i--) if (bl[i].k !== 'hill' && inBlob(bl[i], x, y)) return bl[i].k;
     return 'plain';
   }
   // 縦に y0→y1 進む道のり÷速さ(16か所の地形で平均)
@@ -664,6 +668,8 @@ var TF = (function () {
     // 配置の奥行き(adv): 出撃線(0)から射撃位置(1)へどれだけ前に置いたか。ふだん(おまかせ・敵)は advDef で、app はそのときの所要時間。
     // 自由配置では advMin〜advMax の範囲に置け、前に置くほど早く着く(所要時間は (1-adv)/(1-advDef) 倍)
     advDef: 0.4, advMin: -0.1, advMax: 0.6,
+    // 射程(左右に何列先まで撃てるか)。射程の外の敵は狙えず、射程内に敵がいなければ近い敵のほうへ横に動く(動く間は撃てない)
+    rng: { inf: 2, at: 2.5, tank: 3, art: 99 },
     // 拠点: 敵部隊を撃破すると前線が進んで拠点を占領。占領した拠点は前線基地になり(増援+1・ポイント回復が速く)、
     // 特殊ユニットを1回発進できる(攻撃ヘリ・対地攻撃機・自爆ドローン)。味方がやられると拠点を奪われる
     postRate: 0.3, postRes: 1, supDelay: 1.2, supGap: 1.5, supMul: 0.6, supHeli: 0.9, supHeliTank: 1.5, supHeliN: 4, supAir: 0.8, supDrone: 3.0,
@@ -1301,19 +1307,41 @@ var TF = (function () {
       }
       return dmg;
     }
+    // 射程の外の敵しかいないとき: いちばん近い敵が射程に入るところまで横に動く(戻り値 true = 動いた)
+    function reposition(u, f) {
+      var rg = K.rng[u.type] || 99, d = f.lx - u.lx, go = d - (d > 0 ? 1 : -1) * Math.min(Math.abs(d), rg * 0.6);
+      var nl = Math.max(0, Math.min(K.laneN - 1, u.lx + go)), from = u.lane;
+      var dur = K.side[u.type] * (TR ? sideCost(TR, u.type, u.lx, nl, fightY(u.side, u.type, u.adv, PO ? fIdx : 3)) : Math.abs(nl - u.lx));
+      u.lx = nl; u.lane = Math.round(nl); u.trF = -1;
+      u.arrT = t + dur; u.next = t + Math.max(0.1, dur);
+      if (ev) ev.push({ t: t, k: 'lane', s: u.id, lane: u.lane, lx: nl, from: from, dur: dur, auto: 1 });
+      return true;
+    }
     function attack(u) {
       var foes = live[1 - u.side], n = foes.length;
       if (!n) return;
-      var f, j;
+      var f, j, rg = (K.rng[u.type] || 99) + 1e-9, dj;
       if (u.order !== null && U[u.order].alive) {
-        f = U[u.order]; // 指示された目標を集中攻撃
+        f = U[u.order]; // 指示された目標を集中攻撃(射程の外なら近づく)
+        if (laneDist(u, f) > rg) return reposition(u, f);
       } else {
         u.order = null;
-        var aff = AFF2[u.type], tot = 0, LA = u.type === 'art' ? K.laneAimArt : K.laneAim;
-        for (j = 0; j < n; j++) tot += aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * laneW(LA, laneDist(u, foes[j]));
+        var aff = AFF2[u.type], tot = 0, LA = u.type === 'art' ? K.laneAimArt : K.laneAim, near = null, nd = 1e9;
+        for (j = 0; j < n; j++) {
+          dj = laneDist(u, foes[j]);
+          if (dj < nd) { nd = dj; near = foes[j]; }
+          if (dj <= rg) tot += aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * laneW(LA, dj);
+        }
+        if (!(tot > 0)) return reposition(u, near);
         var r = rnd() * tot;
-        f = foes[n - 1];
-        for (j = 0; j < n; j++) { r -= aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * laneW(LA, laneDist(u, foes[j])); if (r <= 0) { f = foes[j]; break; } }
+        f = null;
+        for (j = 0; j < n; j++) {
+          dj = laneDist(u, foes[j]);
+          if (dj > rg) continue;
+          f = foes[j];
+          r -= aff[foes[j].type] * (foes[j].stance ? K.stAim[foes[j].stance] : 1) * laneW(LA, dj);
+          if (r <= 0) break;
+        }
       }
       if (rnd() < K.miss) { if (ev) ev.push({ t: t, k: 'atk', s: u.id, d: f.id, miss: 1 }); return; }
       var crit = rnd() < K.crit, vm = u.vs && u.vs[f.type] || 1;
@@ -1368,7 +1396,7 @@ var TF = (function () {
         if (sup >= 0) { useCharge(sup, charges[sup][0]); supNext[sup] = charges[sup].length ? t + K.supGap : Infinity; continue; }
         if (dep >= 0) { deploy(dep, dep === 0 ? bestReserveType() : null); continue; }
         if (isSk) { cast(actor); actor.skLast = t; actor.skNext += SKILL[actor.sk].cd; }
-        else { attack(actor); actor.next += actor.cd; }
+        else if (attack(actor) !== true) actor.next += actor.cd;
         flushKills();
         if (!live[1 - actor.side].length) { winner = actor.side; done = true; }
       }
@@ -2211,12 +2239,14 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     return rows;
   }
+  // 射程の説明(左右に何列先まで撃てるか)
+  function rngText(t) { var r = TF.K.rng[t]; return r >= TF.K.laneN ? '戦場全体' : '左右' + r + '列'; }
   function unitCardHtml(t) {
     var q = TF.squadStats(st, t, null);
     var on = TF.typeUnlocked(st, t);
     return '<div class="card urow" style="margin-top:8px"><div class="uicon' + (on ? '' : ' off') + '">' + allySvg(t) + '</div><div class="grow">' +
       '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">兵舎系Lv' + TF.lv(st, TF.TYPE_BLD[t]) + '</span>' : '<span class="pill red">未解放</span>') + '</div>' +
-      (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div>' : '') +
+      (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>射程 <b>' + rngText(t) + '</b></span></div>' : '') +
       '<div class="aff"><span class="s">強い: ' + names(STRONG[t]) + '</span> / <span class="w">弱い: ' + names(WEAK[t]) + '</span></div></div></div>';
   }
   function openBuilding(id) {
@@ -2283,7 +2313,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var on = TF.typeUnlocked(st, t), q = TF.squadStats(st, t, null), b = TF.TYPE_BLD[t];
       html += '<div class="card urow"><div class="uicon' + (on ? '' : ' off') + '">' + allySvg(t) + '</div><div class="grow">' +
         '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">' + TF.BLD[b].name + ' Lv' + TF.lv(st, b) + '</span>' : '<span class="pill red">' + TF.BLD[b].name + 'で解放</span>') + '</div>' +
-        (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span></div>' : '') +
+        (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span><span>射程 <b>' + rngText(t) + '</b></span></div>' : '') +
         (on ? '<div class="small" style="margin-top:2px">武装: ' + TF.ARM_KINDS.map(function (k) { var l = TF.armLv(st, t, k); return l ? TF.armName(t, k, l) + ' Lv' + l : '<span style="opacity:.6">' + TF.ARM_KIND[k].name + 'なし</span>'; }).join(' ・ ') + '</div>' : '') +
         '<div class="aff"><span class="s">強い: ' + names(STRONG[t]) + '</span> / <span class="w">弱い: ' + names(WEAK[t]) + '</span></div></div></div>';
     });
@@ -2398,7 +2428,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     TF.unlockedTypes(st).forEach(function (t) { TF.ARM_KINDS.forEach(function (k) { var c = TF.armCost(t, k, TF.armLv(st, t, k)); if (c.bp && TF.armLv(st, t, k) < TF.armMax(st)) bpUse.push(c.bp); }); });
     html += '<div class="card item' + ((st.bp || 0) ? '' : ' zero') + '"><div class="ic">' + icoBp() + '</div><div class="grow"><div class="row"><span class="nm">設計図</span><b class="n num">' + fmt(st.bp || 0) + '</b></div>' +
       '<div class="small">戦闘に勝つと手に入ります(先のステージほど多く、ボス戦・初クリアは2倍)。武装の配備と新型の開発に使います。</div>' +
-      (bpUse.length ? '<div class="small use">次の開発に必要: ' + fmt(Math.min.apply(null, bpUse)) + '〜' + fmt(Math.max.apply(null, bpUse)) + '</div>' : '') +
+      (bpUse.length ? '<div class="small use">次の開発に必要: ' + fmt(Math.min.apply(null, bpUse)) + (Math.max.apply(null, bpUse) > Math.min.apply(null, bpUse) ? '〜' + fmt(Math.max.apply(null, bpUse)) : '') + '</div>' : '') +
       '<button class="pill" data-act="bp-go">集めに行く ▶</button></div></div>';
     // 試作部品: 持っている等級と、次の開発に要る等級(手の届くところまで)
     var reach = TF.partGrade(Math.max(10, Math.ceil((st.cleared + 1) / 10) * 10)), top = 1, use = {};
@@ -3203,11 +3233,51 @@ if (typeof module !== 'undefined') module.exports = TF;
       FP = CAM.D * KREF * CAM.z;
       CY = H * 0.54;
     }
+    // 地面の点 → 画面(丘の上なら、その高さだけ上に)
     function proj(wx, wy) {
+      var dy = wy - CAM.y, zc = CAM.D + dy * CS;
+      if (zc < 30) zc = 30;
+      var k = FP / zc, e = ELEV ? elevAt(wx, wy) : 0;
+      return { x: W / 2 + (wx - CAM.x) * k, y: CY - dy * SN * k - e * k, k: k, s: k / KREF };
+    }
+    function projFlat(wx, wy) {
       var dy = wy - CAM.y, zc = CAM.D + dy * CS;
       if (zc < 30) zc = 30;
       var k = FP / zc;
       return { x: W / 2 + (wx - CAM.x) * k, y: CY - dy * SN * k, k: k, s: k / KREF };
+    }
+    // ---- 丘の高さ(地形マップの丘陵の区域から作る。部隊・木・前線も丘の上に乗る) ----
+    var ELEV = null;
+    function hillH(b) { return 14 + (b.p1 / 6.283) * 12; }
+    function hillLevel(b, v) { var q = 1 - Math.pow(Math.max(0, v) / hillH(b), 1 / 1.1); return Math.sqrt(Math.max(0, q)); } // 高さ v の輪の大きさ
+    function buildElev(TM) {
+      ELEV = null;
+      var hills = (TM && TM.blobs || []).filter(function (b) { return b.k === 'hill'; });
+      if (!hills.length) return;
+      var g = { x0: LANES[0] - LANEW * 1.6, y0: fyW(-1.7), step: 2 };
+      g.nx = Math.ceil((LANES[LANES.length - 1] + LANEW * 1.6 - g.x0) / g.step) + 1;
+      g.ny = Math.ceil((fyW(1.7) - g.y0) / g.step) + 1;
+      var h = new Float32Array(g.nx * g.ny);
+      for (var j = 0; j < g.ny; j++) {
+        var fy = (g.y0 + j * g.step - F0) / HALF;
+        for (var i = 0; i < g.nx; i++) {
+          var lx = (g.x0 + i * g.step - LANES[0]) / LANEW, best = 0;
+          for (var m = 0; m < hills.length; m++) {
+            var b = hills[m], dx = (lx - b.x) / b.rx, dy = (fy - b.y) / b.ry, r2 = dx * dx + dy * dy;
+            if (r2 > 1.75) continue;
+            var R = TF.blobR(b, Math.atan2(dy, dx)), q = r2 / (R * R);
+            if (q < 1) { var v = hillH(b) * Math.pow(1 - q, 1.1); if (v > best) best = v; }
+          }
+          h[j * g.nx + i] = best;
+        }
+      }
+      g.h = h; ELEV = g;
+    }
+    function elevAt(wx, wy) {
+      var g = ELEV, fx = (wx - g.x0) / g.step, fy = (wy - g.y0) / g.step;
+      if (fx < 0 || fy < 0 || fx >= g.nx - 1 || fy >= g.ny - 1) return 0;
+      var i = fx | 0, j = fy | 0, ax = fx - i, ay = fy - j, n = g.nx, h = g.h, o = j * n + i;
+      return (h[o] * (1 - ax) + h[o + 1] * ax) * (1 - ay) + (h[o + n] * (1 - ax) + h[o + n + 1] * ax) * ay;
     }
     // 画面上の点 → 地面上の点
     function unproj(sx, sy) {
@@ -3457,6 +3527,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       // 地形の区域(戦闘の計算とまったく同じ形): 森林・市街地・丘陵・湿地。区域の外は平原。後の区域が上に重なる
       var TM = B.info.terrain;
+      buildElev(TM);
+      B.hills = (TM && TM.blobs || []).filter(function (b) { return b.k === 'hill'; }).map(function (b) { return { k: 'hill', b: b, x: fxW(b.x), y: fyW(b.y + b.ry * 1.3) }; });
       function blobPath(b, sc) {
         g.beginPath();
         for (var a = 0; a <= 72; a++) {
@@ -3480,7 +3552,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (b.k === 'forest') {
           g.fillStyle = shade(bio.near, -0.2); blobPath(b, 1.03); g.fill();
           g.fillStyle = shade(bio.near, -0.28); blobPath(b, 0.75); g.fill();
-          scatter(b, Math.round(area / 40), function (px, py) { props.push({ k: 'tree', x: px, y: py, s: 0.7 + rnd() * 0.55 }); });
+          scatter(b, Math.round(area / 34), function (px, py) { props.push({ k: 'tree', x: px, y: py, s: 0.9 + rnd() * 0.7 }); });
         } else if (b.k === 'urban') {
           g.fillStyle = shade(bio.road, 0.2); blobPath(b); g.fill();
           g.save(); blobPath(b); g.clip();
@@ -3492,7 +3564,9 @@ if (typeof module !== 'undefined') module.exports = TF;
           for (gx = gx0; gx < gx1; gx += 17) for (gy = gy0; gy < gy1; gy += 15) {
             var hx = gx + 8.5, hy = gy + 7.5;
             if (!TF.inBlob(b, (hx - LANES[0]) / LANEW, (hy - F0) / HALF) || terrW(hx, hy) !== 'urban' || rnd() < 0.12) continue;
-            props.push({ k: 'house', x: hx + (rnd() - 0.5) * 2, y: hy + (rnd() - 0.5) * 2, w: 7 + rnd() * 4, d: 5.5 + rnd() * 3, h: 3.5 + rnd() * 3.5, roof: bio.roofs[Math.floor(rnd() * 3)], gable: B.biome !== 'desert' });
+            // 中心ほど高い建物(ビル)が多い
+            var cen = 1 - Math.min(1, Math.hypot((hx - fxW(b.x)) / (b.rx * LANEW), (hy - fyW(b.y)) / (b.ry * HALF))), tall = rnd() < 0.15 + 0.5 * cen;
+            props.push({ k: 'house', x: hx + (rnd() - 0.5) * 2, y: hy + (rnd() - 0.5) * 2, w: 7 + rnd() * 4, d: 5.5 + rnd() * 3, h: tall ? 8 + rnd() * 7 * (0.5 + cen) : 3.5 + rnd() * 3, roof: bio.roofs[Math.floor(rnd() * 3)], gable: !tall && B.biome !== 'desert', roofType: tall ? 'flat' : undefined });
           }
         } else if (b.k === 'hill') {
           [[1.0, 0.08], [0.78, 0.15], [0.56, 0.22], [0.34, 0.29]].forEach(function (q) {
@@ -3545,9 +3619,11 @@ if (typeof module !== 'undefined') module.exports = TF;
         g.drawImage(T.c, cx0, cy0, cx1 - cx0, cy1 - cy0, dx0, dy0, dx1 - dx0, dy1 - dy0 + 0.6);
       }
       // 木・岩・家・建物を奥から順に
-      var items = B.props.concat(B.blds);
+      // 丘(立体)・木・岩・家・建物を奥から順に。丘は奥の端の位置で並べ、丘の上と手前の物は丘のあとに描く
+      var items = B.props.concat(B.blds, B.hills || []);
       items.sort(function (a, b) { return b.y - a.y; });
       items.forEach(function (it) {
+        if (it.k === 'hill') { drawHill(g, it.b, bio); return; }
         var p = proj(it.x, it.y);
         if (p.y < -30 || p.y > H + 80 || p.x < -80 || p.x > W + 80) return;
         if (it.k === 'tree' || it.k === 'rock') drawProp(g, it, p, bio);
@@ -3559,6 +3635,34 @@ if (typeof module !== 'undefined') module.exports = TF;
       var vg = g.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.8);
       vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.25)');
       g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    }
+    // 丘: 高さごとの輪を下から積み重ねて立体に描く(左上から光が当たり、右下に影)
+    function drawHill(g, b, bio) {
+      var H0 = hillH(b), N = 8, a, th, R, i;
+      function ring(s, v, ox, oy) {
+        var pts = [], x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+        for (a = 0; a <= 40; a++) {
+          th = a / 40 * Math.PI * 2; R = TF.blobR(b, th) * s;
+          var p = projFlat(fxW(b.x + b.rx * R * Math.cos(th)) + (ox || 0), fyW(b.y + b.ry * R * Math.sin(th)) + (oy || 0));
+          p.y -= v * p.k;
+          pts.push(p); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+        }
+        return { pts: pts, x0: x0, x1: x1, y0: y0, y1: y1 };
+      }
+      function path(r) { g.beginPath(); r.pts.forEach(function (p, k) { if (k) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y); }); g.closePath(); }
+      var base = ring(1, 0);
+      if (base.x1 < -40 || base.x0 > W + 40 || base.y1 < -40 || base.y0 > H + 80) return;
+      // 地面に落ちる影
+      path(ring(1, 0, H0 * 0.9, -H0 * 0.5)); g.fillStyle = 'rgba(0,0,0,.16)'; g.fill();
+      for (i = 0; i < N; i++) {
+        var v = H0 * i / N, s = hillLevel(b, v);
+        if (s < 0.05) break;
+        var r = ring(s, v);
+        var c0 = shade(bio.near, 0.0 + 0.055 * i), gr = g.createLinearGradient(r.x0, r.y0, r.x1, r.y1);
+        gr.addColorStop(0, shade(c0, 0.16)); gr.addColorStop(0.55, c0); gr.addColorStop(1, shade(c0, -0.2));
+        path(r); g.fillStyle = gr; g.fill();
+        g.strokeStyle = 'rgba(40,50,30,' + (0.12 + 0.02 * i) + ')'; g.lineWidth = 0.8; g.stroke();
+      }
     }
     function drawProp(g, it, p, bio) {
       var sz = it.s * p.k;
@@ -3782,6 +3886,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     function applyEventInstant(ev) {
       if (ev.k === 'spawn') { spawnVisual(ev); return; }
+      if (ev.k === 'lane') { laneMoveVisual(ev, true); return; }
       if (ev.k === 'post') { postEvent(ev, true); return; }
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
       else if (ev.hits) ev.hits.forEach(function (h) { applyImpact({ d: h.d, dmg: h.dmg, kill: h.kill, quiet: true }); });
@@ -3963,7 +4068,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         u.wasMarch = u.march;
         var dFin = Math.hypot(tx - u.wx, ty - u.wy);
         if (u.side === 0) {
-          ty = Math.max(RY + 13, ty);
+          if (!hold) ty = Math.max(RY + 13, ty); // 待っている間は川の手前から動かない
           // 川の手前にいる間は橋へ向かい、縦一列になって渡る
           var bx = u.bridge, by = riverY(bx);
           if (!hold && u.wy < by + 10) {
@@ -4152,10 +4257,24 @@ if (typeof module !== 'undefined') module.exports = TF;
       B.pillars.push({ wx: u.wx, wy: u.wy, side: ev.side, t: fxNow(), big: 1.3 });
       text(u.wx, u.wy, base ? (ev.side === 0 ? '前線基地から増援!' : '敵の増援(前線基地)') : ev.side === 0 ? '増援到着!' : '敵の増援!', ev.side === 0 ? '#bfffc8' : '#ffb3a8', 15, 30);
     }
+    // 射程内に敵がいないので横へ動いた(エンジンが決めた移動。手動の移動は画面側ですでに動かしている)
+    function laneMoveVisual(ev, quiet) {
+      if (!ev.auto) return;
+      var u = B.units[ev.s];
+      if (!u || u.dead) return;
+      u.col = u.homeCol = fxW(ev.lx); u.free = true; u.jx = 0;
+      frontRows(u.side);
+      if (quiet || u.side !== 0) return;
+      var nt = B.noteT || (B.noteT = {});
+      if (nt.rng !== undefined && B.clock - nt.rng < 1.2) return;
+      nt.rng = B.clock;
+      text(u.wx, u.wy, '射程外→敵へ移動', '#cfe9ff', 12, 34);
+    }
     function fire(ev) {
       if (ev.k === 'post') { postEvent(ev, false); return; }
       if (ev.k === 'sup') { supportEvent(ev); return; }
       var s = B.units[ev.s];
+      if (ev.k === 'lane') { laneMoveVisual(ev, false); return; }
       if (ev.k === 'atk') {
         s.aim = ev.d; s.aimT = B.clock;
         var d = B.units[ev.d], fl = FLIGHT[s.type];
@@ -4883,6 +5002,23 @@ if (typeof module !== 'undefined') module.exports = TF;
       text(CXW, F0 - 22, '攻撃開始!', '#ffe08a', 18, 30);
       if (!B.auto) showHint('敵へドラッグで集中攻撃/空き地へドラッグで移動(別の列へも)/カードで増援', 4);
     }
+    // 射程の帯: 部隊の横の位置 x から左右に射程の分だけ、敵側の前線あたりを塗る
+    function drawRange(type, x) {
+      var r = TF.K.rng[type];
+      if (!(r < TF.K.laneN)) r = TF.K.laneN;
+      var x0 = Math.max(fxW(-0.5), x - r * LANEW), x1 = Math.min(fxW(TF.K.laneN - 0.5), x + r * LANEW), fy = B.front, y0 = fy - 2, y1 = fy + 75;
+      var a = proj(x0, y0), b = proj(x1, y0), c = proj(x1, y1), d = proj(x0, y1);
+      cx.save();
+      cx.fillStyle = 'rgba(255,214,90,.24)'; cx.strokeStyle = 'rgba(255,224,120,.95)'; cx.lineWidth = 2; cx.setLineDash([7, 4]);
+      cx.beginPath(); cx.moveTo(a.x, a.y); cx.lineTo(b.x, b.y); cx.lineTo(c.x, c.y); cx.lineTo(d.x, d.y); cx.closePath(); cx.fill(); cx.stroke();
+      cx.setLineDash([]);
+      var m = proj((x0 + x1) / 2, y1);
+      cx.font = '800 11px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+      var rl = r >= TF.K.laneN ? '射程: 戦場全体' : '射程 ±' + TF.K.rng[type] + '列', rw = cx.measureText(rl).width + 10;
+      cx.fillStyle = 'rgba(10,14,9,.75)'; cx.fillRect(m.x - rw / 2, m.y - 16, rw, 15);
+      cx.fillStyle = '#ffe08a'; cx.fillText(rl, m.x, m.y - 2);
+      cx.restore();
+    }
     function drawDeploy() {
       if (B.phase !== 'deploy') return;
       var T = B.info.terrain, drag = B.drag && B.drag.deploy && B.drag.moved ? B.drag : null;
@@ -4910,6 +5046,8 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.fillStyle = 'rgba(10,14,9,.55)'; cx.fillRect(c0.x - tw / 2, c0.y - 8, tw, 16);
         cx.fillStyle = b.y < 0 ? '#bfe9c8' : '#ffc9bd'; cx.fillText(nm, c0.x, c0.y);
       });
+      // ドラッグ中: 射程(左右に撃てる範囲)を敵側の前線に帯で出す
+      if (drag) drawRange(drag.u.type, clampDep(unproj(drag.x, drag.y).x, 0).x);
       // ドラッグ中: 置く場所から戦う場所までの通り道(地形で色分け: 緑=速い・赤=遅い)と、戦う場所の地形
       if (drag) {
         var dw0 = unproj(drag.x, drag.y), dp0 = clampDep(dw0.x, dw0.y), lx0 = xToLx(dp0.x), ty0 = drag.u.type, a0v = yToAdv(dp0.y);
@@ -5117,7 +5255,10 @@ if (typeof module !== 'undefined') module.exports = TF;
           cx.strokeStyle = '#ff5a4e'; cx.lineWidth = 3;
           cx.beginPath(); cx.ellipse(h.x, h.y, hw * 1.2, hw * 0.5, 0, 0, Math.PI * 2); cx.stroke();
         }
-        if (!d.deploy) arrow(s0.x, s0.y - 4, d.x, d.y, 'rgba(90,255,120,.95)', 6);
+        if (!d.deploy) {
+          if (!d.hover) drawRange(d.u.type, unproj(d.x, d.y).x);
+          arrow(s0.x, s0.y - 4, d.x, d.y, 'rgba(90,255,120,.95)', 6);
+        }
       }
     }
     function drawHint() {

@@ -797,6 +797,20 @@ function midState(over) {
     }, midState()));
   }
 
+  await test('部隊の画面に兵種ごとの射程が出る。アイテム一覧の✕は下までスクロールしても見えている', () => withPage('iPhone SE', async page => {
+    await page.click('[data-act="tab"][data-tab="army"]');
+    const txt = await page.textContent('#scr-army');
+    assert(txt.includes('射程') && txt.includes('左右2列'), '射程が出ない');
+    await page.click('#top [data-act="items"]');
+    await page.waitForSelector('#sheetWrap:not(.hidden) .itemlist');
+    await page.evaluate(() => { const s = document.getElementById('sheet'); s.scrollTop = s.scrollHeight; });
+    await page.waitForTimeout(200);
+    const r = await page.evaluate(() => { const s = document.getElementById('sheet').getBoundingClientRect(), c = document.querySelector('.sheet .close').getBoundingClientRect(); return { st: s.top, ct: c.top, cb: c.bottom, sb: s.bottom }; });
+    assert(r.ct >= r.st - 1 && r.cb <= r.sb, '✕が見えない ' + JSON.stringify(r));
+    await page.click('.sheet .close');
+    assert(await page.isHidden('#sheetWrap'), '✕で閉じない');
+  }, midState({ cleared: 45, sel: 46, parts: { 1: 2, 2: 1, 3: 1, 4: 2 } })));
+
   await test('施設の強化で資源が減り、レベルが上がる', () => withPage('iPhone 13', async page => {
     const before = await state(page);
     await page.click('[data-act="tile"][data-slot="1"]');

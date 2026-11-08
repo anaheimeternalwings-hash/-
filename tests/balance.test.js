@@ -315,7 +315,8 @@ check('地形: 森林・市街地は歩兵と対戦車兵を守り、戦車は�
 check('列: 部隊はおもに同じ列の敵を狙い、離れた列への攻撃は弱い。砲兵はどの列にも届く', () => {
   const mk = (t, lane) => ({ type: t, maxHp: 1e7, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
   function shots(att) {
-    const b = TF.createBattle([mk(att, 0)], [mk('inf', 0), mk('inf', 4)], 7, { record: true });
+    // 離れた列の敵は砲兵(射程が戦場全体なので動かない)
+    const b = TF.createBattle([mk(att, 0)], [mk('inf', 0), mk('art', 4)], 7, { record: true });
     b.step(60);
     const a = b.ev.filter(x => x.k === 'atk' && x.s === 0 && !x.miss);
     const near = a.filter(x => x.d === 1), far = a.filter(x => x.d === 2);
@@ -323,7 +324,7 @@ check('列: 部隊はおもに同じ列の敵を狙い、離れた列への攻�
   }
   const inf = shots('inf'), art = shots('art');
   assert(inf.near > inf.far * 10, '同じ列をおもに狙わない ' + JSON.stringify(inf));
-  assert(art.far > art.near * 0.3, '砲兵が離れた列を撃たない ' + JSON.stringify(art));
+  assert(art.far >= 5 && art.far > art.near * 0.15 && inf.far === 0, '砲兵が離れた列を撃たない ' + JSON.stringify(art));
 });
 check('移動: 地形で進む速さが変わり(戦車は平原で速く湿地でとても遅い)、射撃位置に着くまで撃てない。砲兵は陣地から撃てる。列の移動にも時間がかかる', () => {
   assert(TF.terrMove('plain', 'tank') > 1 && TF.terrMove('marsh', 'tank') < 0.6 && TF.terrMove('forest', 'tank') < TF.terrMove('forest', 'inf'));
@@ -376,6 +377,23 @@ check('自由配置: 列の間(小数の列)や前後の好きな位置に置け
   }
   const s0 = share(0), s5 = share(0.5), s1 = share(1);
   assert(s0 < 0.4 && s1 > 0.6 && s5 > s0 + 0.15 && s5 < s1 - 0.15, '列の間で狙い方が中間にならない ' + [s0, s5, s1]);
+});
+check('射程: 歩兵は左右2列・対戦車兵2.5列・戦車3列・砲兵は戦場全体。射程の外の敵は狙わず、射程内に敵がいなければ近い敵のほうへ横に動く(動く間は撃たない)', () => {
+  assert(K.rng.inf < K.rng.at && K.rng.at < K.rng.tank && K.rng.art >= K.laneN);
+  const mk = (t, lane) => ({ type: t, maxHp: 1e7, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane });
+  // 列5の敵は砲兵(自分は動かない)。射程内の敵(列1)が残っている間は、射程の外の列5は撃たない
+  let b = TF.createBattle([mk('inf', 0)], [mk('inf', 1), mk('art', 5)], 3, { record: true });
+  b.step(30);
+  assert(!b.ev.some(e => e.k === 'atk' && e.s === 0 && e.d === 2), '射程の外の敵を撃った');
+  b = TF.createBattle([mk('inf', 0)], [mk('art', 5)], 3, { record: true, terrain: TF.flatTerrain() });
+  b.step(20);
+  const mv = b.ev.find(e => e.k === 'lane' && e.s === 0);
+  assert(mv && mv.auto && Math.abs(mv.lx - 5) <= K.rng.inf + 1e-9, '射程の外の敵へ近づかない');
+  assert(!b.ev.some(e => e.k === 'atk' && e.s === 0 && e.t < mv.t + mv.dur - 1e-9), '動いている間に撃った');
+  assert(b.ev.some(e => e.k === 'atk' && e.s === 0 && e.t >= mv.t + mv.dur), '近づいたあとに撃たない');
+  b = TF.createBattle([mk('art', 0)], [mk('inf', 6)], 3, { record: true, terrain: TF.flatTerrain() });
+  b.step(5);
+  assert(!b.ev.some(e => e.k === 'lane' && e.s === 0) && b.ev.some(e => e.k === 'atk' && e.s === 0), '砲兵が戦場全体に届かない');
 });
 check('地形はマップ上の区域: 同じ列でも前後で地形が違い、戦う場所の地形が効く。拠点を取って前線が進むと戦う場所も進む。通り道の地形で進む速さが変わる', () => {
   // 敵側の前線近く(列3)だけに森、自軍の通り道(列1)に湿地がある地図
