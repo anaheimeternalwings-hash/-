@@ -516,9 +516,11 @@ check('布陣は見えない: おまかせ配置・配置中の予想勝率は�
   const p1 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 0 })), s), p2 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 6 })), s);
   assert.deepStrictEqual(p1.e.map(e => e.lane), p2.e.map(e => e.lane), '敵の布陣がこちらの配置で変わった');
 });
-check('索敵: 部隊ごとに索敵範囲があり、範囲に入るまで敵味方とも見えない。見えない敵は狙わず、撃つと遠くからでも見つかる', () => {
-  // 索敵範囲は兵種ごと(歩兵がいちばん広く、砲兵がいちばん狭い)
+check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、範囲に入るまで敵味方とも見えない。見えない敵は狙わず、撃つと遠くからでも見つかる。時間がたつだけでは見つからず、部隊を動かして探す', () => {
+  // 索敵範囲は兵種ごと(歩兵がいちばん広く、砲兵がいちばん狭い)。見つかりやすさも兵種ごと(対戦車兵がいちばん見つかりにくく、戦車がいちばん目立つ)
   assert(K.det.inf > K.det.at && K.det.at > K.det.tank && K.det.tank > K.det.art && K.det.art > 0);
+  assert(K.sig.at < K.sig.inf && K.sig.inf < K.sig.art && K.sig.art < K.sig.tank);
+  assert(K.detT0 === undefined && K.detGrow === undefined, '時間で索敵範囲が広がる');
   const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 1e6, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
   // 配置の時点では、どこに置いても(いちばん前でも)お互いに見えない
   for (let s = 5; s <= 60; s += 11) {
@@ -551,12 +553,27 @@ check('索敵: 部隊ごとに索敵範囲があり、範囲に入るまで敵�
     if (!shot) assert(!b.seen(1, 0, tt), '撃つ前の砲兵が見えている');
   }
   assert(shot && b.seen(1, 0, shot.t + 0.01), '撃った砲兵が見つからない');
-  // 長引いても、偵察が進んで最後には見つかる(時間切れにならない)
-  b = TF.createBattle([mk('tank', 0, { maxHp: 1000 })], [mk('tank', 4, { maxHp: 800 })], 7, { record: true, terrain: T });
+  // 見つかりにくさ: 同じ距離でも、戦車は見えて対戦車兵は見えない
+  const pair = ft => { const c = TF.createBattle([mk('inf', 3, { adv: 0.9 })], [mk(ft, 3, { adv: 0.2, hold: true })], 7, { terrain: T }); return c; };
+  {
+    const c1 = pair('tank'), c2 = pair('at');
+    const d0 = Math.abs((c1.pos(0, 0).y - c1.pos(1, 0).y) * K.detY);
+    assert(d0 > K.det.inf * K.sig.tank, '最初から見えている');
+    // 歩兵を少しずつ近づけ、見え始めた距離を比べる
+    const seenAt = c => { const cc = TF.createBattle([mk('inf', 3, { adv: 0.9 })], [mk(c, 3, { adv: 0.2, hold: true, maxHp: 1e9 })], 7, { terrain: T, auto: false }); let d = null; for (let tt = 0.05; tt < 6 && d === null; tt += 0.05) { cc.step(tt); if (cc.seen(0, 1, tt)) d = Math.abs((cc.pos(0, tt).y - cc.pos(1, tt).y) * K.detY); } return d; };
+    const dt = seenAt('tank'), da = seenAt('at');
+    assert(dt && da && dt > da * 1.6, '戦車と対戦車兵で見つかる距離が変わらない ' + dt + ' ' + da);
+  }
+  // 時間がたつだけでは見つからない: 動かない砲兵だけでは、離れた所に待ち構える敵は見つからず、撃たない
+  b = TF.createBattle([mk('art', 0)], [mk('inf', 6, { adv: 0.1, hold: true })], 7, { record: true, terrain: T });
   b.step(Infinity);
-  const first = b.ev.find(e => e.k === 'atk');
-  assert(first && first.t > K.detT0, '離れた列の敵がすぐ見えた');
-  assert(!b.result().timeout, '見つけられずに時間切れ');
+  assert(!b.ev.some(e => e.k === 'atk'), '動かずに見つけた');
+  // 部隊を動かして探せば、離れた所に隠れている敵も見つかる(敵陣を区画ごとに探して回る)
+  for (const [x, a] of [[6, 0.1], [0, 0.2], [5, 0.0]]) {
+    b = TF.createBattle([mk('inf', 0, { maxHp: 1e9 }), mk('tank', 1, { maxHp: 1e9 })], [mk('at', x, { adv: a, hold: true, maxHp: 3000 })], 7, { record: true, terrain: T });
+    b.step(Infinity);
+    assert(b.result().win, '探しても見つからない ' + x + ',' + a);
+  }
 });
 check('戦闘の再現: 少しずつ進めた結果は一括計算と同じ(手動の移動指示を入れても、同じ時刻に入れれば同じ)', () => {
   const st = TF.newState(0);

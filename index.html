@@ -703,16 +703,17 @@ var TF = (function () {
     app: { inf: 1.6, at: 1.7, tank: 1.1, art: 0 }, side: { inf: 1.0, at: 1.1, tank: 0.7, art: 1.5 }, resApp: 1.3, fwdApp: 0.3,
     // 配置の奥行き(adv): 出撃線(0)から射撃位置(1)へどれだけ前に置いたか。ふだん(おまかせ・敵)は advDef で、app はそのときの所要時間。
     // 自由配置では advMin〜advMax の範囲に置け、前に置くほど早く着く(所要時間は (1-adv)/(1-advDef) 倍)
-    advDef: 0.4, advMin: 0, advMax: 0.95, eAdvMax: 0.45,
+    advDef: 0.4, advMin: 0, advMax: 0.95, eAdvMax: 0.22,
     // マップ全体で戦う: 部隊はマップ上を自由に動き、見えている敵が射程に入ればどこでも撃ち合う(動いている間は撃てない)。
     // 速さは列の幅/秒(平原。地形の速さを掛ける)。replan 秒ごとに行き先を考え直す。見えている敵がいなければ前へ進んで探す(searchY まで)
-    spd: { inf: 0.6, at: 0.55, tank: 0.9, art: 0.35 }, replan: 0.5, searchY: 0.92, lineLead: 0.2, mapX: [-0.5, 6.5], mapY: [-1.08, 1.08],
+    spd: { inf: 0.6, at: 0.55, tank: 0.9, art: 0.35 }, replan: 0.5, searchY: 0.92, lineLead: 0.2, scoutR: 0.5, scoutFwd: 1.2, marchMul: 1.5, mapX: [-0.5, 6.5], mapY: [-1.08, 1.08],
     hrA: 0.08,
     // 射程(何列ぶんの距離まで撃てるか。奥行きも同じ縮尺)。射程の外の敵は狙えず、射程内に敵がいなければ見えている敵へ近づく
     rng: { inf: 2, at: 2.5, tank: 3, art: 99 },
     // 索敵範囲(列の幅を1とした距離。奥行きは出撃線〜前線の1が detY 列ぶん)。どちらの側も、自分の部隊の索敵範囲に入るまで敵が見えず、
-    // 見えない敵は狙えない。撃った部隊は fireT 秒のあいだ fireSpot 倍の距離から見つかる。偵察が進むと detT0 秒から毎秒 detGrow ずつ範囲が広がる
-    det: { inf: 1.2, at: 1.0, tank: 0.9, art: 0.6 }, detY: 1.75, fireT: 2.5, fireSpot: 2, detT0: 3, detGrow: 0.2, idleT: 0.3,
+    // 見えない敵は狙えない。見つかりやすさ sig は兵種ごと(敵が見える距離 = 見る側の索敵範囲 × 見られる側の見つかりやすさ)。
+    // 撃った部隊は fireT 秒のあいだ fireSpot 倍の距離から見つかる。時間がたつだけでは見つからない(部隊を動かして探す)
+    det: { inf: 1.3, at: 1.0, tank: 0.9, art: 0.6 }, sig: { inf: 0.8, at: 0.6, tank: 1.25, art: 1.1 }, detY: 1.75, fireT: 2.5, fireSpot: 2, idleT: 0.3,
     // 拠点: 敵部隊を撃破すると前線が進んで拠点を占領。占領した拠点は前線基地になり(増援+1・ポイント回復が速く)、
     // 特殊ユニットを1回発進できる(攻撃ヘリ・対地攻撃機・自爆ドローン)。味方がやられると拠点を奪われる
     postRate: 0.3, postRes: 1, supDelay: 1.2, supGap: 1.5, supMul: 0.6, supHeli: 0.9, supHeliTank: 1.5, supHeliN: 4, supAir: 0.8, supDrone: 3.0,
@@ -1324,11 +1325,11 @@ var TF = (function () {
       return terrAt(TR, p.x, p.y);
     }
     // 目標の点へ向かって進む(stop だけ手前で止まる)。replan 秒ぶん進んだら考え直す。戻り値 true = 動いた/待つ
-    function moveToward(u, g, stop) {
+    function moveToward(u, g, stop, march) {
       settle(u);
       var dx = g.x - u.x, dy = (g.y - u.y) * DY, d = Math.sqrt(dx * dx + dy * dy);
       if (d <= stop + 0.02) { u.next = t + K.idleT; return true; }
-      var sp = K.spd[u.type] * u.spd * terrMove(TR ? terrAt(TR, u.x, u.y) : 'plain', u.type);
+      var sp = K.spd[u.type] * u.spd * terrMove(TR ? terrAt(TR, u.x, u.y) : 'plain', u.type) * (march ? K.marchMul : 1);
       var len = Math.min(d - stop, sp * K.replan), k = len / d;
       var nx = Math.max(K.mapX[0], Math.min(K.mapX[1], u.x + dx * k)), ny = Math.max(K.mapY[0], Math.min(K.mapY[1], u.y + dy / DY * k));
       var dur = Math.max(0.05, len / sp);
@@ -1373,15 +1374,43 @@ var TF = (function () {
     function laneDist(a, b) { return distAt(a, b, t); }
     // ---- 索敵(地形マップのある戦闘だけ) ----
     var DET = !!TR && opt.det !== false;
-    function detR(u, T) { return K.det[u.type] + Math.max(0, T - K.detT0) * K.detGrow; }
+    // 捜索: マップを区画(横 SCX × 縦 SCY)に分け、探し終えた区画を覚えておく(側ごと)
+    var SCX = [0, 1, 2, 3, 4, 5, 6], SCY = [-0.88, -0.53, -0.18, 0.18, 0.53, 0.88], explored = [{}, {}];
+    function markExplored(u) {
+      if (!hasPos(u)) return;
+      var p = posAt(u, t), ex = explored[u.side];
+      if (u.mkX === p.x && u.mkY === p.y) return; // 動いていなければ同じ
+      u.mkX = p.x; u.mkY = p.y;
+      var i0 = Math.max(0, Math.floor(p.x - K.scoutR)), i1 = Math.min(SCX.length - 1, Math.ceil(p.x + K.scoutR));
+      for (var i = i0; i <= i1; i++) for (var j = 0; j < SCY.length; j++) {
+        var dx = SCX[i] - p.x, dy = (SCY[j] - p.y) * DY;
+        if (dx * dx + dy * dy <= K.scoutR * K.scoutR) ex[i + ',' + j] = 1;
+      }
+    }
+    function searchCell(u, sg) {
+      var ex = explored[u.side], best = null, bs = 1e9, i, j, pass;
+      for (pass = 0; pass < 2 && !best; pass++) {
+        for (i = 0; i < SCX.length; i++) for (j = 0; j < SCY.length; j++) {
+          if (ex[i + ',' + j]) continue;
+          var dx = SCX[i] - u.x, dy = (SCY[j] - u.y) * DY, sc = Math.sqrt(dx * dx + dy * dy) - K.scoutFwd * sg * SCY[j], key = i + ',' + j;
+          // ほかの部隊が向かっている区画は避ける(手分けして探す)
+          for (var m = 0; m < live[u.side].length; m++) { var o = live[u.side][m]; if (o !== u && o.scoutKey === key) { sc += 1.5; break; } }
+          if (sc < bs) { bs = sc; best = { x: SCX[i], y: SCY[j], key: key }; }
+        }
+        if (!best) { explored[u.side] = ex = {}; u.mkX = null; markExplored(u); } // 全部探したら、もう一度
+      }
+      u.scoutKey = best ? best.key : null;
+      return best || { x: u.x, y: sg * K.searchY };
+    }
+    function detR(u) { return K.det[u.type]; }
     // side の部隊から敵 f が見えるか(どれかの部隊の索敵範囲に入っている。撃ったばかりの部隊は遠くからでも見つかる)
     function seen(side, f, T) {
       if (!DET || !hasPos(f)) return true;
-      var fp = posAt(f, T), own = live[side], fm = T < f.revUntil ? K.fireSpot : 1;
+      var fp = posAt(f, T), own = live[side], fm = (T < f.revUntil ? K.fireSpot : 1) * (K.sig[f.type] || 1);
       for (var j = 0; j < own.length; j++) {
         var o = own[j];
         if (!hasPos(o)) return true;
-        var op = posAt(o, T), dx = op.x - fp.x, dy = (op.y - fp.y) * DY, r = detR(o, T) * fm;
+        var op = posAt(o, T), dx = op.x - fp.x, dy = (op.y - fp.y) * DY, r = detR(o) * fm;
         if (dx * dx + dy * dy <= r * r) return true;
       }
       return false;
@@ -1566,14 +1595,17 @@ var TF = (function () {
       if (near) return moveToward(u, posAt(near, t), Math.min(rg, 3) * 0.85);
       // 待ち構える部隊は、敵が見えるまでその場で待つ
       if (u.hold) { u.next = t + K.idleT; return true; }
-      // 見えている敵がいない: 前へ進んで探す。味方と足並みをそろえ、1部隊だけ先に行きすぎない(奥まで来たら真ん中へ)
+      if (DET) markExplored(u);
+      // 見えている敵がいない: マップを区画に分け、まだ探していない区画を(前のほうを先に)近い順に探して回る。
+      // 味方と足並みをそろえ、1部隊だけ先に行きすぎない(待ち構える部隊・砲兵・場所の指示がある部隊は数えない)
       var sg = u.side === 0 ? 1 : -1, line = 0, nl = 0;
-      live[u.side].forEach(function (o) { if (o.type !== 'art' && hasPos(o) && !o.goal) { line += posAt(o, t).y * sg; nl++; } });
-      var sy = sg * Math.min(K.searchY, nl ? line / nl + K.lineLead : K.searchY);
-      if ((sy - u.y) * sg > 0.02) return moveToward(u, { x: u.x, y: sy }, 0);
-      if (sg * u.y < K.searchY - 0.02) { u.next = t + K.idleT; return true; } // 味方を待つ
-      if (Math.abs(u.x - 3) > 0.1) return moveToward(u, { x: 3, y: sy }, 0);
-      u.next = t + K.idleT; return true;
+      live[u.side].forEach(function (o) { if (o.type !== 'art' && !o.hold && !o.goal && hasPos(o)) { line += posAt(o, t).y * sg; nl++; } });
+      var lim = nl ? line / nl + K.lineLead : 1, g = searchCell(u, sg);
+      if (sg * g.y > lim) {
+        if (sg * u.y >= lim - 0.02) { u.next = t + K.idleT; return true; } // 味方を待つ
+        g = { x: u.x + (g.x - u.x) * Math.max(0, (lim - sg * u.y) / Math.max(1e-6, sg * (g.y - u.y))), y: sg * lim };
+      }
+      return moveToward(u, g, 0, true);
     }
     function fire(u, f) {
       reveal(u); // 撃つと位置がばれる
@@ -1701,7 +1733,7 @@ var TF = (function () {
       isAuto: function () { return auto; },
       // 索敵: side から部隊 id が見えるか(時刻 now)。索敵範囲の半径(列の幅=1)
       seen: function (side, id, now) { var f = U[id]; return !!f && seen(side, f, now === undefined ? t : now); },
-      detR: function (id, now) { var u = U[id]; return u ? detR(u, now === undefined ? t : now) : 0; },
+      detR: function (id) { var u = U[id]; return u ? detR(u) : 0; },
       hasDet: function () { return DET; },
       // 自動/手動の切替。自動に戻すと、たまっているスキルはすぐ発動する
       setAuto: function (on, now) {
@@ -2578,13 +2610,15 @@ if (typeof module !== 'undefined') module.exports = TF;
     return rows;
   }
   // 射程の説明(左右に何列先まで撃てるか)
-  function rngText(t) { var r = TF.K.rng[t]; return r >= TF.K.laneN ? '戦場全体' : '左右' + r + '列'; }
+  function rngText(t) { var r = TF.K.rng[t]; return r >= TF.K.laneN ? '戦場全体' : r + '列'; }
+  // 見つかりにくさ(敵から見える距離の倍率が小さいほど見つかりにくい)
+  function hideText(t) { var g = TF.K.sig[t]; return (g <= 0.65 ? 'とても高い' : g <= 0.85 ? '高い' : g < 1.15 ? 'ふつう' : '低い(目立つ)') + '(×' + g + ')'; }
   function unitCardHtml(t) {
     var q = TF.squadStats(st, t, null);
     var on = TF.typeUnlocked(st, t);
     return '<div class="card urow" style="margin-top:8px"><div class="uicon' + (on ? '' : ' off') + '">' + allySvg(t) + '</div><div class="grow">' +
       '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">兵舎系Lv' + TF.lv(st, TF.TYPE_BLD[t]) + '</span>' : '<span class="pill red">未解放</span>') + '</div>' +
-      (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>射程 <b>' + rngText(t) + '</b></span><span>索敵 <b>' + TF.K.det[t] + '列</b></span></div>' : '') +
+      (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>射程 <b>' + rngText(t) + '</b></span><span>索敵 <b>' + TF.K.det[t] + '列</b></span><span>見つかりにくさ <b>' + hideText(t) + '</b></span></div>' : '') +
       '<div class="aff"><span class="s">強い: ' + names(STRONG[t]) + '</span> / <span class="w">弱い: ' + names(WEAK[t]) + '</span></div></div></div>';
   }
   function openBuilding(id) {
@@ -2651,7 +2685,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var on = TF.typeUnlocked(st, t), q = TF.squadStats(st, t, null), b = TF.TYPE_BLD[t];
       html += '<div class="card urow"><div class="uicon' + (on ? '' : ' off') + '">' + allySvg(t) + '</div><div class="grow">' +
         '<div class="row"><b>' + TF.UNIT[t].name + '</b>' + (on ? '<span class="pill">' + TF.BLD[b].name + ' Lv' + TF.lv(st, b) + '</span>' : '<span class="pill red">' + TF.BLD[b].name + 'で解放</span>') + '</div>' +
-        (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span><span>射程 <b>' + rngText(t) + '</b></span><span>索敵 <b>' + TF.K.det[t] + '列</b></span></div>' : '') +
+        (on ? '<div class="stats"><span>HP <b class="num">' + fmt(q.maxHp) + '</b></span><span>攻撃 <b class="num">' + fmt(q.atk) + '</b></span><span>戦力 <b class="num">' + fmt(q.power) + '</b></span><span>射程 <b>' + rngText(t) + '</b></span><span>索敵 <b>' + TF.K.det[t] + '列</b></span><span>見つかりにくさ <b>' + hideText(t) + '</b></span></div>' : '') +
         (on ? '<div class="small" style="margin-top:2px">武装: ' + TF.ARM_KINDS.map(function (k) { var l = TF.armLv(st, t, k); return l ? TF.armName(t, k, l) + ' Lv' + l : '<span style="opacity:.6">' + TF.ARM_KIND[k].name + 'なし</span>'; }).join(' ・ ') + '</div>' : '') +
         '<div class="aff"><span class="s">強い: ' + names(STRONG[t]) + '</span> / <span class="w">弱い: ' + names(WEAK[t]) + '</span></div></div></div>';
     });
