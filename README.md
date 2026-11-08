@@ -247,7 +247,7 @@ HTML ファイルを Web 上に置いてブラウザで開くのがおすすめ�
 バランス確認と iPhone 画面での動作確認を自動テストにしています。
 
 ```sh
-node tests/balance.test.js            # ルールの確認 + 4種類のプレイヤーAIによる自動プレイ(約80分。気まぐれなAIは3通りの乱数で調べる)
+node tests/balance.test.js            # ルールの確認 + 4種類のプレイヤーAIによる自動プレイ(約2時間半。気まぐれなAIは3通りの乱数で調べる)
 STAGES=200 node tests/balance.test.js # もっと先まで
 npm install && node tests/ui.test.js  # iPhone SE / 13 / 14 Pro Max の画面で操作テスト(Playwright)
 ```
