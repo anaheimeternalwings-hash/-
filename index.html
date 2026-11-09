@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="前線基地">
-<meta name="theme-color" content="#141912">
+<meta name="theme-color" content="#080b0e">
 <meta name="format-detection" content="telephone=no">
 <title>前線基地コマンダー</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2333402a'/%3E%3Cpath d='M32 9l6.5 14.2 15.5 1.6-11.6 10.4 3.3 15.3L32 42.7 18.3 50.5l3.3-15.3L10 24.8l15.5-1.6z' fill='%23f1c453'/%3E%3C/svg%3E">
@@ -403,6 +403,218 @@ button.cost.mat.short{color:var(--bad)}
 #toast div{background:rgba(18,24,14,.95);border:1px solid #5a6a46;border-radius:12px;padding:9px 14px;font-size:13px;font-weight:700;animation:toast 2.6s forwards;text-align:center}
 @keyframes toast{0%{opacity:0;transform:translateY(-8px)}10%,80%{opacity:1;transform:none}100%{opacity:0}}
 textarea{width:100%;height:110px;background:#10150e;color:var(--text);border:1px solid #44523a;border-radius:10px;padding:8px;font:12px/1.4 ui-monospace,Menlo,monospace;-webkit-user-select:text;user-select:text}
+
+/* ================================================================
+   戦術HUD テーマ(全体のデザイン)
+   暗い紺鼠の地に、琥珀色の差し色。味方は青緑、敵は赤。
+   角を切り落としたパネルと、四隅の括弧。数字は等幅
+   ================================================================ */
+:root{
+  --bg:#080b0e; --bg2:#0d1216; --panel:#111a20; --panel2:#16222a; --panel3:#1d2c35; --line:#24343e; --line2:#34495a;
+  --text:#e8eef1; --sub:#9db0ba; --dim:#62747e;
+  --khaki:#d9c48f; --gold:#f5b83d; --amber:#f5b83d; --amber2:#ffd98a; --good:#4ee08f; --warn:#f5a83d; --bad:#ff5a4e;
+  --ally:#38d9b0; --enemy:#ff4d4d; --steel:#9cc6e8;
+  --cut:10px;
+  --mono:"SF Mono","SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+}
+html,body{background:var(--bg)}
+.num,.res b,.cost,.basestats .v,.wr .v,.cardbar .pts b{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+#app{background:
+  radial-gradient(90% 40% at 50% -6%,rgba(245,184,61,.10),transparent 70%),
+  repeating-linear-gradient(0deg,rgba(120,170,200,.035) 0 1px,transparent 1px 28px),
+  repeating-linear-gradient(90deg,rgba(120,170,200,.035) 0 1px,transparent 1px 28px),
+  linear-gradient(#0b1014,#070a0c)}
+/* --- 上部の資源表示 --- */
+#top{background:linear-gradient(rgba(10,15,19,.96),rgba(8,11,14,.96));border-bottom:1px solid rgba(245,184,61,.35);box-shadow:0 1px 0 rgba(0,0,0,.6),0 6px 18px rgba(0,0,0,.35)}
+.res{border-radius:0;background:linear-gradient(90deg,#141f26,#0e161b);border:1px solid var(--line2);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);padding:4px 10px 4px 6px}
+.res b{color:#f3f6f7;font-size:15px}
+#resM{box-shadow:inset 3px 0 0 var(--amber)} #resS{box-shadow:inset 3px 0 0 var(--steel)}
+.stagepill{border-radius:0;border:1px solid rgba(245,184,61,.6);color:var(--amber);font-family:var(--mono);font-weight:800;letter-spacing:.06em;background:rgba(245,184,61,.08);clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.iconbtn{border-radius:0;background:#111a20;border:1px solid var(--line2);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.iconbtn .dot{box-shadow:0 0 0 2px #0b1014,0 0 8px var(--bad)}
+/* --- 下のタブ --- */
+#tabs{background:linear-gradient(#0c1217,#080b0e);border-top:1px solid rgba(245,184,61,.3)}
+#tabs button{color:#5d6f79;font-weight:800;letter-spacing:.08em;gap:0;padding-top:8px}
+#tabs button svg{width:24px;height:24px;transition:transform .15s}
+#tabs button::after{font-family:var(--mono);font-size:8px;letter-spacing:.22em;color:#3f505a;font-weight:700;margin-top:1px}
+#tabs button[data-tab=base]::after{content:"BASE"} #tabs button[data-tab=army]::after{content:"FORCES"}
+#tabs button[data-tab=arms]::after{content:"ARSENAL"} #tabs button[data-tab=sortie]::after{content:"SORTIE"}
+#tabs button.on{color:var(--amber);text-shadow:0 0 10px rgba(245,184,61,.45)}
+#tabs button.on svg{transform:translateY(-1px);filter:drop-shadow(0 0 6px rgba(245,184,61,.6))}
+#tabs button.on::after{color:rgba(245,184,61,.75)}
+#tabs button.on::before{left:22%;right:22%;height:2px;border-radius:0;background:var(--amber);box-shadow:0 0 12px var(--amber)}
+#tabs .dot{box-shadow:0 0 0 2px #0b1014,0 0 8px var(--bad)}
+/* --- 見出し --- */
+h2.sec{font-size:12px;color:var(--amber);letter-spacing:.18em;font-weight:900;margin:20px 0 9px}
+h2.sec::before{content:"";width:4px;height:12px;background:var(--amber);box-shadow:0 0 8px rgba(245,184,61,.6)}
+h2.sec::after{background:linear-gradient(90deg,rgba(245,184,61,.45),rgba(245,184,61,.08) 60%,transparent);height:1px}
+/* --- パネル(角を切り落とし、四隅に括弧) --- */
+.card,.bitem,.collect,.hint,.arm,.armsum,.side,.rline,.skill,.modal,.basestats .card{
+  border-radius:0;
+  clip-path:polygon(var(--cut) 0,100% 0,100% calc(100% - var(--cut)),calc(100% - var(--cut)) 100%,0 100%,0 var(--cut))}
+.card,.bitem,.arm{background:
+  linear-gradient(var(--amber),var(--amber)) left top/12px 1px no-repeat,
+  linear-gradient(var(--amber),var(--amber)) left top/1px 12px no-repeat,
+  linear-gradient(var(--amber),var(--amber)) right bottom/12px 1px no-repeat,
+  linear-gradient(var(--amber),var(--amber)) right bottom/1px 12px no-repeat,
+  linear-gradient(160deg,#15212a,#0e161c 70%);border:1px solid var(--line)}
+.card,.bitem,.arm{background-origin:border-box}
+.bitem.locked{opacity:.5;filter:saturate(.3)}
+.hint{background:linear-gradient(90deg,rgba(245,184,61,.14),rgba(245,184,61,.03) 70%),#0f171c;border:1px solid rgba(245,184,61,.35)}
+.hint .tag{border-radius:0;background:var(--amber);color:#1b1300;font-family:var(--mono);letter-spacing:.12em;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+/* --- ボタン --- */
+.btn{border-radius:0;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  background:linear-gradient(#ffcf6a,#e79a1f);color:#1d1200;letter-spacing:.06em;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 0 rgba(0,0,0,.25)}
+.btn:active:not(:disabled){transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(255,255,255,.4)}
+.btn.sub{background:linear-gradient(#20313b,#152129);color:var(--amber2);box-shadow:inset 0 0 0 1px rgba(245,184,61,.45)}
+.btn.green{background:linear-gradient(#5ff0c0,#1fae86);color:#03231a;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(0,0,0,.2)}
+.btn.red{background:linear-gradient(#ff7a62,#d8342b);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -3px 0 rgba(0,0,0,.25)}
+.btn:disabled{background:#1a252c;color:#53636c;box-shadow:inset 0 0 0 1px #24343e}
+.btn.big{letter-spacing:.2em}
+.pill{border-radius:0;background:rgba(245,184,61,.12);color:var(--amber2);border:1px solid rgba(245,184,61,.35);clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.pill.red{background:rgba(255,77,77,.14);color:#ffb0a6;border-color:rgba(255,77,77,.45)}
+.pill.blue{background:rgba(56,217,176,.12);color:#9ff2da;border-color:rgba(56,217,176,.45)}
+.pill.gold{background:rgba(245,184,61,.2);color:var(--amber);border-color:rgba(245,184,61,.6)}
+.bar{border-radius:0;background:#060a0c;box-shadow:inset 0 0 0 1px #1f2d35}
+.bar>i{border-radius:0;background:linear-gradient(90deg,#1fae86,#5ff0c0);box-shadow:0 0 8px rgba(95,240,192,.5)}
+/* --- シート・モーダル --- */
+.backdrop{background:radial-gradient(circle at 50% 40%,rgba(6,10,12,.55),rgba(3,5,6,.85))}
+.sheet{border-radius:0;background:linear-gradient(#121c22,#0b1115);border:1px solid var(--line2);border-top:2px solid var(--amber);
+  clip-path:polygon(18px 0,calc(100% - 18px) 0,100% 18px,100% 100%,0 100%,0 18px)}
+.sheet .grab{border-radius:0;background:rgba(245,184,61,.5);height:3px}
+.sheet h3{letter-spacing:.06em}
+.sheet .close{border-radius:0;background:#0f171c;border:1px solid rgba(245,184,61,.45);color:var(--amber);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.modal{background:linear-gradient(#131e25,#0a1014);border:1px solid var(--line2);box-shadow:0 0 0 1px rgba(245,184,61,.25),0 30px 60px rgba(0,0,0,.7);--cut:16px}
+.modal::before{content:"";position:absolute;left:16px;right:16px;top:0;height:2px;background:linear-gradient(90deg,transparent,var(--amber),transparent)}
+/* --- 結果 --- */
+.result h2{font-size:46px;letter-spacing:.14em}
+.result h2.win{background:linear-gradient(#fff4d1,#ffc74d 45%,#c97d12 55%,#ffd98a);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 0 14px rgba(245,184,61,.45))}
+.result h2.lose{background:linear-gradient(#e7edf0,#8ea2ad 55%,#5d6f79);-webkit-background-clip:text;background-clip:text;color:transparent}
+.result .sub{font-family:var(--mono);letter-spacing:.12em}
+.rline{background:linear-gradient(90deg,#14202a,#0e161b);border:1px solid var(--line);--cut:7px}
+.rline.rare{background:linear-gradient(90deg,#2a1f55,#0e161b)}
+#toast div{border-radius:0;background:rgba(10,15,19,.96);border:1px solid var(--line2);border-left:3px solid var(--amber);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+/* --- 部隊・兵器 --- */
+.uicon,.arm .kico,.arm .wico,.armsum .big,.bitem .art,.bhead .art,.item .ic{border-radius:0;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);
+  background:radial-gradient(circle at 50% 35%,#1d3640,#0b141a 75%);border:1px solid #27424d}
+.uicon.enemy{background:radial-gradient(circle at 50% 35%,#40201d,#160b0a 75%);border-color:#5c2622}
+.stats{gap:6px}
+.stats span{background:#0b1217;border:1px solid #1f2d35;padding:1px 6px;clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+.stats b{color:#fff;font-family:var(--mono)}
+.portrait{border-radius:0;border:1px solid rgba(245,184,61,.55);clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);box-shadow:0 0 0 1px #000}
+.portrait.sm{clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.portrait.xs{clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.traits span{border-radius:0;background:rgba(245,184,61,.08);border:1px solid rgba(245,184,61,.3);color:var(--amber2)}
+.skill{background:linear-gradient(90deg,rgba(245,184,61,.14),#0b1217 70%);border-left:2px solid var(--amber);--cut:6px}
+.mtx td{border-radius:0;background:#0b1217}
+.mtx td.s2{background:rgba(78,224,143,.25)}.mtx td.s1{background:rgba(78,224,143,.12)}.mtx td.w1{background:rgba(255,90,78,.2)}
+.armtypes button{border-radius:0;background:#0f171c;border:1px solid var(--line);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.armtypes button.on{background:linear-gradient(#21323b,#121d23);border-color:var(--amber);box-shadow:inset 0 -2px 0 var(--amber);color:#fff}
+.armsum{background:linear-gradient(135deg,#17303a,#0d171c 70%);border:1px solid #27424d}
+.arm .pips i{border-radius:0;background:#1b2830;transform:skewX(-20deg)}
+.arm .pips i.on{background:var(--amber);box-shadow:0 0 6px rgba(245,184,61,.6)}
+.arm .act .btn.dev{background:linear-gradient(#c9a8ff,#7a4fe0);color:#fff}
+.seg{border-radius:0;background:#0b1217;border:1px solid var(--line2);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.seg button.on{background:linear-gradient(#25363f,#18252c);color:var(--amber);box-shadow:inset 0 -2px 0 var(--amber)}
+.farmbtn{border-radius:0;background:rgba(245,184,61,.06);border:1px dashed rgba(245,184,61,.5);color:var(--amber2)}
+/* --- 出撃 --- */
+.stagebar .nav{border-radius:0;background:#0f171c;border:1px solid var(--line2);color:var(--amber);clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px)}
+.stagebar .sn{font-family:var(--mono);font-size:24px;letter-spacing:.12em;color:#fff;text-shadow:0 0 14px rgba(245,184,61,.35)}
+.stagebar .sn::before{content:"OPERATION";display:block;font-size:9px;line-height:1.3;letter-spacing:.4em;color:var(--amber)}
+.stagebar .sn{font-size:21px;line-height:1.1}
+.mapwrap{border-radius:0;border:1px solid var(--line2);background:#071015;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);box-shadow:inset 0 0 0 1px rgba(56,217,176,.12)}
+.mapwrap .maptip{border-radius:0;background:rgba(5,10,12,.75);border-left:2px solid var(--amber);font-family:var(--mono);letter-spacing:.04em}
+.side{--cut:12px}
+.side.enemy{background:
+  repeating-linear-gradient(135deg,rgba(255,77,77,.05) 0 2px,transparent 2px 9px),
+  linear-gradient(#1f0f0f,#120909);border-color:#5c2622;box-shadow:inset 0 2px 0 rgba(255,77,77,.55)}
+.side.ally{background:
+  repeating-linear-gradient(135deg,rgba(56,217,176,.04) 0 2px,transparent 2px 9px),
+  linear-gradient(#0e1d1c,#0a1314);border-color:#1f4a44;box-shadow:inset 0 2px 0 rgba(56,217,176,.55)}
+.side .hd{letter-spacing:.08em}
+.side.enemy .hd .grow::before{content:"INTEL ";font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:#ff6a5c}
+.side.ally .hd .grow::before{content:"FORCES ";font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--ally)}
+.slot{border-radius:0;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.side.enemy .slot{background:linear-gradient(#2a1414,#170b0b);border:1px solid #5c2622}
+.side.ally .slot{background:linear-gradient(#112825,#0b1716);border:1px solid #1f4a44}
+.slot .boss,.slot .cmdb{border-radius:0;font-family:var(--mono);letter-spacing:.06em}
+.slot.locked{background:repeating-linear-gradient(135deg,rgba(255,255,255,.03) 0 3px,transparent 3px 8px)!important}
+.ecmd{border-radius:0;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  background:repeating-linear-gradient(135deg,rgba(255,77,77,.07) 0 2px,transparent 2px 8px),linear-gradient(90deg,rgba(150,20,20,.35),rgba(40,8,8,.6));border:1px solid #9a2a22;
+  display:flex;gap:9px;align-items:flex-start}
+.ecmd .eportrait{flex:none;width:52px;height:52px;border:1px solid #ff6a5c;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);box-shadow:0 0 12px rgba(255,77,77,.45)}
+.ecmd .eportrait svg{width:100%;height:100%}
+.wr .v{font-family:var(--mono)}
+/* --- 戦闘の操作部 --- */
+#battle{background:#05080a}
+#battle .bctl,.skillbar,.cardbar{background:linear-gradient(#0c1216,#080b0e)}
+#battle .bctl{border-top:1px solid rgba(245,184,61,.3)}
+.speed,.autobtn{border-radius:0;background:#0b1217;border:1px solid var(--line2);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.speed button{font-family:var(--mono)}
+.speed button.on{background:linear-gradient(#25363f,#18252c);color:var(--amber);box-shadow:inset 0 -2px 0 var(--amber)}
+.autobtn{font-family:var(--mono);letter-spacing:.08em}
+.autobtn.on{background:linear-gradient(#3a2c0c,#1d1606);border-color:var(--amber);color:var(--amber);box-shadow:0 0 12px rgba(245,184,61,.35)}
+.skb{border-radius:0;background:linear-gradient(#15212a,#0d151a);border:1px solid var(--line2);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.skb::after{background:linear-gradient(90deg,#c97d12,var(--amber));box-shadow:0 0 8px rgba(245,184,61,.6)}
+.skb.ready{background:linear-gradient(#3a2c0c,#1a1406);border-color:var(--amber);box-shadow:inset 0 0 14px rgba(245,184,61,.35)}
+.rcard{border-radius:0;background:linear-gradient(#112825,#0b1716);border:1px solid #1f4a44;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.rcard.on{border-color:var(--ally);background:linear-gradient(#17403a,#0d2421);box-shadow:inset 0 0 12px rgba(56,217,176,.3)}
+.cardbar .pts{border-radius:0;background:#0b1217;border:1px solid var(--line2);clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px)}
+.cardbar .pts b{color:var(--amber)}
+.cardbar .pts i{border-radius:0}
+.camreset{border-radius:0;background:rgba(8,12,15,.9);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);font-family:var(--mono);letter-spacing:.06em}
+.deploybar{border-radius:0;background:linear-gradient(rgba(12,18,22,.94),rgba(7,11,14,.96));border:1px solid var(--line2);border-top:2px solid var(--amber);
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+.deploybar .tt{color:var(--amber);letter-spacing:.12em}
+.deploybar .trn button{border-radius:0;background:#0f171c;border:1px solid var(--line2)}
+.supbtn{border-radius:0;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+.cardghost{border-radius:0;background:rgba(17,40,37,.92);border:2px solid var(--ally);clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px)}
+textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
+/* --- 基地(放置) --- */
+.grid{border-radius:0;padding:10px;gap:7px;border:1px solid rgba(56,217,176,.35);
+  background:
+    linear-gradient(rgba(56,217,176,.6),rgba(56,217,176,.6)) left top/14px 1px no-repeat,
+    linear-gradient(rgba(56,217,176,.6),rgba(56,217,176,.6)) left top/1px 14px no-repeat,
+    linear-gradient(rgba(56,217,176,.6),rgba(56,217,176,.6)) right bottom/14px 1px no-repeat,
+    linear-gradient(rgba(56,217,176,.6),rgba(56,217,176,.6)) right bottom/1px 14px no-repeat,
+    repeating-linear-gradient(0deg,rgba(56,217,176,.07) 0 1px,transparent 1px 16px),
+    repeating-linear-gradient(90deg,rgba(56,217,176,.07) 0 1px,transparent 1px 16px),
+    radial-gradient(circle at 50% 40%,#0e2430,#07121a 75%);
+  box-shadow:inset 0 0 40px rgba(0,0,0,.6);clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px)}
+.tile{border-radius:0;background:radial-gradient(ellipse at 50% 62%,rgba(120,170,200,.16),transparent 62%),linear-gradient(#111c23,#0b1318);border:1px solid #22343f;box-shadow:none;
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);justify-content:flex-start;padding:2px 2px 16px}
+.tile .art{width:96%;margin-top:4px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.6))}
+.tile .nm{position:absolute;left:0;right:0;bottom:0;padding:2px 0 3px;font-size:10.5px;letter-spacing:.06em;background:linear-gradient(transparent,rgba(0,0,0,.75) 40%);text-shadow:none;color:#dfe8ec}
+.tile.hq{background:radial-gradient(ellipse at 50% 62%,rgba(245,184,61,.22),transparent 62%),linear-gradient(#1a1a12,#0f1210);border-color:rgba(245,184,61,.6)}
+.tile .lv{left:0;top:0;border-radius:0;background:rgba(245,184,61,.9);color:#1b1300;font-family:var(--mono);font-size:9.5px;padding:1px 6px 1px 4px;clip-path:polygon(0 0,100% 0,calc(100% - 5px) 100%,0 100%)}
+.tile .up{border-radius:0;width:20px;height:16px;right:3px;top:3px;background:none;box-shadow:none;color:var(--ally);font-size:0;animation:upglow 1.2s ease-in-out infinite alternate}
+.tile .up::before{content:"";position:absolute;inset:0;background:var(--ally);clip-path:polygon(50% 0,100% 55%,72% 55%,72% 100%,28% 100%,28% 55%,0 55%);filter:drop-shadow(0 0 4px var(--ally))}
+@keyframes upglow{from{opacity:.55;transform:translateY(1px)}to{opacity:1;transform:translateY(-1px)}}
+.tile .store{border-radius:0;left:6px;right:6px;bottom:17px;height:3px;background:rgba(0,0,0,.6)}
+.tile .store i{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+.tile .store.steel i{background:var(--steel);box-shadow:0 0 6px var(--steel)}
+.tile .bub{border-radius:0;background:rgba(5,9,11,.85);border:1px solid rgba(245,184,61,.5);font-family:var(--mono);clip-path:polygon(4px 0,100% 0,100% calc(100% - 4px),calc(100% - 4px) 100%,0 100%,0 4px)}
+.tile .bub.full{background:rgba(120,30,20,.9);border-color:var(--bad)}
+.tile.empty{background:repeating-linear-gradient(135deg,rgba(56,217,176,.05) 0 4px,transparent 4px 10px),rgba(6,14,18,.6);border:1px dashed rgba(56,217,176,.45);color:var(--ally);justify-content:center;padding:4px}
+.tile.empty .plus{font-weight:200;font-size:32px;text-shadow:0 0 10px rgba(56,217,176,.6)}
+.tile.empty .lbl{letter-spacing:.2em}
+.collect{background:linear-gradient(90deg,rgba(245,184,61,.1),transparent 60%),#0f171c;border:1px solid var(--line2)}
+.collect .info b{font-size:15px}
+.basestats .card{padding:8px 11px 9px}
+.basestats .k{font-size:10px;letter-spacing:.12em;color:var(--dim)}
+.basestats .v{font-size:18px;color:#fff;text-shadow:0 0 10px rgba(245,184,61,.25)}
+
+/* --- 戦場の見た目: 地面の色味を落とし、周辺を暗く --- */
+#bbg{filter:saturate(.72) brightness(.8) contrast(1.1) hue-rotate(-6deg)}
+#bwrap::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at 50% 55%,transparent 55%,rgba(2,4,6,.55) 100%),linear-gradient(rgba(10,30,40,.12),rgba(10,30,40,.12))}
+
+/* --- 部隊タブ: 兵種のアイコンと肖像を大きく --- */
+.urow .uicon{width:62px;height:62px}
+.urow .uicon svg{width:48px;height:48px}
+.hero .portrait{width:88px;height:88px}
+.hero .nm{letter-spacing:.04em}
+.hero .ttl{color:var(--amber2);letter-spacing:.06em}
 </style>
 </head>
 <body>
@@ -2530,75 +2742,255 @@ if (typeof module !== 'undefined') module.exports = TF;
   function eraTier(s) { return 1 + Math.floor(Math.max(0, s - 1) / 25); }
   function enemySvg(t, s, cls) { var n = eraTier(s); return ArmArt.unit(t, ENEMY_C, n, n, cls); }
 
-  var BART = {
-    hq: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><rect x="9" y="29" width="46" height="26" rx="2" fill="#7b8752"/><rect x="7" y="26" width="50" height="5" rx="1" fill="#55603a"/><rect x="20" y="15" width="24" height="12" fill="#8c9862"/><rect x="18" y="12" width="28" height="4" rx="1" fill="#55603a"/><g fill="#ffd166"><rect x="13" y="34" width="7" height="6" rx="1"/><rect x="44" y="34" width="7" height="6" rx="1"/><rect x="24" y="18" width="5" height="5"/><rect x="35" y="18" width="5" height="5"/></g><rect x="27" y="40" width="10" height="15" fill="#3a3021"/><path d="M32 30.5l1.8 3.7 4 .5-3 2.8.8 4-3.6-2-3.6 2 .8-4-3-2.8 4-.5z" fill="#f1c453"/><rect x="43" y="1" width="1.8" height="12" fill="#cfd3c4"/><path d="M44.8 1.8h11l-3 3.3 3 3.3h-11z" fill="#d64545"/><path d="M25 12 22 3" stroke="#b9bfa8" stroke-width="1.4"/><circle cx="22" cy="3" r="1.6" fill="#ef6b5b"/>',
-    supply: '<ellipse cx="32" cy="57" rx="26" ry="5" fill="#000" opacity=".25"/><g stroke="#6e4b1c" stroke-width="1.5"><rect x="6" y="36" width="20" height="19" fill="#b98a45"/><rect x="27" y="36" width="20" height="19" fill="#c5964f"/><rect x="16" y="17" width="20" height="19" fill="#d0a35c"/></g><g stroke="#7d5622" stroke-width="1.3"><path d="M6 36l20 19M26 36 6 55M27 36l20 19M47 36 27 55"/></g><path d="M18.5 26.5h15" stroke="#7d5622" stroke-width="2"/><circle cx="26" cy="26.5" r="5" fill="#f1c453" stroke="#a8791c" stroke-width="1.5"/><rect x="49" y="40" width="10" height="15" rx="2" fill="#5f6f45"/><rect x="49" y="44" width="10" height="2" fill="#3e4a2c"/><rect x="49" y="50" width="10" height="2" fill="#3e4a2c"/>',
-    steel: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><circle cx="48" cy="8" r="4.5" fill="#9aa3a8" opacity=".7"/><circle cx="53" cy="3.5" r="3.2" fill="#9aa3a8" opacity=".5"/><rect x="42" y="10" width="8" height="26" fill="#5c656e"/><rect x="42" y="13" width="8" height="2.5" fill="#d64545"/><path d="M6 30l10-8 0 8 10-8 0 8 10-8v8h18v25H6z" fill="#717d88"/><path d="M6 30l10-8v8l10-8v8l10-8v8" fill="none" stroke="#4d5660" stroke-width="2"/><rect x="11" y="38" width="30" height="11" rx="2" fill="#2b2420"/><rect x="13" y="40" width="26" height="7" rx="1.5" fill="#ff8a2a"/><rect x="16" y="41.5" width="20" height="3" fill="#ffd36a"/><rect x="44" y="40" width="8" height="15" fill="#4d5660"/>',
-    depot: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><path d="M5 55V36C5 21 17 12 32 12s27 9 27 24v19z" fill="#7d8556"/><g stroke="#5c6340" stroke-width="1.6" fill="none"><path d="M14 55V30M23 55V18M32 55V12M41 55V18M50 55V30"/></g><path d="M20 55V38c0-6 5-10 12-10s12 4 12 10v17z" fill="#3a3a2c"/><g stroke="#55553f" stroke-width="1.4"><path d="M20 41h24M20 45h24M20 49h24M20 53h24"/></g><rect x="26" y="20" width="12" height="4" rx="1" fill="#f1c453"/>',
-    barracks: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><path d="M33 54l13-24 13 24z" fill="#5d6a3a"/><path d="M4 55L22 20l18 35z" fill="#768547"/><path d="M22 20l8 35H14z" fill="#65733d"/><path d="M22 34l5 21H17z" fill="#2c3220"/><path d="M22 20v-12" stroke="#cfd3c4" stroke-width="1.6"/><path d="M22.8 8h9l-2.5 3 2.5 3h-9z" fill="#d64545"/><g fill="#9aa985"><circle cx="46" cy="49" r="2"/><rect x="44.6" y="51" width="2.8" height="4"/></g>',
-    atpost: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><path d="M15 36 L52 22 L53.5 25.5 L17 40z" fill="#3e4a2c"/><rect x="51" y="21" width="6" height="4.5" rx="1" transform="rotate(-21 54 23)" fill="#2d3620"/><path d="M14 30h14v12H14z" fill="#56663a"/><circle cx="18" cy="45" r="5" fill="#2b2b22"/><g fill="#c2a878" stroke="#8d7650" stroke-width="1.2"><ellipse cx="9" cy="50" rx="7" ry="4.5"/><ellipse cx="22" cy="51" rx="7" ry="4.5"/><ellipse cx="35" cy="51" rx="7" ry="4.5"/><ellipse cx="48" cy="50" rx="7" ry="4.5"/><ellipse cx="15.5" cy="44" rx="6.5" ry="4"/><ellipse cx="41.5" cy="44" rx="6.5" ry="4"/></g>',
-    factory: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><path d="M5 26 32 12l27 14v29H5z" fill="#6c7a63"/><path d="M5 26 32 12l27 14" fill="none" stroke="#4b5644" stroke-width="2.5"/><rect x="12" y="30" width="40" height="25" fill="#3c4436"/><g stroke="#56604d" stroke-width="1.6"><path d="M12 34h40M12 38h40M12 42h40"/></g><g transform="translate(14 41)"><rect x="2" y="9" width="32" height="5" rx="2.5" fill="#26301f"/><path d="M3 9h30l-2-4H5z" fill="#6f7d47"/><path d="M11 5h12l2-4H13z" fill="#7d8b52"/><rect x="24" y="1.6" width="12" height="2" fill="#7d8b52"/></g><circle cx="32" cy="22" r="4" fill="#f1c453"/><circle cx="32" cy="22" r="1.6" fill="#6c7a63"/>',
-    artpost: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><path d="M22 38 55 11l2.4 3L26 42z" fill="#4a5634"/><rect x="53" y="9" width="5" height="5" rx="1" transform="rotate(-40 55 11)" fill="#33402a"/><path d="M14 33h16v11H14z" fill="#62733f"/><path d="M24 44l18 8-1 2.5-19-7z" fill="#3a4429"/><circle cx="21" cy="47" r="7" fill="#2b2b22"/><circle cx="21" cy="47" r="3" fill="#6a6a58"/><g fill="#c2a878" stroke="#8d7650" stroke-width="1.2"><ellipse cx="8" cy="51" rx="6.5" ry="4"/><ellipse cx="44" cy="52" rx="6.5" ry="4"/><ellipse cx="56" cy="52" rx="6.5" ry="4"/></g>',
-    lab: '<ellipse cx="32" cy="57" rx="27" ry="5" fill="#000" opacity=".25"/><rect x="8" y="28" width="48" height="27" rx="2" fill="#a9b6ba"/><rect x="6" y="25" width="52" height="5" rx="1" fill="#7d8b90"/><g fill="#5fd0ff" opacity=".9"><rect x="13" y="34" width="9" height="7" rx="1"/><rect x="42" y="34" width="9" height="7" rx="1"/></g><rect x="27" y="40" width="10" height="15" fill="#4c5a5f"/><path d="M38 25V15" stroke="#7d8b90" stroke-width="2"/><path d="M28 14a12 7 -25 0 0 20-6z" fill="#d7e0e3" stroke="#7d8b90" stroke-width="1.5"/><circle cx="39" cy="10" r="1.6" fill="#ef6b5b"/><path d="M29 31h6l-1.2 2.2v3l3 5.3c.4.8-.2 1.5-1 1.5h-7.6c-.8 0-1.4-.7-1-1.5l3-5.3v-3z" fill="#7fd17a" stroke="#3e7f3c" stroke-width="1"/>'
-  };
+  // ====== 施設の絵: 暗いコンクリートの基礎に建つ、立体的なミニチュア(等角図) ======
+  var BART = (function () {
+    function P(x, y, z) { return [32 + (x - y) * 0.87, 41 + (x + y) * 0.5 - z]; }
+    function f1(v) { return Math.round(v * 10) / 10; }
+    function poly(pts, fill, ex) { return '<path d="M' + pts.map(function (p) { return f1(p[0]) + ' ' + f1(p[1]); }).join('L') + 'Z" fill="' + fill + '"' + (ex || '') + '/>'; }
+    function box(x, y, z, w, d, h, c) {
+      var A = P(x, y, z + h), B = P(x + w, y, z + h), C = P(x + w, y + d, z + h), D = P(x, y + d, z + h), B0 = P(x + w, y, z), C0 = P(x + w, y + d, z), D0 = P(x, y + d, z);
+      return poly([D, C, C0, D0], c[1]) + poly([C, B, B0, C0], c[2]) + poly([A, B, C, D], c[0]);
+    }
+    // 切妻屋根(棟は y 方向)
+    function gable(x, y, z, w, d, rh, c) {
+      var m = x + w / 2;
+      return poly([P(x, y, z), P(m, y, z + rh), P(m, y + d, z + rh), P(x, y + d, z)], c[0]) + poly([P(m, y, z + rh), P(x + w, y, z), P(x + w, y + d, z), P(m, y + d, z + rh)], c[2]) +
+        poly([P(x, y + d, z), P(m, y + d, z + rh), P(x + w, y + d, z)], c[1]);
+    }
+    // 左の面(y = 一定)・右の面(x = 一定)に貼る四角
+    function onL(yy, a, b, z0, z1, f, ex) { return poly([P(a, yy, z1), P(b, yy, z1), P(b, yy, z0), P(a, yy, z0)], f, ex); }
+    function onR(xx, a, b, z0, z1, f, ex) { return poly([P(xx, a, z1), P(xx, b, z1), P(xx, b, z0), P(xx, a, z0)], f, ex); }
+    function onTop(x, y, z, w, d, f, ex) { return poly([P(x, y, z), P(x + w, y, z), P(x + w, y + d, z), P(x, y + d, z)], f, ex); }
+    function glow(cx, cy, r, col, op) { return '<circle cx="' + f1(cx) + '" cy="' + f1(cy) + '" r="' + r + '" fill="' + col + '" opacity="' + (op || 0.35) + '"/>'; }
+    var WALL = ['#56656d', '#35424a', '#252f35'], DARK = ['#3c4950', '#29343a', '#1c2429'], PAD = ['#2c363c', '#1b2226', '#13181b'], OL = ['#5c6a49', '#3c4730', '#2b3323'];
+    var AM = '#ffc35a', TL = '#5ff0c0', OR = '#ff7a2a';
+    function pad() {
+      var s = '<ellipse cx="32" cy="57.5" rx="29" ry="6" fill="#000" opacity=".5"/>' + box(-15, -15, 0, 30, 30, 2.5, PAD);
+      for (var i = 0; i < 6; i++) s += onL(15, -15 + i * 5, -12.5 + i * 5, 0, 2.5, i % 2 ? '#0c0e0f' : '#d99a26');
+      for (i = 0; i < 6; i++) s += onR(15, -15 + i * 5, -12.5 + i * 5, 0, 2.5, i % 2 ? '#0a0b0c' : '#a8761d');
+      s += onTop(-13, -13, 2.5, 26, 26, 'none', ' stroke="#3a464d" stroke-width=".35" stroke-dasharray="1.2 1.2"');
+      return s;
+    }
+    function winsL(yy, x0, x1, n, z0, z1, f) { var s = '', w = (x1 - x0) / n; for (var i = 0; i < n; i++) s += onL(yy, x0 + i * w + w * 0.2, x0 + (i + 1) * w - w * 0.2, z0, z1, f); return s; }
+    function winsR(xx, y0, y1, n, z0, z1, f) { var s = '', w = (y1 - y0) / n; for (var i = 0; i < n; i++) s += onR(xx, y0 + i * w + w * 0.2, y0 + (i + 1) * w - w * 0.2, z0, z1, f); return s; }
+    function flag(x, y, z, h, col) { var a = P(x, y, z), b = P(x, y, z + h); return '<path d="M' + f1(a[0]) + ' ' + f1(a[1]) + 'V' + f1(b[1]) + '" stroke="#9aa6ad" stroke-width=".8"/><path d="M' + f1(b[0]) + ' ' + f1(b[1]) + 'l7 2.2-7 2.4z" fill="' + col + '"/>'; }
+    var Z = 2.5;
+    var A = {};
+    A.hq = pad() + box(-10, -10, Z, 20, 20, 9, WALL) + winsL(10, -9, 9, 5, Z + 3, Z + 6, AM) + winsR(10, -9, 9, 5, Z + 3, Z + 6, AM) +
+      box(-5, -5, Z + 9, 10, 10, 9, WALL) + winsL(5, -4, 4, 2, Z + 12, Z + 16, AM) + winsR(5, -4, 4, 2, Z + 12, Z + 16, '#e0a840') +
+      onTop(-4, -4, Z + 18, 8, 8, '#1b2226') + (function () { var t = P(0, 0, Z + 18), u = P(0, 0, Z + 30); return '<path d="M' + f1(t[0]) + ' ' + f1(t[1]) + 'V' + f1(u[1]) + '" stroke="#b9c3c8" stroke-width=".9"/><circle cx="' + f1(u[0]) + '" cy="' + f1(u[1]) + '" r="1.3" fill="#ff4d4d"/>' + glow(u[0], u[1], 3, '#ff4d4d', 0.35); })() +
+      (function () { var c = P(-7, 7, Z + 9); return '<ellipse cx="' + f1(c[0]) + '" cy="' + f1(c[1] - 2) + '" rx="4.2" ry="2.4" fill="#c9d2d6" transform="rotate(-20 ' + f1(c[0]) + ' ' + f1(c[1] - 2) + ')"/><path d="M' + f1(c[0]) + ' ' + f1(c[1] - 2) + 'v3" stroke="#8e999e" stroke-width=".8"/>'; })() +
+      flag(8, -8, Z + 9, 9, '#38d9b0');
+    A.supply = pad() + box(-12, -6, Z, 15, 16, 7, DARK) + gable(-12, -6, Z + 7, 15, 16, 4, ['#4a5a62', '#36434a', '#273036']) + onL(10, -9, -2, Z, Z + 5, '#141a1d') + onL(10, -8.4, -2.6, Z + 0.6, Z + 4.4, 'none', ' stroke="#ffc35a" stroke-width=".4" stroke-dasharray=".8 .8"') +
+      box(5, -11, Z, 6, 6, 5, ['#9a7a3c', '#6e5525', '#53401b']) + box(5, -4, Z, 6, 6, 5, ['#8f7036', '#664e22', '#4d3b18']) + box(5, -8, Z + 5, 6, 6, 5, ['#a6844a', '#76592a', '#59431f']) +
+      (function () { var c = P(-4.5, 2, Z + 11.5); return '<circle cx="' + f1(c[0]) + '" cy="' + f1(c[1]) + '" r="4" fill="#f5b83d" stroke="#fff3c4" stroke-width=".7"/><text x="' + f1(c[0]) + '" y="' + f1(c[1] + 2.2) + '" font-size="6" font-weight="900" text-anchor="middle" fill="#3a2500">¥</text>' + glow(c[0], c[1], 7, AM, 0.22); })();
+    A.steel = pad() + box(-11, -9, Z, 15, 18, 9, DARK) + onL(9, -8, -1, Z, Z + 6, '#2a1206') + onL(9, -7.4, -1.6, Z + 0.5, Z + 5.2, OR) + glow(P(-4.5, 9, Z + 3)[0], P(-4.5, 9, Z + 3)[1], 6, OR, 0.4) +
+      box(5, -8, Z, 5, 5, 22, ['#5e6b72', '#3d494f', '#2a3338']) + onL(-3, 5, 10, Z + 17, Z + 19, '#d99a26') + onL(-3, 5, 10, Z + 13, Z + 15, '#d99a26') +
+      (function () { var t = P(7.5, -5.5, Z + 22); return '<circle cx="' + f1(t[0] + 1) + '" cy="' + f1(t[1] - 4) + '" r="3.2" fill="#8a959b" opacity=".75"/><circle cx="' + f1(t[0] + 4) + '" cy="' + f1(t[1] - 8.5) + '" r="4" fill="#7a868c" opacity=".55"/><circle cx="' + f1(t[0] + 8) + '" cy="' + f1(t[1] - 13) + '" r="4.6" fill="#6e7a80" opacity=".35"/>'; })() +
+      box(5, 4, Z, 8, 6, 3, ['#7d8a91', '#56636a', '#3e494f']) + onTop(5.6, 4.6, Z + 3.05, 6.8, 4.8, '#c4ced3');
+    A.depot = pad() + box(-12, -11, Z, 24, 20, 6, WALL) +
+      (function () { // かまぼこ屋根
+        var s = '', n = 6;
+        for (var i = 0; i < n; i++) { var a0 = Math.PI * i / n, a1 = Math.PI * (i + 1) / n, x0 = -12 + 12 * (1 - Math.cos(a0)), x1 = -12 + 12 * (1 - Math.cos(a1)), z0 = Z + 6 + 8 * Math.sin(a0), z1 = Z + 6 + 8 * Math.sin(a1); s += poly([P(x0, -11, z0), P(x1, -11, z1), P(x1, 9, z1), P(x0, 9, z0)], i < n / 2 ? '#5f6f78' : i < n - 1 ? '#3f4c54' : '#2d383e'); }
+        var g = []; for (i = 0; i <= n; i++) { var a = Math.PI * i / n; g.push(P(-12 + 12 * (1 - Math.cos(a)), 9, Z + 6 + 8 * Math.sin(a))); }
+        g.push(P(12, 9, Z + 6)); g.push(P(-12, 9, Z + 6));
+        return s + poly(g, '#34414a');
+      })() + onL(9, -7, 7, Z, Z + 9, '#141a1d') + (function () { var s = ''; for (var i = 0; i < 6; i++) s += onL(9, -7, 7, Z + 0.6 + i * 1.4, Z + 1.1 + i * 1.4, '#27323a'); return s; })() + onL(9, -7, 7, Z + 9.2, Z + 9.8, AM) + glow(P(0, 9, Z + 9.5)[0], P(0, 9, Z + 9.5)[1], 5, AM, 0.3);
+    A.barracks = pad() + box(-12, -11, Z, 8, 21, 5, OL) + gable(-12, -11, Z + 5, 8, 21, 4, ['#6a7a52', '#465234', '#333c26']) + winsR(-4, -9, 8, 4, Z + 1.5, Z + 3.5, AM) +
+      box(2, -11, Z, 8, 21, 5, OL) + gable(2, -11, Z + 5, 8, 21, 4, ['#6a7a52', '#465234', '#333c26']) + winsR(10, -9, 8, 4, Z + 1.5, Z + 3.5, AM) + flag(-1, 12, Z, 16, '#38d9b0');
+    A.atpost = pad() +
+      (function () { var s = ''; for (var i = 0; i < 14; i++) { var a = i / 14 * Math.PI * 2, c = P(Math.cos(a) * 10, Math.sin(a) * 10, Z + 1.2); s += '<ellipse cx="' + f1(c[0]) + '" cy="' + f1(c[1]) + '" rx="3.2" ry="1.9" fill="' + (i % 2 ? '#8c7a52' : '#a08c5e') + '" stroke="#5a4c30" stroke-width=".4"/>'; } return s; })() +
+      box(-3, -3, Z, 6, 6, 2.5, ['#4a554a', '#323a32', '#252b25']) +
+      (function () { var b0 = P(0, 0, Z + 4), b1 = P(10, -9, Z + 8); return '<path d="M' + f1(b0[0]) + ' ' + f1(b0[1]) + 'L' + f1(b1[0]) + ' ' + f1(b1[1]) + '" stroke="#2a3330" stroke-width="2.4" stroke-linecap="round"/><path d="M' + f1(b0[0]) + ' ' + f1(b0[1]) + 'L' + f1(b1[0]) + ' ' + f1(b1[1]) + '" stroke="#65736c" stroke-width="1" stroke-linecap="round"/>'; })() +
+      onL(3, -3, 3, Z + 2.5, Z + 7, '#3e4a43') + onL(3, -2.6, 2.6, Z + 6, Z + 6.6, AM);
+    A.factory = pad() + box(-13, -12, Z, 24, 20, 9, WALL) +
+      (function () { var s = ''; for (var i = 0; i < 4; i++) { var x = -13 + i * 6; s += poly([P(x, -12, Z + 9), P(x + 6, -12, Z + 9), P(x + 6, 8, Z + 9), P(x, 8, Z + 9)], '#2c373d') + poly([P(x, -12, Z + 9), P(x, -12, Z + 13), P(x, 8, Z + 13), P(x, 8, Z + 9)], '#7fb2c4') + poly([P(x, -12, Z + 13), P(x + 6, -12, Z + 9), P(x + 6, 8, Z + 9), P(x, 8, Z + 13)], '#4b5a62') + poly([P(x, 8, Z + 9), P(x, 8, Z + 13), P(x + 6, 8, Z + 9)], '#35424a'); } return s; })() +
+      onL(8, -9, 3, Z, Z + 7, '#141a1d') + onL(8, -9, 3, Z + 7.2, Z + 7.8, AM) +
+      box(2, 9, Z, 8, 5, 2.2, ['#5c6b47', '#3e4a2f', '#2d3622']) + box(4, 10, Z + 2.2, 4, 3, 1.8, ['#6d7d55', '#4a5737', '#36402a']) +
+      (function () { var a = P(6, 11.5, Z + 3.1), b = P(6, 18, Z + 3.4); return '<path d="M' + f1(a[0]) + ' ' + f1(a[1]) + 'L' + f1(b[0]) + ' ' + f1(b[1]) + '" stroke="#2a3322" stroke-width="1.2" stroke-linecap="round"/>'; })();
+    A.artpost = pad() +
+      (function () { var s = ''; for (var i = 0; i < 16; i++) { var a = i / 16 * Math.PI * 2, c = P(Math.cos(a) * 11, Math.sin(a) * 11, Z + 0.8); s += '<rect x="' + f1(c[0] - 2.2) + '" y="' + f1(c[1] - 1.6) + '" width="4.4" height="3.2" rx="1" fill="' + (i % 2 ? '#5a6248' : '#6c7556') + '"/>'; } return s; })() +
+      box(-4, -4, Z, 8, 8, 2, ['#4c5640', '#343b2c', '#262b20']) + box(-2, -2, Z + 2, 4, 4, 3, ['#68745a', '#48513e', '#353c2e']) +
+      (function () { var b0 = P(0, 0, Z + 4.5), b1 = P(13, -12, Z + 17); return '<path d="M' + f1(b0[0]) + ' ' + f1(b0[1]) + 'L' + f1(b1[0]) + ' ' + f1(b1[1]) + '" stroke="#262c20" stroke-width="3.2" stroke-linecap="round"/><path d="M' + f1(b0[0]) + ' ' + f1(b0[1]) + 'L' + f1(b1[0]) + ' ' + f1(b1[1]) + '" stroke="#6f7a5e" stroke-width="1.4" stroke-linecap="round"/><circle cx="' + f1(b1[0]) + '" cy="' + f1(b1[1]) + '" r="1.6" fill="#1a1d16"/>'; })() +
+      box(-12, 6, Z, 4, 4, 3, ['#9a7a3c', '#6e5525', '#53401b']) + box(-12, 1, Z, 4, 4, 3, ['#8f7036', '#664e22', '#4d3b18']);
+    A.lab = pad() + box(-11, -9, Z, 18, 18, 8, WALL) + winsL(9, -10, 6, 4, Z + 3, Z + 5.5, TL) + winsR(7, -8, 8, 4, Z + 3, Z + 5.5, TL) +
+      (function () { var c = P(-2, 0, Z + 8), s = ''; s += '<path d="M' + f1(c[0] - 8) + ' ' + f1(c[1]) + 'A8 7 0 0 1 ' + f1(c[0] + 8) + ' ' + f1(c[1]) + 'Z" fill="#7d9aa6"/><path d="M' + f1(c[0] - 8) + ' ' + f1(c[1]) + 'A8 7 0 0 1 ' + f1(c[0]) + ' ' + f1(c[1] - 7) + 'L' + f1(c[0]) + ' ' + f1(c[1]) + 'Z" fill="#a9c3cc"/>'; s += '<path d="M' + f1(c[0] - 1.5) + ' ' + f1(c[1] - 7) + 'L' + f1(c[0] + 1.5) + ' ' + f1(c[1] - 7) + 'L' + f1(c[0] + 1) + ' ' + f1(c[1]) + 'L' + f1(c[0] - 1) + ' ' + f1(c[1]) + 'Z" fill="' + TL + '" opacity=".85"/>' + glow(c[0], c[1] - 4, 7, TL, 0.25); return s; })() +
+      (function () { var t = P(6, -8, Z + 8), u = P(6, -8, Z + 17); return '<path d="M' + f1(t[0]) + ' ' + f1(t[1]) + 'V' + f1(u[1]) + '" stroke="#b9c3c8" stroke-width=".8"/><ellipse cx="' + f1(u[0] + 2) + '" cy="' + f1(u[1] + 1) + '" rx="3.6" ry="1.6" fill="#c9d2d6" transform="rotate(-30 ' + f1(u[0] + 2) + ' ' + f1(u[1] + 1) + ')"/><circle cx="' + f1(u[0]) + '" cy="' + f1(u[1]) + '" r="1" fill="' + TL + '"/>'; })();
+    return A;
+  })();
   function bSvg(id) { return '<svg viewBox="0 0 64 64" class="art">' + BART[id] + '</svg>'; }
 
-  var HERO_ART = {
-    oni: { bg: '#5a2620', uni: '#4f5d33', skin: '#e8b98f',
-      head: '<path d="M18 29C18 15 24 10 32 10s14 5 14 19l3 .8v2.6H15v-2.6z" fill="#59663a"/><path d="M15 29.8h34v2.6H15z" fill="#434d2b"/><path d="M21 31c0 8 2.5 14 4 16M43 31c0 8-2.5 14-4 16" stroke="#3b4426" stroke-width="1.6" fill="none"/>',
-      face: '<path d="M23.5 33.5l6 1.2M40.5 33.5l-6 1.2" stroke="#2a1f17" stroke-width="2.4" stroke-linecap="round"/><rect x="25" y="36" width="4.5" height="2.2" rx="1" fill="#1d1a16"/><rect x="34.5" y="36" width="4.5" height="2.2" rx="1" fill="#1d1a16"/><path d="M28 46h8" stroke="#6b3b2a" stroke-width="2" stroke-linecap="round"/><path d="M38.5 39l3 5" stroke="#b5574a" stroke-width="1.5"/><path d="M23 44c2 6 5 8 9 8s7-2 9-8" fill="none" stroke="#5c4636" stroke-width="1" stroke-dasharray="1 1.6" opacity=".7"/>' },
-    tetsu: { bg: '#1f3a5a', uni: '#3d4b5c', skin: '#f1cba8',
-      head: '<path d="M44 26c6 4 8 14 6 24-2-5-4-9-6-11z" fill="#8a3324"/><path d="M19 30C19 16 25 11 32 11s13 5 13 19v4h-4v-7H23v7h-4z" fill="#5a4030"/><path d="M24 12.5v12M32 11v13M40 12.5v12" stroke="#463224" stroke-width="1.6"/><rect x="19" y="21" width="26" height="5" rx="2" fill="#2f2f2f"/><circle cx="27" cy="23.5" r="3.6" fill="#8fd3ff" stroke="#2f2f2f" stroke-width="1.6"/><circle cx="37" cy="23.5" r="3.6" fill="#8fd3ff" stroke="#2f2f2f" stroke-width="1.6"/><path d="M23 27c2 3 5 4 9 3-3 3-7 3-10 1z" fill="#8a3324"/>',
-      face: '<path d="M25 33.6h5M34 33.6h5" stroke="#5a2a20" stroke-width="1.4" stroke-linecap="round"/><ellipse cx="27.5" cy="37" rx="2" ry="2.4" fill="#1d1a16"/><ellipse cx="36.5" cy="37" rx="2" ry="2.4" fill="#1d1a16"/><circle cx="28.2" cy="36.2" r=".7" fill="#fff"/><circle cx="37.2" cy="36.2" r=".7" fill="#fff"/><path d="M29 45.5q3 2 6 0" stroke="#b5473e" stroke-width="1.8" fill="none" stroke-linecap="round"/>' },
-    taka: { bg: '#21482c', uni: '#556b45', skin: '#efc9a6',
-      head: '<path d="M20 31c-1-10 4-17 12-17s13 7 12 17c-2-4-3-7-4-8-3 4-9 6-15 5z" fill="#d9dde3"/><path d="M16 20c2-7 10-10 18-9 8 0 14 4 14 8 0 2-3 3-8 3H21c-3 0-5-1-5-2z" fill="#2f5d3a"/><circle cx="23" cy="17" r="2.6" fill="#f1c453"/><path d="M33 22c-5 2-8 7-9 13 3-2 6-5 8-8z" fill="#c9ced6"/>',
-      face: '<path d="M26 34.5h4M35 34.5h4" stroke="#6a6f78" stroke-width="1.3" stroke-linecap="round"/><path d="M26 37.4q2-1.6 4 0M35 37.4q2-1.6 4 0" stroke="#1d1a16" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M30 45.5h4" stroke="#8a5a48" stroke-width="1.5" stroke-linecap="round"/>',
-      neck: '<path d="M20 50c4-3 20-3 24 0l-2 6H22z" fill="#6b8f71"/>' },
-    rai: { bg: '#5a4110', uni: '#5b4a33', skin: '#e3b48c',
-      head: '<path d="M21 30c-1-5 0-9 2-12M43 30c1-5 0-9-2-12" stroke="#2a211b" stroke-width="3"/><path d="M15 21c0-6 8-11 17-11s17 5 17 11z" fill="#3a3f2e"/><rect x="18" y="20" width="28" height="4" fill="#c9a33c"/><path d="M14 24h36c0 2-3 4-8 4H22c-5 0-8-2-8-4z" fill="#111"/><path d="M33 11l-4 6h3l-2 5 5-7h-3l2-4z" fill="#f1c453"/>',
-      face: '<path d="M24 32.5l6 .6M40 32.5l-6 .6" stroke="#2a211b" stroke-width="2" stroke-linecap="round"/><rect x="25.5" y="35.4" width="4" height="2.4" rx="1.2" fill="#1d1a16"/><rect x="34.5" y="35.4" width="4" height="2.4" rx="1.2" fill="#1d1a16"/><path d="M27 44q5 4 10 0" stroke="#7a3a2a" stroke-width="1.8" fill="#fff" stroke-linecap="round"/>',
-      extra: '<rect x="8" y="53" width="10" height="3" rx="1" fill="#c9a33c"/><rect x="46" y="53" width="10" height="3" rx="1" fill="#c9a33c"/>' },
-    // 衛生兵: 赤十字の帽子・桃色の髪
-    sakura: { bg: '#6a2d44', uni: '#e9e4d6', skin: '#f3d0b4',
-      head: '<path d="M19 33c-2-12 4-21 13-21s15 9 13 21c-1-5-3-8-5-9-4 3-11 4-17 2-2 2-3 4-4 7z" fill="#e58aa8"/><path d="M18 22c1-8 7-12 14-12s13 4 14 12z" fill="#fff"/><path d="M18 21.5h28v3H18z" fill="#e3ded0"/><rect x="30" y="12.5" width="4" height="9" fill="#d23a3a"/><rect x="27.5" y="15" width="9" height="4" fill="#d23a3a"/><path d="M44 30c3 4 4 10 2 15-1-4-2-8-4-10z" fill="#e58aa8"/>',
-      face: '<path d="M25.5 33.4q2.5-1.4 5 0M33.5 33.4q2.5-1.4 5 0" stroke="#8a4a5a" stroke-width="1.2" fill="none" stroke-linecap="round"/><ellipse cx="28" cy="37" rx="1.9" ry="2.3" fill="#3a2230"/><ellipse cx="36" cy="37" rx="1.9" ry="2.3" fill="#3a2230"/><circle cx="28.6" cy="36.2" r=".7" fill="#fff"/><circle cx="36.6" cy="36.2" r=".7" fill="#fff"/><ellipse cx="25" cy="41" rx="2" ry="1" fill="#f0a0a8" opacity=".6"/><ellipse cx="39" cy="41" rx="2" ry="1" fill="#f0a0a8" opacity=".6"/><path d="M29.5 45q2.5 2 5 0" stroke="#c0505a" stroke-width="1.6" fill="none" stroke-linecap="round"/>',
-      extra: '<rect x="13" y="52" width="9" height="9" rx="1.5" fill="#fff"/><rect x="16.5" y="53.5" width="2" height="6" fill="#d23a3a"/><rect x="14.5" y="55.5" width="6" height="2" fill="#d23a3a"/>' },
-    // 電撃戦: ゴーグル・逆立った髪・赤いマフラー
-    hayate: { bg: '#2b3f66', uni: '#3f4a3a', skin: '#ecc19c',
-      head: '<path d="M18 28l-2-12 6 5 2-10 5 8 3-11 3 11 5-8 2 10 6-5-2 12z" fill="#2a2a33"/><rect x="18" y="24" width="28" height="5" rx="2.5" fill="#5a4a36"/><circle cx="26" cy="26.5" r="4" fill="#ffd36b" stroke="#3a3026" stroke-width="1.6"/><circle cx="38" cy="26.5" r="4" fill="#ffd36b" stroke="#3a3026" stroke-width="1.6"/>',
-      face: '<path d="M25 33l5 1M39 33l-5 1" stroke="#2a2a33" stroke-width="1.8" stroke-linecap="round"/><ellipse cx="28" cy="36.8" rx="1.8" ry="2.2" fill="#1d1a16"/><ellipse cx="36" cy="36.8" rx="1.8" ry="2.2" fill="#1d1a16"/><path d="M28 44q4 3 8 0" stroke="#7a3a2a" stroke-width="1.8" fill="none" stroke-linecap="round"/>',
-      neck: '<path d="M21 47c5-2 17-2 22 0l-1 4H22z" fill="#c8352d"/><path d="M42 48l8 6-3 2-7-5z" fill="#c8352d"/>' },
-    // 煙幕の策士: 黒い長髪・ガスマスクを首に
-    kiri: { bg: '#3a3f46', uni: '#4b5246', skin: '#efd2b8',
-      head: '<path d="M17 50c-3-20 2-38 15-38s18 18 15 38c-2-8-3-14-4-20-5 2-12 2-18-1-3 5-5 12-8 21z" fill="#16181d"/><path d="M20 22c3-6 8-9 13-9 6 0 10 3 12 8-6-2-15-2-25 1z" fill="#24272e"/>',
-      face: '<path d="M25 33.8h5M34 33.8h5" stroke="#2a2a33" stroke-width="1.2" stroke-linecap="round"/><path d="M25.5 37.3q2.5-1.8 5 0M33.5 37.3q2.5-1.8 5 0" stroke="#1d1a16" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M30 44.5h4" stroke="#9a5a58" stroke-width="1.5" stroke-linecap="round"/>',
-      neck: '<ellipse cx="32" cy="51" rx="9" ry="5" fill="#5d6458"/><circle cx="27" cy="51" r="2.6" fill="#2f342c"/><circle cx="37" cy="51" r="2.6" fill="#2f342c"/><rect x="29.5" y="52" width="5" height="5" rx="1" fill="#2f342c"/>' },
-    // 不動の守護者: 大柄・ひげ・大きな鉄帽
-    kuro: { bg: '#3d3226', uni: '#5a5240', skin: '#c99872',
-      head: '<path d="M14 30C14 14 22 8 32 8s18 6 18 22l3 1v3H11v-3z" fill="#4a4e44"/><path d="M11 31h42v3H11z" fill="#383b33"/><path d="M20 20h24" stroke="#5c6155" stroke-width="2"/>',
-      face: '<path d="M23 34l7 .5M41 34l-7 .5" stroke="#2a211b" stroke-width="3" stroke-linecap="round"/><rect x="25.5" y="36" width="4" height="2" rx="1" fill="#1d1a16"/><rect x="34.5" y="36" width="4" height="2" rx="1" fill="#1d1a16"/><path d="M21 41c2 9 6 12 11 12s9-3 11-12c-3 3-7 4-11 4s-8-1-11-4z" fill="#3a2a1e"/><path d="M28 44h8" stroke="#2a1c12" stroke-width="2" stroke-linecap="round"/>',
-      extra: '<path d="M4 64c1-8 6-14 14-16l-2 16zM60 64c-1-8-6-14-14-16l2 16z" fill="#4a4336"/>' },
-    // 空軍連絡将校: 飛行帽・サングラス
-    amagi: { bg: '#1f4a66', uni: '#4d5a6a', skin: '#ebc4a0',
-      head: '<path d="M18 33C17 18 23 11 32 11s15 7 14 22l-3-1c0-9-4-14-11-14s-11 5-11 14z" fill="#6b4a2e"/><path d="M17 31c-2 5-2 10 0 14 2-1 3-3 3-6zM47 31c2 5 2 10 0 14-2-1-3-3-3-6z" fill="#6b4a2e"/><path d="M24 14l8-3 8 3-8 2z" fill="#f1c453"/>',
-      face: '<rect x="22.5" y="33.5" width="8.5" height="5" rx="2.5" fill="#1b2a36"/><rect x="33" y="33.5" width="8.5" height="5" rx="2.5" fill="#1b2a36"/><path d="M31 35.5h2" stroke="#1b2a36" stroke-width="1.4"/><path d="M24 34.5l3 1M35 34.5l3 1" stroke="#8fd3ff" stroke-width=".8" opacity=".8"/><path d="M28.5 44.5q3.5 2.6 7 0" stroke="#7a3a2a" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
-      extra: '<path d="M20 55l6-2 6 3 6-3 6 2-6 2h-12z" fill="#f1c453"/>' },
-    // 情報参謀: 眼鏡・ベレー帽・短い髪
-    ayase: { bg: '#40305a', uni: '#3f4552', skin: '#f2cfb0',
-      head: '<path d="M19 34c-1-12 4-20 13-20s14 8 13 20c-1-4-2-7-4-8-3 2-9 3-15 2-3 1-5 3-7 6z" fill="#5a3a2a"/><path d="M17 20c2-6 9-9 17-8 7 1 12 4 12 8-4 2-11 3-17 3-6 0-10-1-12-3z" fill="#7a2f4a"/><circle cx="41" cy="15" r="1.8" fill="#7a2f4a"/><circle cx="24" cy="20" r="2" fill="#f1c453"/>',
-      face: '<circle cx="27.5" cy="36.5" r="3.6" fill="none" stroke="#2a2a33" stroke-width="1.3"/><circle cx="36.5" cy="36.5" r="3.6" fill="none" stroke="#2a2a33" stroke-width="1.3"/><path d="M31.1 36.5h1.8" stroke="#2a2a33" stroke-width="1.3"/><ellipse cx="27.5" cy="36.8" rx="1.4" ry="1.8" fill="#1d1a16"/><ellipse cx="36.5" cy="36.8" rx="1.4" ry="1.8" fill="#1d1a16"/><path d="M29.5 45q2.5 1.4 5 0" stroke="#b5473e" stroke-width="1.5" fill="none" stroke-linecap="round"/>',
-      extra: '<rect x="40" y="52" width="9" height="11" rx="1" fill="#d9d2c0"/><path d="M42 55h5M42 57.5h5M42 60h3" stroke="#8a8270" stroke-width=".8"/>' }
-  };
+  // ====== 指揮官・敵将の肖像(軍の身上書ふう: 斜めの光・顔の影・輪郭の光) ======
+  var Portrait = (function () {
+    function P(d, f, ex) { return '<path d="' + d + '" fill="' + f + '"' + (ex || '') + '/>'; }
+    function S(d, c, w, ex) { return '<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"' + (ex || '') + '/>'; }
+    var FACE = { m: 'M21.5 30C21.5 21.5 26 17.5 32 17.5S42.5 21.5 42.5 30C42.5 37.5 40 43 35.8 46.2C34.2 47.4 29.8 47.4 28.2 46.2C24 43 21.5 37.5 21.5 30Z',
+      f: 'M22.2 30C22.2 22 26.4 18 32 18S41.8 22 41.8 30C41.8 37 39.6 41.8 35.9 44.9C34.3 46.2 29.7 46.2 28.1 44.9C24.4 41.8 22.2 37 22.2 30Z' };
+    var SHADE = { m: 'M32 17.5C38 17.5 42.5 21.5 42.5 30C42.5 37.5 40 43 35.8 46.2C34.6 47 33.2 47.4 32 47.4C35.6 43 37.6 37 37.6 30C37.6 23.5 35.6 19.3 32 17.5Z',
+      f: 'M32 18C37.7 18 41.8 22 41.8 30C41.8 37 39.6 41.8 35.9 44.9C34.7 45.8 33.3 46.2 32 46.2C35.3 41.9 37.2 36.4 37.2 30C37.2 23.6 35.3 19.6 32 18Z' };
+    function eyes(o) {
+      var s = '', ir = o.f ? 1.45 : 1.25, sc = '#ece8df';
+      if (o.glow) { // 光る目(敵将)
+        return P('M24.6 31.8Q27.3 30.2 30 31.6Q27.4 32.8 24.6 31.8Z', o.glow) + P('M34 31.6Q36.7 30.2 39.4 31.8Q36.6 32.8 34 31.6Z', o.glow) +
+          '<circle cx="27.3" cy="31.6" r="3" fill="' + o.glow + '" opacity=".35"/><circle cx="36.7" cy="31.6" r="3" fill="' + o.glow + '" opacity=".35"/>';
+      }
+      var sq = o.squint ? 0.55 : 1;
+      s += P('M24.6 31.8Q27.3 ' + (31.6 - 1.7 * sq) + ' 30 31.6Q27.4 ' + (31.6 + 1.3 * sq) + ' 24.6 31.8Z', sc);
+      s += P('M34 31.6Q36.7 29.9 39.4 31.8Q36.6 32.9 34 31.6Z', sc);
+      s += '<circle cx="27.6" cy="31.6" r="' + ir * (o.squint ? 0.8 : 1) + '" fill="' + o.eye + '"/><circle cx="36.6" cy="31.6" r="' + ir + '" fill="' + o.eye + '"/>';
+      s += '<circle cx="27.6" cy="31.6" r=".6" fill="#05070a"/><circle cx="36.6" cy="31.6" r=".6" fill="#05070a"/><circle cx="28.1" cy="31.1" r=".38" fill="#fff"/><circle cx="37.1" cy="31.1" r=".38" fill="#fff"/>';
+      s += S('M24.4 31.8Q27.3 ' + (31.6 - 2 * sq) + ' 30.2 31.5', '#1a1410', o.f ? 1.1 : 0.85) + S('M33.8 31.5Q36.7 29.6 39.6 31.8', '#1a1410', o.f ? 1.1 : 0.85);
+      if (o.f) s += S('M24.4 31.8l-1 -.8M39.6 31.8l1 -.8', '#1a1410', 0.8);
+      return s;
+    }
+    function brows(o) {
+      var c = o.browC || '#2a1f18';
+      if (o.brow === 'calm') return S('M24.2 28.9Q27 27.6 29.8 28.5', c, 1.3) + S('M34.2 28.5Q37 27.6 39.8 28.9', c, 1.3);
+      if (o.brow === 'raised') return S('M24.2 28.4Q27 26.8 29.8 28', c, 1.3) + S('M34.2 28.9Q37 27.8 39.8 28.6', c, 1.3);
+      return S('M23.9 28.3L29.9 29.6', c, o.f ? 1.4 : 2) + S('M40.1 28.3L34.1 29.6', c, o.f ? 1.4 : 2);
+    }
+    function mouth(o, sk2) {
+      var m = o.mouth || 'stern', lip = o.f ? '#b8545a' : '#6e3a30';
+      if (m === 'smile') return S('M29 41.8Q32 43.6 35 41.8', lip, 1.1);
+      if (m === 'smirk') return S('M29.2 42.3Q32.5 42.9 35.4 41.4', lip, 1.1);
+      if (m === 'grin') return P('M28.6 41.4Q32 44.6 35.4 41.4Q32 42.4 28.6 41.4Z', '#f2ede2', ' stroke="' + lip + '" stroke-width=".8"');
+      return S('M29.3 42.3Q32 42.7 34.7 42.3', lip, 1.1);
+    }
+    function base(o) {
+      var id = o.id, sk = o.skin, sk2 = shade(sk, -0.22), uni = o.uni, f = o.f ? 'f' : 'm', s = '';
+      s += '<defs><linearGradient id="pb-' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + o.bg + '"/><stop offset="1" stop-color="#04070a"/></linearGradient>' +
+        '<linearGradient id="pu-' + id + '" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="' + shade(uni, 0.18) + '"/><stop offset=".6" stop-color="' + uni + '"/><stop offset="1" stop-color="' + shade(uni, -0.4) + '"/></linearGradient></defs>';
+      s += '<rect width="64" height="64" fill="url(#pb-' + id + ')"/>';
+      s += S('M-4 18L22 -8M-4 30L34 -8M-4 42L46 -8M10 64L64 10M22 64L64 22', o.light, 0.6, ' opacity=".14"');
+      s += '<circle cx="42" cy="20" r="24" fill="' + o.light + '" opacity=".14"/>';
+      if (o.backHair) s += o.backHair;
+      s += P('M3 64C5 52.5 15 48 25 47L32 53L39 47C49 48 59 52.5 61 64Z', 'url(#pu-' + id + ')');
+      s += P('M27.5 40.5H36.5L37 48.5L32 53L27 48.5Z', sk2);
+      s += P('M25 47L32 53L28.4 57.5L21.5 49.2Z', shade(uni, -0.28)) + P('M39 47L32 53L35.6 57.5L42.5 49.2Z', shade(uni, -0.4));
+      if (o.collar) s += o.collar;
+      if (o.rank) s += P('M7.5 54.6L18 50.6L18.8 52.6L8.4 56.6Z', '#f5b83d') + P('M45.2 50.6L55.7 54.6L54.8 56.6L44.4 52.6Z', '#c98f22') + P('M10 56L16.4 53.6', 'none', ' stroke="#1a1206" stroke-width=".5"');
+      if (o.chest) s += o.chest;
+      s += '<ellipse cx="21.2" cy="32.6" rx="2.2" ry="3.3" fill="' + shade(sk, -0.08) + '"/><ellipse cx="42.8" cy="32.6" rx="2.2" ry="3.3" fill="' + sk2 + '"/>';
+      s += P(FACE[f], sk) + P(SHADE[f], sk2, ' opacity=".55"');
+      s += S('M24.5 38.5Q26.5 43.4 29.6 45.4', sk2, 0.7, ' opacity=".6"');
+      if (o.paint) s += o.paint;
+      s += eyes(o) + brows(o);
+      s += S('M32.1 32.6L30.9 38.1Q32 38.9 33.3 38.3', sk2, 0.9);
+      if (o.beard) s += o.beard; else s += mouth(o, sk2);
+      if (o.scar) s += S(o.scar, '#a85a4c', 0.9);
+      if (o.stubble) s += P(o.f ? '' : 'M25.5 39.5Q28 45.8 32 46.6Q36 45.8 38.5 39.5Q36 43.8 32 44.2Q28 43.8 25.5 39.5Z', '#2a2018', ' opacity=".28"');
+      if (o.hair) s += o.hair;
+      if (o.head) s += o.head;
+      if (o.acc) s += o.acc;
+      s += S(f === 'm' ? 'M42.5 27C43 33 41.6 40 37.4 44.6' : 'M41.8 27C42.2 33 40.8 39.4 37.2 43.6', o.light, 0.9, ' opacity=".75"');
+      s += P('M0 0H64V64H0ZM2 2V62H62V2Z', 'rgba(0,0,0,.35)', ' fill-rule="evenodd"');
+      return '<svg viewBox="0 0 64 64">' + s + '</svg>';
+    }
+    // ---- 装備 ----
+    function helmet(c, big) {
+      var k = big ? 1.06 : 1, sx = function (v) { return 32 + (v - 32) * k; };
+      return P('M' + sx(19.5) + ' 29C' + sx(19) + ' 16.5 25 ' + (11.5 - (big ? 1 : 0)) + ' 32 ' + (11.5 - (big ? 1 : 0)) + 'S' + sx(45) + ' 16.5 ' + sx(44.5) + ' 29L' + sx(46.6) + ' 29.8C' + sx(46.8) + ' 31 ' + sx(46) + ' 31.7 ' + sx(44.8) + ' 31.7H' + sx(19.2) + 'C' + sx(18) + ' 31.7 ' + sx(17.2) + ' 31 ' + sx(17.4) + ' 29.8Z', c) +
+        P('M32 ' + (11.5 - (big ? 1 : 0)) + 'C38 ' + (11.5 - (big ? 1 : 0)) + ' ' + sx(45) + ' 16.5 ' + sx(44.5) + ' 29L' + sx(46.6) + ' 29.8C' + sx(46.8) + ' 31 ' + sx(46) + ' 31.7 ' + sx(44.8) + ' 31.7H37C38.4 26 37.6 17 32 ' + (11.5 - (big ? 1 : 0)) + 'Z', 'rgba(0,0,0,.3)') +
+        S('M22 19.5L42 27M24 15.5L44 23M21 24L36 14M27 28.5L42 17', 'rgba(0,0,0,.25)', 0.5) + S('M' + sx(20) + ' 31.4C21 37.5 24 42.6 28 45.8M' + sx(44) + ' 31.4C43 37.5 40 42.6 36 45.8', '#1f2414', 1.1);
+    }
+    function goggles(y, strap) {
+      return S('M20 ' + y + 'H44', strap || '#3a2a1c', 2.2) + '<circle cx="27" cy="' + y + '" r="3.6" fill="#1a2630" stroke="#b9c3c8" stroke-width="1"/><circle cx="37" cy="' + y + '" r="3.6" fill="#1a2630" stroke="#b9c3c8" stroke-width="1"/>' +
+        P('M25 ' + (y - 1.5) + 'l3 -.8 1 1.6-3 .6z', '#9fd8ff', ' opacity=".8"') + P('M35 ' + (y - 1.5) + 'l3 -.8 1 1.6-3 .6z', '#9fd8ff', ' opacity=".8"');
+    }
+    var H = {
+      oni: { bg: '#8a2016', light: '#ff8a5c', uni: '#4d5a33', skin: '#d9a37c', eye: '#3a2a1e', brow: 'stern', mouth: 'stern', rank: 1, stubble: 1,
+        scar: 'M23.6 34.5L27.4 40.2M24.8 34.2L23.9 35.6', head: helmet('#5a6638') },
+      tetsu: { f: 1, bg: '#13406a', light: '#7fc6ff', uni: '#3c4a58', skin: '#efc7a3', eye: '#2f6db0', brow: 'calm', mouth: 'smirk', rank: 1,
+        backHair: P('M40 22C49 24 52 36 49 50C47 44 45 40 42 37Z', '#b8322a') + P('M44 26C49 30 50 38 48 46', 'none', ' stroke="#8a1f19" stroke-width="1"'),
+        hair: P('M22.4 27.5C23 22 26.6 19.8 30 20.8C27.8 22.8 26 25.2 25.4 29.2Z', '#c13a30'),
+        head: P('M20 28C20 17 25.5 12.5 32 12.5S44 17 44 28V31H41V25.5H23V31H20Z', '#5a3d28') + P('M32 12.5C38.5 12.5 44 17 44 28V31H41V25.5H37C38 21 36.5 15 32 12.5Z', 'rgba(0,0,0,.3)') +
+          S('M24 13.8V24M28 12.8V24.5M32 12.4V24.6M36 12.8V24.5M40 13.8V24', '#3e2a1b', 1.1) + goggles(22.5, '#2a1d13') },
+      taka: { bg: '#164a2e', light: '#9fffc0', uni: '#4f6343', skin: '#e3bd99', eye: '#4a6b3a', brow: 'stern', mouth: 'stern', squint: 1, browC: '#c9cdd2',
+        backHair: P('M20 24C17 33 18 42 21 47L24 40C22 35 22 30 23 26Z', '#dfe3e8') + P('M44 24C47 33 46 42 43 47L40 40C42 35 42 30 41 26Z', '#c9ced4'),
+        hair: P('M21.5 29C21 20 25.5 15.5 32 15.5S43 20 42.5 29C40 24 37.5 22 33 22.5C29.5 21.5 25 24 21.5 29Z', '#e3e7ec') + P('M32 15.5C38.5 15.5 43 20 42.5 29C41 25.6 39.4 23.4 36.6 22.6C37.2 19.4 35.2 16.6 32 15.5Z', 'rgba(0,0,0,.18)'),
+        head: P('M20.5 22.5C22 18 26 15.6 32 15.6S42 18 43.5 22.5L43.8 25.4C37 23.4 27 23.4 20.2 25.4Z', '#4a5a36') + P('M43.2 23.8L49 22.6 48.4 25.6 43.6 25.6Z', '#4a5a36'),
+        paint: P('M22.3 35.5L29 36.6 28.6 37.9 22.6 37Z', '#2f4a2a', ' opacity=".8"') + P('M35 36.6L41.7 35.5 41.4 37 35.4 37.9Z', '#1f2f1c', ' opacity=".8"') },
+      rai: { bg: '#6a440c', light: '#ffd06a', uni: '#5b4a33', skin: '#d8a77f', eye: '#3a2a1e', brow: 'raised', mouth: 'grin', rank: 1,
+        hair: P('M21.6 27C21.4 31 21.8 34 22.8 36.5L23.8 30Z', '#2a211b') + P('M42.4 27C42.6 31 42.2 34 41.2 36.5L40.2 30Z', '#2a211b'),
+        head: P('M17.5 20.5C17.5 14.5 24.5 10.5 32 10.5S46.5 14.5 46.5 20.5Z', '#2e3424') + P('M19.5 20.5H44.5V24.6H19.5Z', '#c9a33c') + P('M18.6 24.6H45.4C44.6 27.8 40.4 29 32 29S19.4 27.8 18.6 24.6Z', '#0d0f0c') +
+          P('M30.6 13.2L34.4 13.2 32.6 16.4 34.6 16.4 29.6 21.6 31 17.6 29 17.6Z', '#ffd06a') + P('M24 25.8H40', 'none', ' stroke="#3a4048" stroke-width=".7"') },
+      sakura: { f: 1, bg: '#6a1f40', light: '#ffb3d1', uni: '#d9d3c6', skin: '#f2cfb3', eye: '#7a3a5a', brow: 'calm', mouth: 'smile',
+        backHair: P('M20 24C17.5 33 18.5 41 21.5 45L24 36Z', '#e88fb0') + P('M44 24C46.5 33 45.5 41 42.5 45L40 36Z', '#d97aa0'),
+        hair: P('M22.2 30C22 22.5 26 19.6 32 19.6S42 22.5 41.8 30C40 26 37 23.8 32.4 24.4C30 26 26 27.5 22.2 30Z', '#f0a0c0'),
+        head: P('M19.8 24.5C20 16.5 25.4 12.4 32 12.4S44 16.5 44.2 24.5C38 22.4 26 22.4 19.8 24.5Z', '#f1ede6') + P('M32 12.4C38.6 12.4 44 16.5 44.2 24.5C42 23.7 39.6 23.2 37 23C37.4 18.8 35.6 14.4 32 12.4Z', 'rgba(0,0,0,.14)') +
+          P('M30.4 14.6H33.6V17H36V20.2H33.6V22.6H30.4V20.2H28V17H30.4Z', '#e0302a'),
+        chest: P('M11 55.5L20 52.5 21 55.5 12 58.5Z', '#f1ede6') + P('M14.6 54.4H16.6V53.2H17.8V55.2H19V56.4H17.8V57.6H16.6V56.4H15.4Z', '#e0302a') },
+      hayate: { bg: '#0d4a5e', light: '#6ff7ff', uni: '#2f3d48', skin: '#e9c19c', eye: '#1d6a8a', brow: 'stern', mouth: 'smirk',
+        hair: P('M20.6 29C19 18 25 12 33 12.5C38 12.8 41 15 43 18L50 15.5 45.5 21.5C46 24 45.6 27 43 30C42 25.5 39.5 22.6 35 22.2L37 18.5 31 21.6 28.6 18.4 27 22.8C24.8 23.8 22.6 26 20.6 29Z', '#1c3d66') +
+          P('M33 12.5C38 12.8 41 15 43 18L50 15.5 45.5 21.5C46 24 45.6 27 43 30C42 25.5 39.5 22.6 35 22.2L37 18.5Z', 'rgba(0,0,0,.25)') + S('M26 17L31 14.6M35 15L40 16.6', '#5f9fe0', 0.8),
+        acc: S('M19.8 28C19.5 17 25 13.4 32 13.2', '#2a2f36', 2) + '<rect x="17.8" y="28" width="4.6" height="8" rx="1.6" fill="#2a2f36" stroke="#6ff7ff" stroke-width=".6"/>' + S('M20 36C20.5 41 24 43.6 28.4 43.2', '#2a2f36', 1.1) + '<circle cx="28.8" cy="43.2" r="1.1" fill="#6ff7ff"/>',
+        collar: P('M21 46.5C27 49 37 49 43 46.5L45 50.5C38 53.5 26 53.5 19 50.5Z', '#c8322c') + P('M41 50L52 47.5 49 53Z', '#a8261f') },
+      kiri: { f: 1, bg: '#2f2a50', light: '#c6b3ff', uni: '#2e2b38', skin: '#e8c6a6', eye: '#5a4a8a', brow: 'calm', mouth: 'stern', browC: '#1a1820',
+        backHair: P('M15 36C14 20 22 10.5 32 10.5S50 20 49 36C48 48 50 56 54 64H10C14 56 16 48 15 36Z', '#25222f'),
+        hair: P('M22.4 29C22.8 23 26 20.4 30.6 20C28.6 22.5 27 25 26.6 29.6Z', '#16141c') + P('M41.6 29C41.2 23 38 20.4 33.4 20C35.4 22.5 37 25 37.4 29.6Z', '#16141c'),
+        head: P('M18.5 33C17.5 19 23 12 32 12S46.5 19 45.5 33C44.5 26 41 20.5 32 19.6C23 20.5 19.5 26 18.5 33Z', '#3a3550') + P('M32 12C41 12 46.5 19 45.5 33C44.5 26 41 20.5 32 19.6Z', 'rgba(0,0,0,.3)'),
+        acc: P('M22.6 34.6C26 36 38 36 41.4 34.6C41.6 39.8 39.4 44.4 36 46.4C34 47.2 30 47.2 28 46.4C24.6 44.4 22.4 39.8 22.6 34.6Z', '#24212c') + S('M24 38H40M25 41.5H39', '#3a3550', 0.6) +
+          '<circle cx="48" cy="44" r="5" fill="#c6b3ff" opacity=".12"/><circle cx="52" cy="38" r="3.6" fill="#c6b3ff" opacity=".1"/>' },
+      kuro: { bg: '#5a3d14', light: '#ffc88a', uni: '#5a5240', skin: '#c48f68', eye: '#2a1f18', brow: 'stern', rank: 1,
+        beard: P('M22 36C22.5 45 26.5 50.5 32 50.5S41.5 45 42 36C40 39 37.5 40.6 34.6 40.6C33.6 39.8 30.4 39.8 29.4 40.6C26.5 40.6 24 39 22 36Z', '#3a2a1e') + S('M29 43H35', '#1f160f', 1.2) + P('M26 40.6Q32 38.2 38 40.6Q32 39.4 26 40.6Z', '#2a1f16'),
+        head: helmet('#4a4e44', 1) },
+      amagi: { bg: '#123f66', light: '#9fd8ff', uni: '#4d5a6a', skin: '#e8be98', eye: '#2a1f18', brow: 'raised', mouth: 'smile', rank: 1,
+        head: P('M19 31C18 17 24 11.5 32 11.5S46 17 45 31L44 37C42.5 33 42 28 41 25H23C22 28 21.5 33 20 37Z', '#6b4a2e') + P('M32 11.5C40 11.5 46 17 45 31L44 37C42.5 33 42 28 41 25H37C37.5 20 36 14.5 32 11.5Z', 'rgba(0,0,0,.28)') +
+          S('M23 18.5Q32 14 41 18.5', '#4a321f', 1) + P('M29 13.4L32 11.6 35 13.4 32 15.2Z', '#f5b83d'),
+        acc: P('M22.4 30.4H30.6C31 30.4 31.2 30.8 31 31.4L30 34.6C29.6 35.6 28.6 36 27.4 36H25.6C24 36 22.6 35 22.4 33.4Z', 'url(#lens)') + P('M33.4 30.4H41.6L41.6 33.4C41.4 35 40 36 38.4 36H36.6C35.4 36 34.4 35.6 34 34.6L33 31.4C32.8 30.8 33 30.4 33.4 30.4Z', 'url(#lens)') +
+          S('M22.2 30.4H41.8M31 31.4Q32 30.6 33 31.4', '#d9b25a', 0.8) + '<defs><linearGradient id="lens" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a6a8a"/><stop offset=".5" stop-color="#1a2a36"/><stop offset="1" stop-color="#d98a3a"/></linearGradient></defs>' +
+          P('M24 31.2l3 0-1.4 2.2z', '#fff', ' opacity=".45"') },
+      ayase: { f: 1, bg: '#40205e', light: '#e0b3ff', uni: '#3f4552', skin: '#f1cdb0', eye: '#4a2e22', brow: 'calm', mouth: 'smirk',
+        backHair: P('M20.5 26C18.5 34 19.5 40 22 43L24.5 34Z', '#4a2e22') + P('M43.5 26C45.5 34 44.5 40 42 43L39.5 34Z', '#3a2219'),
+        hair: P('M22.2 30C22 22.5 26 18.6 32 18.6S42 22.5 41.8 30C40.6 25.8 36.6 23.4 31 23.6C27.6 24.8 24.6 26.8 22.2 30Z', '#5a3a2a'),
+        head: P('M17.5 21.5C18.5 15 25 11.5 33 12S46.5 16.5 46 21.5C44 23.5 38 24.4 31 24.2S19.5 23.6 17.5 21.5Z', '#7a2048') + P('M33 12C40 12.4 46.5 16.5 46 21.5C44 23.5 40 24.2 36 24.3C37.5 20 36.4 14.8 33 12Z', 'rgba(0,0,0,.28)') +
+          '<circle cx="24.4" cy="18.6" r="2" fill="#f5b83d"/><circle cx="41.5" cy="12.6" r="1.6" fill="#7a2048"/>',
+        acc: '<circle cx="27.6" cy="31.8" r="3.6" fill="rgba(200,230,255,.12)" stroke="#2a2a33" stroke-width="1"/><circle cx="36.6" cy="31.8" r="3.6" fill="rgba(200,230,255,.12)" stroke="#2a2a33" stroke-width="1"/>' + S('M31.2 31.6H33M24 31.2L21.6 30.4M40.2 31.2L42.4 30.4', '#2a2a33', 0.9) +
+          P('M45.5 52.5H54V63H45.5Z', '#d9d2c0') + S('M47 55.5H52.6M47 58H52.6M47 60.5H50.5', '#8a8270', 0.7) }
+    };
+    // 敵将: 仮面・面頬で顔を隠し、目が光る
+    var E = {
+      ghost: { bg: '#3a0d0d', light: '#9fffb8', uni: '#2a2d2a', skin: '#b9b4a8', glow: '#b8ffcf',
+        head: P('M17 33C16 18 23 10 32 10S48 18 47 33C45 26 41 21 32 20.5C23 21 19 26 17 33Z', '#2c2f2b'),
+        acc: P('M21.5 26C24 22 40 22 42.5 26C44 33 42.5 41 37 45.5C35 47 29 47 27 45.5C21.5 41 20 33 21.5 26Z', '#3a3f36') + '<circle cx="27.2" cy="31.4" r="4.2" fill="#0d110e" stroke="#7a8270" stroke-width="1.2"/><circle cx="36.8" cy="31.4" r="4.2" fill="#0d110e" stroke="#7a8270" stroke-width="1.2"/>' +
+          '<circle cx="27.2" cy="31.4" r="2.6" fill="#b8ffcf" opacity=".8"/><circle cx="36.8" cy="31.4" r="2.6" fill="#b8ffcf" opacity=".8"/><circle cx="27.2" cy="31.4" r="5" fill="#b8ffcf" opacity=".2"/><circle cx="36.8" cy="31.4" r="5" fill="#b8ffcf" opacity=".2"/>' +
+          '<rect x="28" y="38" width="8" height="9" rx="2" fill="#2a2d27" stroke="#6a7060" stroke-width=".8"/>' + S('M29 40.5H35M29 43H35', '#55594e', 0.8) + '<ellipse cx="32" cy="50" rx="5.5" ry="3.4" fill="#4a4f44"/>' },
+      wall: { bg: '#3d0f0f', light: '#ff8a7a', uni: '#3a3e44', skin: '#9aa2aa',
+        head: P('M18 34C17 18 24 10 32 10S47 18 46 34L46 44C44 47 40 49 32 49S20 47 18 44Z', '#4d555c') + P('M32 10C40 10 47 18 46 34L46 44C44 47 40 49 37 49C39 40 40 22 32 10Z', 'rgba(0,0,0,.3)') +
+          P('M20.5 30H43.5V33.6H20.5Z', '#0a0c0d') + P('M22 31H42V32.6H22Z', '#ff4d3d') + '<rect x="20" y="29" width="24" height="6" fill="#ff4d3d" opacity=".25"/>' + S('M24 38V45M28 38.5V46M32 38.8V46.5M36 38.5V46M40 38V45', '#2a3035', 1) +
+          S('M22 18L42 18M20.5 24H43.5', '#5f686f', 0.8), collar: P('M14 50C20 46 44 46 50 50L52 57C44 54 20 54 12 57Z', '#545c63') },
+      thunder: { bg: '#4a0d0d', light: '#ffd06a', uni: '#1f2227', skin: '#d9b294', eye: '#c03030', brow: 'stern', mouth: 'smirk', rank: 1,
+        scar: 'M36.5 27L39.4 35.6M37.2 30.4L38.6 29.8',
+        hair: P('M21.6 27C21.4 31 21.8 34 22.8 36.5L23.8 30Z', '#b9bcc2') + P('M42.4 27C42.6 31 42.2 34 41.2 36.5L40.2 30Z', '#a9adb3'),
+        head: P('M17 20.5C17 14 24.5 9.6 32 9.6S47 14 47 20.5Z', '#121418') + P('M19 20.5H45V24.8H19Z', '#a8261f') + P('M18.2 24.8H45.8C45 28 40.6 29.4 32 29.4S19 28 18.2 24.8Z', '#050607') +
+          P('M30.4 12.2L34.6 12.2 32.6 15.6 34.8 15.6 29.4 21.2 30.8 16.8 28.6 16.8Z', '#ffd06a'),
+        acc: '<circle cx="36.6" cy="31.6" r="3.4" fill="none" stroke="#d9b25a" stroke-width=".9"/>' + S('M39.8 32.6Q42 38 40.6 44', '#d9b25a', 0.5) + P('M34.6 30.2l2.6-.6.6 1z', '#fff', ' opacity=".7"') },
+      viper: { bg: '#123a12', light: '#9dff6a', uni: '#1f2a1c', skin: '#c8b08e', glow: '#9dff6a',
+        head: P('M15 38C13 20 21 10 32 10S51 20 49 38C48 48 50 56 54 64H10C14 56 16 48 15 38Z', '#1f2a1c') + P('M32 10C43 10 51 20 49 38C48 48 50 56 54 64H40C44 50 42 22 32 10Z', 'rgba(0,0,0,.3)') +
+          S('M22 16Q26 14 28 18Q30 22 34 20Q38 18 40 22', '#3a5a2a', 1.2) + S('M20 24Q24 22 26 26Q28 30 32 28', '#3a5a2a', 1),
+        acc: P('M21.5 35C25 37 39 37 42.5 35C42.6 40.5 40 45 36 47C34 48 30 48 28 47C24 45 21.4 40.5 21.5 35Z', '#2a3626') + goggles(31.4, '#121812').replace(/#1a2630/g, '#0f2a0f') +
+          '<circle cx="27" cy="31.4" r="2.2" fill="#9dff6a" opacity=".85"/><circle cx="37" cy="31.4" r="2.2" fill="#9dff6a" opacity=".85"/>' },
+      witch: { f: 1, bg: '#3a0a1e', light: '#ff8ab0', uni: '#1a1418', skin: '#e9d2c6', glow: '#ff3b5c', mouth: 'smirk',
+        backHair: P('M14 36C12 18 21 9 32 9S52 18 50 36C49 48 52 56 56 64H8C12 56 15 48 14 36Z', '#d9dde3') + P('M32 9C43 9 52 18 50 36C49 48 52 56 56 64H42C46 50 44 20 32 9Z', 'rgba(0,0,0,.2)'),
+        hair: P('M22.2 30C22 21 26 16 32 16S42 21 41.8 30C40 24 36.6 20.6 32 20.6S24 24 22.2 30Z', '#eef0f3'),
+        head: P('M17 26C18 15 24 9.4 32 9.4S46 15 47 26L45 24C42 18 38 15.4 32 15.4S22 18 19 24Z', '#120c10') + P('M22.2 33.8C26 34.6 38 34.6 41.8 33.8L41.8 36C38 36.8 26 36.8 22.2 36Z', '#120c10', ' opacity=".45"'),
+        acc: S('M29.2 42.2Q32 43.4 35 41.8', '#8a1020', 1.4) },
+      reaper: { bg: '#2a0a0a', light: '#ff4d4d', uni: '#151719', skin: '#1c1e20', glow: '#ff3030',
+        head: helmet('#2a2e30', 1),
+        acc: P('M22 30C22 23 26 20.4 32 20.4S42 23 42 30C42 37 40 42 36 45.6C34.4 46.8 29.6 46.8 28 45.6C24 42 22 37 22 30Z', '#16181a') +
+          P('M24 30.4C24.6 28 26.6 27.4 28.6 28.2C30 29 30.4 31 29.8 32.6C29 34.2 26.6 34.6 25.2 33.6C24.2 32.8 23.8 31.6 24 30.4Z', '#e8e4da') + P('M40 30.4C39.4 28 37.4 27.4 35.4 28.2C34 29 33.6 31 34.2 32.6C35 34.2 37.4 34.6 38.8 33.6C39.8 32.8 40.2 31.6 40 30.4Z', '#e8e4da') +
+          '<circle cx="27.2" cy="31" r="1.6" fill="#0a0a0a"/><circle cx="36.8" cy="31" r="1.6" fill="#0a0a0a"/><circle cx="27.2" cy="31" r=".7" fill="#ff3030"/><circle cx="36.8" cy="31" r=".7" fill="#ff3030"/>' +
+          P('M30.6 34.6L32 37 33.4 34.6Z', '#e8e4da') + P('M27 39.6H37V43C35 44.6 29 44.6 27 43Z', '#e8e4da') + S('M29 39.6V43.8M31 39.6V44.3M33 39.6V44.3M35 39.6V43.8', '#16181a', 0.6) }
+    };
+    var cache = {};
+    function hero(id) { var o = H[id]; if (!o) return ''; if (!cache[id]) { o.id = id; cache[id] = base(o); } return cache[id]; }
+    function ecmd(k) { var o = E[k]; if (!o) return ''; var key = 'e-' + k; if (!cache[key]) { o.id = key; if (!o.eye) o.eye = '#300'; cache[key] = base(o); } return cache[key]; }
+    return { hero: hero, ecmd: ecmd };
+  })();
+  function heroSvg(id) { return Portrait.hero(id); }
+  function ecmdSvg(k) { return Portrait.ecmd(k); }
   // 指揮官が率いる部隊の強さの倍率(攻撃と耐久をならした値)
   function heroPow(id, lv, fav) { var h = TF.HERO[id]; return TF.heroMult(lv, fav, id) * Math.sqrt(h.atk * h.hp); }
-  function heroSvg(id) {
-    var a = HERO_ART[id];
-    return '<svg viewBox="0 0 64 64"><rect width="64" height="64" fill="' + a.bg + '"/><circle cx="32" cy="26" r="28" fill="#fff" opacity=".07"/>' +
-      '<path d="M4 64c2-12 14-17 28-17s26 5 28 17z" fill="' + a.uni + '"/><path d="M25 47l7 9 7-9z" fill="#e8e0c8"/>' + (a.extra || '') +
-      '<rect x="27" y="40" width="10" height="9" fill="' + shade(a.skin, -0.15) + '"/>' + (a.neck || '') +
-      '<ellipse cx="19.6" cy="36" rx="2.4" ry="3.4" fill="' + shade(a.skin, -0.08) + '"/><ellipse cx="44.4" cy="36" rx="2.4" ry="3.4" fill="' + shade(a.skin, -0.08) + '"/>' +
-      '<ellipse cx="32" cy="36" rx="12" ry="13.5" fill="' + a.skin + '"/>' + a.face + a.head + '</svg>';
-  }
 
   // ====== テキスト定義 ======
   var BDESC = {
@@ -2745,7 +3137,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     html += '</div>';
     var power = TF.formSquads(st, st.form).reduce(function (a, q) { return a + q.power; }, 0);
     html += '<div class="basestats">' +
-      '<div class="card"><div class="k">部隊の枠</div><div class="v">' + TF.slots(st) + ' / 6</div></div>' +
+      '<div class="card"><div class="k">部隊の枠</div><div class="v">' + TF.slots(st) + ' / 8</div></div>' +
       '<div class="card"><div class="k">施設の上限レベル</div><div class="v">Lv' + TF.lv(st, 'hq') * 2 + '</div></div>' +
       '<div class="card"><div class="k">編成中の総戦力</div><div class="v num">' + fmt(power) + '</div></div>' +
       '<div class="card"><div class="k">最高到達</div><div class="v">ステージ' + st.cleared + '</div></div></div>';
@@ -3067,8 +3459,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     html += '</div>';
     if (info.ecmd) {
       var ec = TF.ECMD[info.ecmd];
-      html += '<div class="ecmd" id="ecmdInfo"><b>敵将「' + esc(ec.name) + '」</b> スキル〈' + esc(ec.skill) + '〉: ' + esc(ec.desc) +
-        '<div class="small">発動の' + ec.warn + '秒前に予告があり、そのあいだ敵将の位置がわかります。予告中に倒せば止められます</div></div>';
+      html += '<div class="ecmd" id="ecmdInfo"><div class="eportrait">' + ecmdSvg(info.ecmd) + '</div><div class="grow"><b>敵将「' + esc(ec.name) + '」</b> スキル〈' + esc(ec.skill) + '〉: ' + esc(ec.desc) +
+        '<div class="small">発動の' + ec.warn + '秒前に予告があり、そのあいだ敵将の位置がわかります。予告中に倒せば止められます</div></div></div>';
     }
     html += '</div>';
     // 自軍
@@ -3192,6 +3584,12 @@ if (typeof module !== 'undefined') module.exports = TF;
       return /雪|霧|北部/.test(pl) ? 'snow' : /砂漠|赤土|火山|荒野/.test(pl) ? 'desert' : 'grass';
     }
     function hexW() { return Math.sqrt(3) * R; }
+    // 2色を混ぜる(k は b の割合)
+    function mixHex(a, b, k) {
+      var pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16), out = '#';
+      [16, 8, 0].forEach(function (sh) { var v = Math.round(((pa >> sh) & 255) * (1 - k) + ((pb >> sh) & 255) * k); out += ('0' + v.toString(16)).slice(-2); });
+      return out;
+    }
     function center(col, row) {
       var w = hexW();
       return { x: (W - w * (NC + 0.5)) / 2 + w * (col + 0.5 + (row & 1 ? 0.5 : 0)), y: H * 0.55 - (row - focus) * 1.5 * R };
@@ -3261,7 +3659,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     function draw(ts) {
       g.setTransform(DPR, 0, 0, DPR, 0, 0);
-      g.fillStyle = '#1d2618'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#061015'; g.fillRect(0, 0, W, H);
+      g.strokeStyle = 'rgba(56,217,176,.06)'; g.lineWidth = 1;
+      for (var gx = 0; gx < W; gx += 22) { g.beginPath(); g.moveTo(gx + 0.5, 0); g.lineTo(gx + 0.5, H); g.stroke(); }
+      for (var gy = 0; gy < H; gy += 22) { g.beginPath(); g.moveTo(0, gy + 0.5); g.lineTo(W, gy + 0.5); g.stroke(); }
       var C = st.cleared, at = anim ? (ts - anim.t0) / 1600 : 2;
       if (anim && at > 1) { anim = null; target = st.sel + 1; }
       var rows0 = Math.floor(focus - H / (1.5 * R)) - 1, rows1 = Math.ceil(focus + H / (1.5 * R)) + 1;
@@ -3275,13 +3676,13 @@ if (typeof module !== 'undefined') module.exports = TF;
           var base = tr === 'lake' ? '#4f86ad' : tr === 'base' ? '#7a8a5a' : BIO[bi];
           if (tr === 'forest') base = shade(base, -0.28);
           if (tr === 'mount') base = shade(base, -0.12);
-          hexPath(c.x, c.y, R - 1); g.fillStyle = base; g.fill();
-          // 領土の色
-          var tint = row <= C ? 'rgba(70,225,110,.22)' : 'rgba(240,80,70,.20)';
-          if (anim && row === anim.s) tint = 'rgba(' + (Math.round(240 - 170 * at)) + ',' + Math.round(80 + 145 * at) + ',' + Math.round(70 + 40 * at) + ',.28)';
+          hexPath(c.x, c.y, R - 1.5); g.fillStyle = mixHex(base, '#0a151b', 0.8); g.fill();
+          // 領土の色(自軍は青緑、敵は赤)と、光る縁
+          var mineRow = row <= C, tint = mineRow ? 'rgba(47,214,166,.16)' : 'rgba(255,74,61,.13)';
+          if (anim && row === anim.s) tint = 'rgba(' + (Math.round(255 - 208 * at)) + ',' + Math.round(74 + 140 * at) + ',' + Math.round(61 + 105 * at) + ',.3)';
           g.fillStyle = tint; g.fill();
-          if (row > C + 6) { g.fillStyle = 'rgba(10,12,8,' + Math.min(0.75, 0.2 + (row - C - 6) * 0.12) + ')'; g.fill(); }
-          g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 1; g.stroke();
+          if (row > C + 6) { g.fillStyle = 'rgba(4,8,10,' + Math.min(0.8, 0.25 + (row - C - 6) * 0.12) + ')'; g.fill(); }
+          g.strokeStyle = mineRow ? 'rgba(47,214,166,.28)' : 'rgba(255,74,61,.22)'; g.lineWidth = 1; g.stroke();
           // 地形の飾り
           if (tr === 'forest') { g.fillStyle = 'rgba(20,50,20,.7)'; for (var k = 0; k < 3; k++) { var tx = c.x + (k - 1) * R * 0.38, ty = c.y + (k % 2 ? -R * 0.15 : R * 0.18); g.beginPath(); g.moveTo(tx, ty - R * 0.32); g.lineTo(tx - R * 0.17, ty + R * 0.08); g.lineTo(tx + R * 0.17, ty + R * 0.08); g.fill(); } }
           if (tr === 'mount') { g.fillStyle = 'rgba(90,90,85,.85)'; g.beginPath(); g.moveTo(c.x - R * 0.5, c.y + R * 0.3); g.lineTo(c.x, c.y - R * 0.45); g.lineTo(c.x + R * 0.5, c.y + R * 0.3); g.fill(); g.fillStyle = '#eef'; g.beginPath(); g.moveTo(c.x - R * 0.13, c.y - R * 0.2); g.lineTo(c.x, c.y - R * 0.45); g.lineTo(c.x + R * 0.13, c.y - R * 0.2); g.fill(); }
@@ -3292,20 +3693,21 @@ if (typeof module !== 'undefined') module.exports = TF;
       var fy0 = center(0, C).y, fy1 = center(0, C + 1).y, fy = (fy0 + fy1) / 2;
       if (fy > -10 && fy < H + 10) {
         g.lineJoin = 'round';
-        [[ 'rgba(240,80,70,.9)', -2 ], [ 'rgba(90,255,120,.95)', 2 ]].forEach(function (a) {
-          g.strokeStyle = a[0]; g.lineWidth = 2.5; g.beginPath();
+        [[ '#ff4a3d', -2 ], [ '#2fd6a6', 2 ]].forEach(function (a) {
+          g.strokeStyle = a[0]; g.lineWidth = 2; g.shadowColor = a[0]; g.shadowBlur = 10; g.beginPath();
           for (var x = 0; x <= W; x += 6) { var y = fy + a[1] + Math.sin(x * 0.08 + C) * 3; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
-          g.stroke();
+          g.stroke(); g.shadowBlur = 0;
         });
+        g.font = '700 8px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(255,74,61,.8)'; g.fillText('FRONT LINE', W - 8, fy - 5);
       }
       // 進軍路
-      g.strokeStyle = 'rgba(255,240,200,.35)'; g.lineWidth = 2; g.setLineDash([4, 5]);
+      g.strokeStyle = 'rgba(245,184,61,.55)'; g.lineWidth = 1.6; g.setLineDash([3, 5]); g.shadowColor = '#f5b83d'; g.shadowBlur = 6;
       g.beginPath();
       for (row = Math.max(0, rows0); row <= Math.min(rows1, C + 7); row++) { c = center(colOf(row), row); if (row === Math.max(0, rows0)) g.moveTo(c.x, c.y); else g.lineTo(c.x, c.y); }
-      g.stroke(); g.setLineDash([]);
+      g.stroke(); g.setLineDash([]); g.shadowBlur = 0;
       // 本部
       c = center(colOf(0), 0);
-      if (c.y < H + R) { g.fillStyle = '#3fc45c'; g.fillRect(c.x - 8, c.y - 6, 16, 10); g.fillStyle = '#21813a'; g.beginPath(); g.moveTo(c.x - 10, c.y - 6); g.lineTo(c.x, c.y - 13); g.lineTo(c.x + 10, c.y - 6); g.fill(); g.fillStyle = '#fff'; g.font = '800 9px -apple-system,sans-serif'; g.textAlign = 'center'; g.fillText('本部', c.x, c.y + 14); }
+      if (c.y < H + R) { g.fillStyle = '#2fd6a6'; g.fillRect(c.x - 8, c.y - 6, 16, 10); g.fillStyle = '#13806a'; g.beginPath(); g.moveTo(c.x - 10, c.y - 6); g.lineTo(c.x, c.y - 13); g.lineTo(c.x + 10, c.y - 6); g.fill(); g.fillStyle = '#fff'; g.font = '800 9px -apple-system,sans-serif'; g.textAlign = 'center'; g.fillText('本部', c.x, c.y + 14); }
       // ステージの印
       var pulse = 0.5 + 0.5 * Math.sin(ts / 220);
       for (row = Math.max(1, rows0); row <= rows1; row++) {
@@ -3314,15 +3716,31 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (c.y < -R || c.y > H + R) continue;
         var boss = row % 10 === 0, isNext = row === C + 1, done = row <= C && !(anim && row === anim.s && at < 0.5);
         var r = R * 0.5;
-        if (row === st.sel) { g.strokeStyle = '#fff'; g.lineWidth = 2.5; hexPath(c.x, c.y, R - 3); g.stroke(); }
-        if (isNext) { g.strokeStyle = 'rgba(255,90,70,' + (0.4 + 0.6 * pulse) + ')'; g.lineWidth = 3; g.beginPath(); g.arc(c.x, c.y, r + 4 + pulse * 3, 0, Math.PI * 2); g.stroke(); }
-        g.fillStyle = done ? '#1b6a2e' : isNext ? '#c0392b' : '#7a2620';
-        g.beginPath(); g.arc(c.x, c.y, r, 0, Math.PI * 2); g.fill();
-        g.strokeStyle = boss ? '#f1c453' : 'rgba(255,255,255,.85)'; g.lineWidth = boss ? 2.5 : 1.5; g.stroke();
-        g.fillStyle = '#fff'; g.font = '900 ' + Math.round(r * 0.95) + 'px -apple-system,"Hiragino Sans",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(done ? '✓' : isNext ? '⚔' : String(row), c.x, c.y + 0.5);
-        if (boss) { g.fillStyle = '#f1c453'; g.font = '900 9px -apple-system,sans-serif'; g.fillText('BOSS', c.x, c.y - r - 7); }
-        if (done || isNext || row === st.sel) { g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '800 9px -apple-system,"Hiragino Sans",sans-serif'; g.fillText(row + ' ' + TF.stageInfo(row).place, c.x, c.y + r + 9); }
+        if (row === st.sel) {
+          // 選んだマス: 琥珀色の枠と四隅の括弧
+          g.strokeStyle = '#f5b83d'; g.lineWidth = 2; g.shadowColor = '#f5b83d'; g.shadowBlur = 10; hexPath(c.x, c.y, R - 2.5); g.stroke(); g.shadowBlur = 0;
+          var bb = R * 0.95; g.lineWidth = 1.5;
+          [[-1, -1], [1, -1], [1, 1], [-1, 1]].forEach(function (q) { g.beginPath(); g.moveTo(c.x + q[0] * bb, c.y + q[1] * (bb - 6)); g.lineTo(c.x + q[0] * bb, c.y + q[1] * bb); g.lineTo(c.x + q[0] * (bb - 6), c.y + q[1] * bb); g.stroke(); });
+        }
+        if (isNext) {
+          // 次の目標: 脈打つ照準
+          var rr0 = r + 5 + pulse * 3;
+          g.strokeStyle = 'rgba(255,74,61,' + (0.45 + 0.55 * pulse) + ')'; g.lineWidth = 1.6;
+          g.beginPath(); g.arc(c.x, c.y, rr0, 0, Math.PI * 2); g.stroke();
+          g.beginPath(); g.moveTo(c.x - rr0 - 5, c.y); g.lineTo(c.x - rr0 + 3, c.y); g.moveTo(c.x + rr0 - 3, c.y); g.lineTo(c.x + rr0 + 5, c.y); g.moveTo(c.x, c.y - rr0 - 5); g.lineTo(c.x, c.y - rr0 + 3); g.moveTo(c.x, c.y + rr0 - 3); g.lineTo(c.x, c.y + rr0 + 5); g.stroke();
+        }
+        hexPath(c.x, c.y, r * 1.05);
+        g.fillStyle = done ? '#0d4a3f' : isNext ? '#8a1a14' : '#3a0f0d'; g.fill();
+        g.strokeStyle = boss ? '#f5b83d' : done ? '#2fd6a6' : '#ff6a5c'; g.lineWidth = boss ? 2 : 1.4; g.shadowColor = g.strokeStyle; g.shadowBlur = done || isNext || boss ? 8 : 0; g.stroke(); g.shadowBlur = 0;
+        g.fillStyle = done ? '#a6f7e2' : '#fff'; g.font = '800 ' + Math.round(r * (done ? 0.9 : 0.78)) + 'px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(done ? '✓' : String(row), c.x, c.y + 0.5);
+        if (boss) { g.fillStyle = '#f5b83d'; g.font = '800 8px "SF Mono",ui-monospace,Menlo,monospace'; g.fillText('◆BOSS◆', c.x, c.y - r - 7); }
+        if (done || isNext || row === st.sel) {
+          var lab = row + ' ' + TF.stageInfo(row).place;
+          g.font = '800 9px -apple-system,"Hiragino Sans",sans-serif'; var lw2 = g.measureText(lab).width + 8;
+          g.fillStyle = 'rgba(4,8,10,.75)'; g.fillRect(c.x - lw2 / 2, c.y + r + 3, lw2, 12);
+          g.fillStyle = row === st.sel ? '#ffd98a' : 'rgba(232,238,241,.9)'; g.fillText(lab, c.x, c.y + r + 9.5);
+        }
       }
       // 制圧の演出
       if (anim) {
@@ -3335,9 +3753,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       }
       // 凡例
       g.font = '800 10px -apple-system,"Hiragino Sans",sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
-      g.fillStyle = 'rgba(10,14,9,.6)'; g.fillRect(6, 6, 132, 18);
-      g.fillStyle = '#5cff7c'; g.fillRect(12, 11, 9, 9); g.fillStyle = '#fff'; g.fillText('自軍の領土', 24, 10);
-      g.fillStyle = '#ff6a5c'; g.fillRect(78, 11, 9, 9); g.fillStyle = '#fff'; g.fillText('敵の領土', 90, 10);
+      g.fillStyle = 'rgba(4,8,10,.8)'; g.fillRect(6, 6, 134, 18); g.fillStyle = '#f5b83d'; g.fillRect(6, 6, 2, 18);
+      g.fillStyle = '#2fd6a6'; g.fillRect(14, 11, 8, 8); g.fillStyle = '#dfe8ec'; g.fillText('自軍の領土', 25, 10);
+      g.fillStyle = '#ff4a3d'; g.fillRect(80, 11, 8, 8); g.fillStyle = '#dfe8ec'; g.fillText('敵の領土', 91, 10);
     }
     return { mount: mount, debug: function () { return { focus: focus, target: target, anim: !!anim }; }, centerOf: function (row) { return center(colOf(row), row); } };
   })();
@@ -3752,8 +4170,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     var FIGW = { inf: 1.8, at: 2.6, tank: 5.8, art: 6.2 };
     var FLIGHT = { inf: 0.18, at: 0.5, tank: 0.26, art: 0.78 };
     var TEAM = [
-      { main: '#3fc45c', dark: '#21813a', light: '#a4f5ae', rgb: '70,225,110', icon: '#1b6a2e' },
-      { main: '#e5473c', dark: '#9c2820', light: '#ffa496', rgb: '240,80,70', icon: '#8c1f18' }
+      { main: '#2fd6a6', dark: '#13806a', light: '#a6f7e2', rgb: '47,214,166', icon: '#0d5a4b' },
+      { main: '#ff4a3d', dark: '#a3231b', light: '#ffa496', rgb: '255,74,61', icon: '#7a1812' }
     ];
     var BIOME = {
       snow: { near: '#e3eaef', far: '#cfd9e1', patch: 'rgba(160,178,196,.22)', furrow: 'rgba(120,140,160,.25)', road: '#a88a6c', roadE: '#86694f', tree: '#2c5a4a', tree2: '#3b7360', cap: '#f7fbff', rock: '#98a4ae', haze: '226,234,240', wall: '#c9c2b4', pond: '#86aec6', shore: '#eef3f6', roofs: ['#7a5a48', '#5f6873', '#6f4f6a'] },
@@ -4315,6 +4733,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       SPR = null; // 武装の見た目を反映し直す
       prep.p.forEach(function (q, i) { B.units.push(mkSquad(q, 0, i, B.units.length)); });
       prep.e.forEach(function (q, i) { B.units.push(mkSquad(q, 1, i, B.units.length)); });
+      // 帯に出す顔を先に読み込んでおく
+      B.units.forEach(function (u) { if (u.hero) portraitImg('h:' + u.hero); if (u.ecmd) portraitImg('e:' + u.ecmd); });
       B.blds = [
         { k: 'bld', x: X(100), y: Yd(279), w: 18, d: 10, h: 8, owner: 1, home: 1, hq: true, roofType: 'flat' },
         { k: 'bld', x: X(66), y: Yd(263), w: 13, d: 8, h: 5, owner: 1, home: 1 },
@@ -4869,7 +5289,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         spawnVisual(ev);
       } else if (ev.k === 'skill') {
         var hd = TF.HERO[s.hero], sk = TF.SKILL[ev.sk];
-        B.banner = { t: 0, name: hd.name, skill: sk.name, side: s.side, sub: sk.short };
+        B.banner = { t: 0, name: hd.name, skill: sk.name, side: s.side, sub: sk.short, portrait: 'h:' + s.hero };
         if (ev.sk === 'charge') B.buff[s.side].atk = B.clock + ev.dur;
         else if (ev.sk === 'armor') B.buff[s.side].arm = B.clock + ev.dur;
         else if (ev.sk === 'blitz') B.buff[s.side].haste = B.clock + ev.dur;
@@ -4922,12 +5342,12 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (ev.k === 'eskWarn') {
         if (quiet) return;
         B.ewarn = { s: ev.s, sk: ev.sk, at: ev.at };
-        B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill + 'を準備中', side: 1, sub: 'あと' + c.warn + '秒 ・ 倒せば止められる' };
+        B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill + 'を準備中', side: 1, sub: 'あと' + c.warn + '秒 ・ 倒せば止められる', portrait: 'e:' + ev.sk };
         if (s) text(s.wx, s.wy, '敵将を発見!', '#ff8a7a', 16, 46);
         return;
       }
       if (B.ewarn && B.ewarn.s === ev.s) B.ewarn = null;
-      if (!quiet) { B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill, side: 1, sub: c.desc }; B.shake = Math.max(B.shake, 8); }
+      if (!quiet) { B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill, side: 1, sub: c.desc, portrait: 'e:' + ev.sk }; B.shake = Math.max(B.shake, 8); }
       if (ev.sk === 'ghost') {
         (ev.revive || []).forEach(function (r0) {
           var u = B.units[r0.d]; if (!u) return;
@@ -5194,14 +5614,19 @@ if (typeof module !== 'undefined') module.exports = TF;
       var y = p.y - FIGH[u.type] * p.k * u.big - 3;
       var r = 9.5 * sz;
       var shake = B.clock - u.hitT < 0.15 ? (Math.random() - 0.5) * 3 : 0;
-      cx.fillStyle = TEAM[u.side].icon; cx.strokeStyle = '#fff'; cx.lineWidth = 1.6;
-      cx.beginPath(); cx.arc(p.x, y - r, r, 0, Math.PI * 2); cx.fill(); cx.stroke();
-      cx.save(); cx.translate(p.x, y - r); var isz = r * 1.35; cx.scale(isz / 24, isz / 24); cx.translate(-12, -12);
+      // 兵種章: 六角形(チームの色の縁が光る)
+      var hx0 = p.x, hy0 = y - r;
+      cx.beginPath(); for (var hi = 0; hi < 6; hi++) { var ha = Math.PI / 6 + hi * Math.PI / 3; cx.lineTo(hx0 + Math.cos(ha) * r * 1.05, hy0 + Math.sin(ha) * r * 1.05); } cx.closePath();
+      cx.fillStyle = TEAM[u.side].icon; cx.fill();
+      cx.shadowColor = TEAM[u.side].main; cx.shadowBlur = 6; cx.strokeStyle = TEAM[u.side].light; cx.lineWidth = 1.4; cx.stroke(); cx.shadowBlur = 0;
+      cx.save(); cx.translate(p.x, y - r); var isz = r * 1.3; cx.scale(isz / 24, isz / 24); cx.translate(-12, -12);
       cx.fillStyle = '#fff'; path(u.type).forEach(function (pp) { cx.fill(pp); }); cx.restore();
       var men = Math.ceil(u.hp / u.maxHp * u.troop);
-      cx.font = '900 ' + Math.round(14 * sz) + 'px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
-      cx.lineWidth = 3.5; cx.strokeStyle = 'rgba(20,24,18,.75)'; cx.strokeText(men, p.x + shake, y - 2 * r - 1);
-      cx.fillStyle = B.clock - u.hitT < 0.15 ? '#ffd2c8' : '#ffffff'; cx.fillText(men, p.x + shake, y - 2 * r - 1);
+      cx.font = '800 ' + Math.round(12 * sz) + 'px "SF Mono",ui-monospace,Menlo,monospace'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+      var mw = cx.measureText(men).width + 8 * sz, my = y - 2 * r - 1.5;
+      cx.fillStyle = 'rgba(4,8,10,.78)'; cx.fillRect(p.x - mw / 2 + shake, my - 13 * sz, mw, 13.5 * sz);
+      cx.fillStyle = TEAM[u.side].main; cx.fillRect(p.x - mw / 2 + shake, my - 13 * sz, 2, 13.5 * sz);
+      cx.fillStyle = B.clock - u.hitT < 0.15 ? '#ffd2c8' : '#ffffff'; cx.fillText(men, p.x + shake + 1, my + 0.5);
       if (u.boss) {
         cx.font = '900 ' + Math.round(10 * sz) + 'px -apple-system,sans-serif'; cx.fillStyle = '#f1c453';
         cx.strokeText('BOSS', p.x, y - 2 * r - 15 * sz); cx.fillText('BOSS', p.x, y - 2 * r - 15 * sz);
@@ -5328,26 +5753,61 @@ if (typeof module !== 'undefined') module.exports = TF;
       return n;
     }
     function drawHud() {
-      cx.fillStyle = 'rgba(10,14,9,.8)'; cx.fillRect(0, 0, W, 62);
-      cx.fillStyle = '#d8c27e'; cx.font = '800 13px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'left'; cx.textBaseline = 'top';
-      cx.fillText('ステージ' + B.info.s + ' ' + B.info.place + (B.info.boss ? '(ボス戦)' : ''), 12, 7);
-      var tl = Math.max(0, TF.K.maxT - B.clock);
-      cx.textAlign = 'right'; cx.fillStyle = tl < 10 ? '#ff8b78' : '#eef0e4';
-      var mine = B.posts.filter(function (p) { return p.owner === 0; }).length;
-      cx.fillText('拠点' + mine + '/' + B.posts.length + '  ' + (B.phase === 'deploy' ? '配置中' : B.phase === 'intro' ? '展開中…' : '残り ' + Math.floor(Math.ceil(tl) / 60) + ':' + ('0' + Math.ceil(tl) % 60).slice(-2)), W - 12, 7);
+      var g = cx.createLinearGradient(0, 0, 0, 64);
+      g.addColorStop(0, 'rgba(6,10,13,.94)'); g.addColorStop(1, 'rgba(6,10,13,.72)');
+      cx.fillStyle = g; cx.fillRect(0, 0, W, 62);
+      cx.fillStyle = 'rgba(245,184,61,.55)'; cx.fillRect(0, 61, W, 1);
+      // ステージ名(左)と、拠点・残り時間(右)
+      cx.textBaseline = 'top'; cx.textAlign = 'left';
+      cx.fillStyle = '#f5b83d'; cx.font = '700 9px "SF Mono",ui-monospace,Menlo,monospace'; cx.fillText('OP.' + B.info.s, 12, 6);
+      cx.fillStyle = '#e8eef1'; cx.font = '800 13px -apple-system,"Hiragino Sans",sans-serif';
+      cx.fillText(B.info.place + (B.info.boss ? '(ボス戦)' : ''), 12 + cx.measureText('OP.' + B.info.s).width * 0.72 + 8, 5);
+      var tl = Math.max(0, TF.K.maxT - B.clock), mine = B.posts.filter(function (p) { return p.owner === 0; }).length;
+      var tt = B.phase === 'deploy' ? '配置中' : B.phase === 'intro' ? '展開中' : Math.floor(Math.ceil(tl) / 60) + ':' + ('0' + Math.ceil(tl) % 60).slice(-2);
+      cx.textAlign = 'right'; cx.font = '800 13px "SF Mono",ui-monospace,Menlo,monospace';
+      var tw = cx.measureText(tt).width + 14;
+      cx.fillStyle = 'rgba(0,0,0,.55)'; cx.fillRect(W - 12 - tw, 3, tw, 19);
+      cx.strokeStyle = tl < 15 && B.phase === 'fight' ? '#ff5a4e' : 'rgba(245,184,61,.6)'; cx.lineWidth = 1; cx.strokeRect(W - 12 - tw + 0.5, 3.5, tw - 1, 18);
+      cx.fillStyle = tl < 15 && B.phase === 'fight' ? '#ff8b78' : '#ffd98a'; cx.fillText(tt, W - 19, 6);
+      cx.fillStyle = '#9db0ba'; cx.font = '800 12px -apple-system,"Hiragino Sans",sans-serif';
+      cx.fillText('拠点' + mine + '/' + B.posts.length, W - 20 - tw, 6);
+      // 兵力のバー(斜めの端・目盛り)
       var bw = (W - 36) / 2;
-      [[0, 12, '自軍', '#4fd46a'], [1, 24 + bw, '敵軍', '#ff6a5c']].forEach(function (a) {
-        var f = sideFrac(a[0]);
-        cx.fillStyle = '#000'; rr(a[1], 30, bw, 20, 6); cx.fill();
-        cx.fillStyle = a[3]; if (f > 0) { rr(a[1], 30, Math.max(6, bw * f), 20, 6); cx.fill(); }
-        cx.fillStyle = '#fff'; cx.font = '800 12px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'left'; cx.textBaseline = 'middle';
-        cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.6)';
-        var s = a[2] + ' ' + fmt(totalMen(a[0])) + '人';
-        cx.strokeText(s, a[1] + 7, 40.5); cx.fillText(s, a[1] + 7, 40.5);
+      [[0, 12, '自軍', ['#13806a', '#2fd6a6', '#a6f7e2']], [1, 24 + bw, '敵軍', ['#a3231b', '#ff4a3d', '#ffb0a6']]].forEach(function (a) {
+        var f = sideFrac(a[0]), x = a[1], y = 29, hgt = 20, k = 7;
+        function bar(w0) { cx.beginPath(); cx.moveTo(x + k, y); cx.lineTo(x + w0, y); cx.lineTo(x + w0 - k, y + hgt); cx.lineTo(x, y + hgt); cx.closePath(); }
+        bar(bw); cx.fillStyle = 'rgba(0,0,0,.7)'; cx.fill(); cx.strokeStyle = a[0] ? 'rgba(255,74,61,.45)' : 'rgba(47,214,166,.45)'; cx.lineWidth = 1; cx.stroke();
+        if (f > 0) {
+          var gg = cx.createLinearGradient(x, 0, x + bw, 0); gg.addColorStop(0, a[3][0]); gg.addColorStop(1, a[3][1]);
+          cx.save(); bar(bw); cx.clip(); bar(Math.max(k + 2, bw * f)); cx.fillStyle = gg; cx.fill();
+          cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(x, y, bw * f, 3);
+          cx.strokeStyle = 'rgba(0,0,0,.35)'; cx.lineWidth = 1;
+          for (var q = 1; q < 10; q++) { var tx = x + bw * q / 10; cx.beginPath(); cx.moveTo(tx + 3, y); cx.lineTo(tx - 3, y + hgt); cx.stroke(); }
+          cx.restore();
+        }
+        cx.textAlign = 'left'; cx.textBaseline = 'middle'; cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.7)';
+        cx.fillStyle = a[3][2]; cx.font = '800 11px -apple-system,"Hiragino Sans",sans-serif';
+        cx.strokeText(a[2], x + 10, y + hgt / 2 + 0.5); cx.fillText(a[2], x + 10, y + hgt / 2 + 0.5);
+        var lw = cx.measureText(a[2]).width;
+        cx.fillStyle = '#fff'; cx.font = '800 12px "SF Mono",ui-monospace,Menlo,monospace';
+        var sn = fmt(totalMen(a[0]));
+        cx.strokeText(sn, x + 16 + lw, y + hgt / 2 + 0.5); cx.fillText(sn, x + 16 + lw, y + hgt / 2 + 0.5);
       });
     }
     function rr(x, y, w, h, r) {
       cx.beginPath(); cx.moveTo(x + r, y); cx.arcTo(x + w, y, x + w, y + h, r); cx.arcTo(x + w, y + h, x, y + h, r); cx.arcTo(x, y + h, x, y, r); cx.arcTo(x, y, x + w, y, r); cx.closePath();
+    }
+    // 帯に出す顔(SVGを画像にして描く)
+    var PIMG = {};
+    function portraitImg(key) {
+      if (PIMG[key]) return PIMG[key].ok ? PIMG[key].img : null;
+      var svg = key.charAt(0) === 'e' ? ecmdSvg(key.slice(2)) : heroSvg(key.slice(2));
+      if (!svg) return null;
+      var img = new Image(), rec = { img: img, ok: false };
+      PIMG[key] = rec;
+      img.onload = function () { rec.ok = true; };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '));
+      return null;
     }
     function drawBanner() {
       var b = B.banner; if (!b) return;
@@ -5361,15 +5821,32 @@ if (typeof module !== 'undefined') module.exports = TF;
       var off = (1 - Math.min(1, b.t / 0.18)) * W * (b.side ? 1 : -1);
       cx.save(); cx.globalAlpha = Math.max(0, k);
       var g = cx.createLinearGradient(0, 0, W, 0);
-      var c1 = b.side === 0 ? 'rgba(25,95,55,' : 'rgba(115,30,24,';
-      g.addColorStop(0, c1 + '0)'); g.addColorStop(0.2, c1 + '.92)'); g.addColorStop(0.8, c1 + '.92)'); g.addColorStop(1, c1 + '0)');
+      var c1 = b.side === 0 ? 'rgba(12,30,36,' : 'rgba(60,8,8,';
+      g.addColorStop(0, c1 + '0)'); g.addColorStop(0.15, c1 + '.94)'); g.addColorStop(0.85, c1 + '.94)'); g.addColorStop(1, c1 + '0)');
       cx.fillStyle = g; cx.fillRect(off, y, W, h);
-      cx.fillStyle = '#f1c453'; cx.fillRect(off, y, W, 2); cx.fillRect(off, y + h - 2, W, 2);
+      // 斜めの縞と、上下の光る線
+      cx.save(); cx.beginPath(); cx.rect(off, y, W, h); cx.clip();
+      cx.strokeStyle = b.side === 0 ? 'rgba(245,184,61,.08)' : 'rgba(255,77,77,.1)'; cx.lineWidth = 6;
+      for (var sx = -h; sx < W + h; sx += 18) { cx.beginPath(); cx.moveTo(off + sx, y + h); cx.lineTo(off + sx + h, y); cx.stroke(); }
+      cx.restore();
+      var acc = b.side === 0 ? '#f5b83d' : '#ff4d4d';
+      cx.fillStyle = acc; cx.shadowColor = acc; cx.shadowBlur = 10; cx.fillRect(off, y, W, 2); cx.fillRect(off, y + h - 2, W, 2); cx.shadowBlur = 0;
       cx.textAlign = 'center'; cx.textBaseline = 'middle';
-      cx.fillStyle = '#eef0e4'; cx.font = '700 12px -apple-system,"Hiragino Sans",sans-serif';
-      cx.fillText(b.name + ' ・ ' + b.sub, W / 2 + off, y + 15);
-      cx.fillStyle = '#ffe066'; cx.font = '900 25px -apple-system,"Hiragino Sans",sans-serif';
-      cx.fillText('「' + b.skill + '!」', W / 2 + off, y + 39);
+      // 顔(指揮官・敵将)
+      var pim = b.portrait ? portraitImg(b.portrait) : null, tx0 = W / 2 + off;
+      if (pim) {
+        var ps = h + 18, px = (b.side ? W - ps - 10 : 10) + off, py = y - 9;
+        cx.save(); cx.beginPath(); cx.moveTo(px + 8, py); cx.lineTo(px + ps, py); cx.lineTo(px + ps, py + ps - 8); cx.lineTo(px + ps - 8, py + ps); cx.lineTo(px, py + ps); cx.lineTo(px, py + 8); cx.closePath();
+        cx.fillStyle = '#000'; cx.fill(); cx.clip(); cx.drawImage(pim, px, py, ps, ps); cx.restore();
+        cx.strokeStyle = b.side === 0 ? '#f5b83d' : '#ff4d4d'; cx.lineWidth = 1.5;
+        cx.beginPath(); cx.moveTo(px + 8, py); cx.lineTo(px + ps, py); cx.lineTo(px + ps, py + ps - 8); cx.lineTo(px + ps - 8, py + ps); cx.lineTo(px, py + ps); cx.lineTo(px, py + 8); cx.closePath(); cx.stroke();
+        tx0 = b.side ? (W - ps - 10) / 2 + off : (W + ps + 10) / 2 + off;
+      }
+      cx.fillStyle = '#e8eef1'; cx.font = '700 11.5px -apple-system,"Hiragino Sans",sans-serif';
+      cx.fillText(b.name + ' ・ ' + b.sub, tx0, y + 15, W - (pim ? h + 40 : 20));
+      cx.fillStyle = b.side === 0 ? '#ffd98a' : '#ffb0a6'; cx.font = '900 25px -apple-system,"Hiragino Sans",sans-serif';
+      cx.lineWidth = 4; cx.strokeStyle = 'rgba(0,0,0,.55)'; cx.strokeText('「' + b.skill + '!」', tx0, y + 39, W - (pim ? h + 40 : 20));
+      cx.fillText('「' + b.skill + '!」', tx0, y + 39, W - (pim ? h + 40 : 20));
       cx.restore();
     }
     function drawEnding() {
@@ -6055,7 +6532,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     save();
   }
   function hasStored() { var info = TF.storedInfo(st, now()); return ((info.supply ? info.supply.stored : 0) + (info.steel ? info.steel.stored : 0)) > 0; }
-  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, map: MapView, bestFarm: function () { farmCache = null; return bestFarm(); } };
+  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, map: MapView, heroSvg: heroSvg, ecmdSvg: ecmdSvg, bestFarm: function () { farmCache = null; return bestFarm(); } };
   boot();
 })();
 </script>
