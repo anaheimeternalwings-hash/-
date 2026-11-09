@@ -2383,6 +2383,12 @@ var TF = (function () {
 })();
 if (typeof module !== 'undefined') module.exports = TF;
 </script>
+<script id="art">
+// 生成画像(SpriteCookで描いた指揮官の顔と兵種アイコン)。WebP を base64 で埋め込む。tools/embed_art.py が書き換える
+// h-<指揮官> / e-<敵将> / u-<兵種>-<段階>(味方) / v-<兵種>-<段階>(敵)
+window.ART = {/*ART:BEGIN*/
+/*ART:END*/};
+</script>
 <script id="ui">
 (function () {
   'use strict';
@@ -2736,11 +2742,32 @@ if (typeof module !== 'undefined') module.exports = TF;
     return { icon: icon, unit: unit, pal: pal };
   })();
 
+  // ====== 生成画像: base64 から blob の URL を作って使い回す(無ければコードで描いた絵を使う) ======
+  var ART = window.ART || {}, artUrls = {};
+  function artUrl(key) {
+    if (artUrls.hasOwnProperty(key)) return artUrls[key];
+    var b = ART[key], u = null;
+    if (b) {
+      try {
+        var bin = atob(b), n = bin.length, a = new Uint8Array(n);
+        for (var i = 0; i < n; i++) a[i] = bin.charCodeAt(i);
+        u = URL.createObjectURL(new Blob([a], { type: 'image/webp' }));
+      } catch (e) { u = 'data:image/webp;base64,' + b; }
+    }
+    return (artUrls[key] = u);
+  }
+  function artSvg(u, cls) { return '<svg viewBox="0 0 64 64"' + (cls ? ' class="' + cls + '"' : '') + '><image href="' + u + '" width="64" height="64"/></svg>'; }
+  // 兵種アイコンの段階: 武器の開発段階(兵種ごとの最大まで)
+  var UNIT_STAGES = { inf: 7, at: 7, tank: 6, art: 7 };
+  function unitArt(t, side, n, cls) {
+    var u = artUrl((side ? 'v-' : 'u-') + t + '-' + Math.max(1, Math.min(UNIT_STAGES[t], n || 1)));
+    return u ? artSvg(u, cls) : null;
+  }
   // 兵種アイコン: 味方は開発した武装で、敵はステージの年代で見た目が変わる
   function armTierOf(t, k) { return TF.armTier(TF.armLv(st, t, k)); }
-  function allySvg(t, cls) { return ArmArt.unit(t, ALLY_C, armTierOf(t, 'w'), armTierOf(t, 'a'), cls); }
+  function allySvg(t, cls) { return unitArt(t, 0, armTierOf(t, 'w'), cls) || ArmArt.unit(t, ALLY_C, armTierOf(t, 'w'), armTierOf(t, 'a'), cls); }
   function eraTier(s) { return 1 + Math.floor(Math.max(0, s - 1) / 25); }
-  function enemySvg(t, s, cls) { var n = eraTier(s); return ArmArt.unit(t, ENEMY_C, n, n, cls); }
+  function enemySvg(t, s, cls) { var n = eraTier(s); return unitArt(t, 1, n, cls) || ArmArt.unit(t, ENEMY_C, n, n, cls); }
 
   // ====== 施設の絵: 暗いコンクリートの基礎に建つ、立体的なミニチュア(等角図) ======
   var BART = (function () {
@@ -2987,8 +3014,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     function ecmd(k) { var o = E[k]; if (!o) return ''; var key = 'e-' + k; if (!cache[key]) { o.id = key; if (!o.eye) o.eye = '#300'; cache[key] = base(o); } return cache[key]; }
     return { hero: hero, ecmd: ecmd };
   })();
-  function heroSvg(id) { return Portrait.hero(id); }
-  function ecmdSvg(k) { return Portrait.ecmd(k); }
+  function heroSvg(id) { var u = artUrl('h-' + id); return u ? artSvg(u) : Portrait.hero(id); }
+  function ecmdSvg(k) { var u = artUrl('e-' + k); return u ? artSvg(u) : Portrait.ecmd(k); }
   // 指揮官が率いる部隊の強さの倍率(攻撃と耐久をならした値)
   function heroPow(id, lv, fav) { var h = TF.HERO[id]; return TF.heroMult(lv, fav, id) * Math.sqrt(h.atk * h.hp); }
 
@@ -3406,8 +3433,9 @@ if (typeof module !== 'undefined') module.exports = TF;
   function showDevDone(t, k, r) {
     // 部隊の見た目が変わるなら、前と後を並べて見せる
     var wT = armTierOf(t, 'w'), aT = armTierOf(t, 'a');
-    var before = ArmArt.unit(t, ALLY_C, k === 'w' ? TF.armTier(r.lv - 1) : wT, k === 'a' ? TF.armTier(r.lv - 1) : aT);
-    var after = ArmArt.unit(t, ALLY_C, wT, aT);
+    var wB = k === 'w' ? TF.armTier(r.lv - 1) : wT;
+    var before = unitArt(t, 0, wB) || ArmArt.unit(t, ALLY_C, wB, k === 'a' ? TF.armTier(r.lv - 1) : aT);
+    var after = unitArt(t, 0, wT) || ArmArt.unit(t, ALLY_C, wT, aT);
     var morph = before !== after ? '<div class="morph"><div class="uicon">' + before + '</div><span class="ar">▶</span><div class="uicon new">' + after + '</div></div><div class="small" style="text-align:center;margin-top:-4px;margin-bottom:6px">' + TF.UNIT[t].name + 'の見た目も新しくなりました</div>' : '';
     openModal('<div class="result"><div class="sub" style="color:#d9b8ff;font-weight:900;letter-spacing:.2em;margin-bottom:0">' + (r.lv === 1 ? '新兵器 配備完了!' : '新型兵器 開発成功!') + '</div>' +
       '<div class="devart"><div class="ring w2">' + ArmArt.icon(t, k, TF.armTier(r.lv)) + '<span class="kb ' + k + '">' + KICO[k] + '</span></div></div>' +
@@ -5801,12 +5829,12 @@ if (typeof module !== 'undefined') module.exports = TF;
     var PIMG = {};
     function portraitImg(key) {
       if (PIMG[key]) return PIMG[key].ok ? PIMG[key].img : null;
-      var svg = key.charAt(0) === 'e' ? ecmdSvg(key.slice(2)) : heroSvg(key.slice(2));
-      if (!svg) return null;
+      var url = artUrl(key.replace(':', '-')), svg = url ? '' : key.charAt(0) === 'e' ? ecmdSvg(key.slice(2)) : heroSvg(key.slice(2));
+      if (!url && !svg) return null;
       var img = new Image(), rec = { img: img, ok: false };
       PIMG[key] = rec;
       img.onload = function () { rec.ok = true; };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '));
+      img.src = url || 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '));
       return null;
     }
     function drawBanner() {
