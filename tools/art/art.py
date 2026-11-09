@@ -51,7 +51,7 @@ def unit(key, im):
     img = img.resize((max(1, round(w * sc)), max(1, round(h * sc))), Image.LANCZOS)
     meta[key] = [img.size[0], img.size[1]]
     return webp(img, 84)
-for f in sorted(glob.glob(D + '/single/*')) + sorted(glob.glob(D + '/.work/cells/*')):  # 同じキーは後(まとめ描き)が優先
+for f in sorted(glob.glob(D + '/.work/cells/*')) + sorted(glob.glob(D + '/single/*')):  # 同じキーは後(1枚ずつ描き直した絵)が優先
     key = os.path.splitext(os.path.basename(f))[0]
     im = Image.open(f).convert('RGB')
     b = unit(key, im) if key.startswith('u.') else portrait(key, im)
