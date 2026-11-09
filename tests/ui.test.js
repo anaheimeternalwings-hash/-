@@ -863,6 +863,21 @@ function midState(over) {
     assert(await page.isHidden('#sheetWrap'), '✕で閉じない');
   }, midState({ cleared: 45, sel: 46, parts: { 1: 2, 2: 1, 3: 1, 4: 2 } })));
 
+  await test('絵: 指揮官・敵将の顔は描き下ろしの絵(ファイルに埋め込み・外部から読まない)。小さい枠では顔に寄せる。部隊アイコンが描き下ろしなら敵は左右反転', () => withPage('iPhone 13', async page => {
+    const isArt = 's => !!s && s.classList.contains("art") && getComputedStyle(s).backgroundImage.startsWith("url(\\"data:image/webp")';
+    await page.click('[data-act="tab"][data-tab="army"]');
+    const r = await page.evaluate(f => { const ok = eval(f); const ps = [...document.querySelectorAll('#scr-army .card.hero .portrait svg')]; return { n: ps.length, art: ps.filter(ok).length }; }, isArt);
+    assert.strictEqual(r.n, 10, '指揮官の顔が10人分ない');
+    assert.strictEqual(r.art, 10, '描き下ろしの顔が出ない ' + JSON.stringify(r));
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    assert(await page.evaluate(f => eval(f)(document.querySelector('#ecmdInfo .eportrait svg')), isArt), '敵将の顔が描き下ろしでない');
+    await page.click('[data-act="auto"]');
+    const z = await page.evaluate(() => { const s = document.querySelector('.slot .portrait.xs svg.art'); return s ? getComputedStyle(s).backgroundSize : null; });
+    assert(z && z.startsWith('175%'), '小さい枠で顔に寄らない ' + z);
+    const u = await page.evaluate(() => { const en = document.querySelector('.slot svg.art.en'), al = document.querySelector('.slot svg.art.al'); return { en: en ? getComputedStyle(en).transform : null, al: !!al }; });
+    if (u.al) assert(u.en && u.en.startsWith('matrix(-1'), '敵の部隊アイコンが左右反転しない ' + JSON.stringify(u));
+  }, midState({ cleared: 13, sel: 14 })));
+
   await test('あとから追加された指揮官: 着任のステージをクリア済みなら、開いたときに着任の画面が出て使えるようになる', () => withPage('iPhone 13', async page => {
     await page.waitForSelector('#modalWrap:not(.hidden)', { timeout: 5000 });
     const names = [];

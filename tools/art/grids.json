@@ -1,0 +1,78 @@
+{
+ "G1": {
+  "grid": [
+   2,
+   2
+  ],
+  "keys": [
+   "h.taka",
+   "h.rai",
+   "h.sakura",
+   "h.hayate"
+  ]
+ },
+ "G2": {
+  "grid": [
+   2,
+   2
+  ],
+  "keys": [
+   "h.kiri",
+   "h.kuro",
+   "h.amagi",
+   "h.ayase"
+  ]
+ },
+ "G3": {
+  "grid": [
+   3,
+   2
+  ],
+  "keys": [
+   "e.ghost",
+   "e.wall",
+   "e.thunder",
+   "e.viper",
+   "e.witch",
+   "e.reaper"
+  ]
+ },
+ "G4": {
+  "strip": 3,
+  "keys": [
+   "u.inf.1",
+   "u.inf.2",
+   "u.inf.3"
+  ]
+ },
+ "G5": {
+  "strip": 3,
+  "keys": [
+   "u.at.1",
+   "u.at.2",
+   "u.at.3"
+  ]
+ },
+ "G6": {
+  "strip": 3,
+  "keys": [
+   "u.tank.1",
+   "u.tank.2",
+   "u.tank.3"
+  ],
+  "crop": [
+   0,
+   0,
+   1024,
+   290
+  ]
+ },
+ "G7": {
+  "strip": 3,
+  "keys": [
+   "u.art.1",
+   "u.art.2",
+   "u.art.3"
+  ]
+ }
+}
