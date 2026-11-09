@@ -940,7 +940,7 @@ var TF = (function () {
     resRate: 1, resCost: 5, resStart: 2, resMax: 10, resMul: 0.6,
     // 配置: 前進(与/被ダメージ↑・狙われやすい)、後退(与/被ダメージ↓・狙われにくい。砲兵は与ダメージが下がらない)
     stDeal: { '1': 1.25, '-1': 0.75 }, stTake: { '1': 1.25, '-1': 0.6 }, stAim: { '1': 1.6, '-1': 0.5 },
-    ecmdRate: 0.3, ecmdFocus: 6,
+    ecmdRate: 0.3, ecmdFocus: 6, ecmdHp: 3, ecmdAdv: 0.04,
     // 兵種ごとに編成できる部隊の数の上限(ほかに置ける兵種がないときだけ超えてよい)
     typeCap: { inf: 4, at: 3, tank: 3, art: 2 },
     // 敵の連携: 集中攻撃(同じ目標を狙いやすい倍率・目標を選び直す間隔)
@@ -1183,12 +1183,12 @@ var TF = (function () {
   // ボス戦と一部のステージに出てくる。1人で戦況をひっくり返すほどのスキルを持つ。
   // 発動の warn 秒前に予告があり、その間は位置が見える。予告中に倒せば発動しない
   var ECMD = {
-    ghost:   { name: '亡霊',   skill: '亡者の行進', unlock: 12, first: 16, cd: 45, warn: 8, desc: '倒された敵の部隊をすべて兵力50%でよみがえらせる' },
-    wall:    { name: '鉄壁',   skill: '不落要塞',   unlock: 12, first: 14, cd: 40, warn: 8, dur: 12, mul: 0.2, heal: 0.25, desc: '12秒間、敵全体の被ダメージを5分の1にし、兵力を25%回復する' },
-    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 15, cd: 40, warn: 8, r: 1.6, dmg: 0.5, desc: '自軍がいちばん集まった場所(半径1.6列)の部隊すべてに、兵力の50%のダメージ' },
-    viper:   { name: '毒蛇',   skill: '電子妨害',   unlock: 40, first: 14, cd: 40, warn: 8, dur: 12, desc: '12秒間、自軍の索敵がすべて使えなくなる(敵がまったく見えず、撃てない)' },
-    witch:   { name: '魔女',   skill: '寝返り工作', unlock: 55, first: 18, cd: 50, warn: 8, desc: '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする' },
-    reaper:  { name: '死神',   skill: '斬首作戦',   unlock: 70, first: 16, cd: 45, warn: 8, dmg: 0.6, desc: '指揮官のいる自軍の部隊すべてに、兵力の60%のダメージ' }
+    ghost:   { name: '亡霊',   skill: '亡者の行進', unlock: 12, first: 10, cd: 40, warn: 4, desc: '倒された敵の部隊をすべて兵力50%でよみがえらせる' },
+    wall:    { name: '鉄壁',   skill: '不落要塞',   unlock: 12, first: 6, cd: 35, warn: 4, dur: 12, mul: 0.2, heal: 0.25, desc: '12秒間、敵全体の被ダメージを5分の1にし、兵力を25%回復する' },
+    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 6, cd: 35, warn: 4, r: 1.6, dmg: 0.5, desc: '自軍がいちばん集まった場所(半径1.6列)の部隊すべてに、兵力の50%のダメージ' },
+    viper:   { name: '毒蛇',   skill: '電子妨害',   unlock: 40, first: 5, cd: 35, warn: 4, dur: 12, desc: '12秒間、自軍の索敵がすべて使えなくなる(敵がまったく見えず、撃てない)' },
+    witch:   { name: '魔女',   skill: '寝返り工作', unlock: 55, first: 7, cd: 45, warn: 4, desc: '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする' },
+    reaper:  { name: '死神',   skill: '斬首作戦',   unlock: 70, first: 6, cd: 40, warn: 4, dmg: 0.6, desc: '指揮官のいる自軍の部隊すべてに、兵力の60%のダメージ' }
   };
   var ECMD_KEYS = Object.keys(ECMD);
   // ステージの敵将: ボス戦はかならず、ふつうのステージは12から3割ほど。出てくる敵将はステージが進むと増える
@@ -1484,23 +1484,29 @@ var TF = (function () {
       tc[types[k]] = (tc[types[k]] || 0) + 1;
     });
     // 単位倍率の敵を作り、「全兵種が同じ強さの自軍」が五分になる倍率で編成の難しさを均す
-    var unitE = types.map(function (t, i) {
-      return makeSquad(t, vars[i], i === bossIdx ? { boss: true, hpMul: K.bossHp, atkMul: K.bossAtk } : {});
-    });
+    // 敵将: ボスの部隊(ボス戦でなければ、いちばん強い部隊)が率いる。敵将の部隊は耐久の高い親衛隊
+    var cmd = stageCmd(s), cmdIdx = -1;
+    function sqOpt(i) {
+      var o = i === bossIdx ? { boss: true, hpMul: K.bossHp, atkMul: K.bossAtk } : {};
+      if (i === cmdIdx) o.hpMul = (o.hpMul || 1) * K.ecmdHp;
+      return o;
+    }
+    var unitE = types.map(function (t, i) { return makeSquad(t, vars[i], sqOpt(i)); });
+    if (cmd) {
+      cmdIdx = 0;
+      unitE.forEach(function (e, i) { if (e.power > unitE[cmdIdx].power) cmdIdx = i; });
+      if (bossIdx >= 0) cmdIdx = bossIdx;
+      unitE[cmdIdx] = makeSquad(types[cmdIdx], vars[cmdIdx], sqOpt(cmdIdx));
+      unitE[cmdIdx].ecmd = cmd;
+    }
     var sumV = 0;
     unitE.forEach(function (e) { sumV += e.power / (100 * UNIT_POW[e.type]); });
     // 地形と敵の配置を先に決め、その条件で難しさを均す
     var terrain = stageTerrain(s), places = enemyPlace(types, terrain, s);
+    // 敵将は後方の本陣で動かずに構える(予告で位置がわかっても、近づかないと止められない)
+    if (cmdIdx >= 0) places[cmdIdx] = { lane: places[cmdIdx].lane, lx: places[cmdIdx].lane, adv: K.ecmdAdv, hold: true, role: null, tactic: places[cmdIdx].tactic };
     function setPlace(e, i) { e.lane = places[i].lane; e.lx = places[i].lx; e.adv = places[i].adv; if (places[i].hold) e.hold = true; if (places[i].role) e.role = places[i].role; }
     unitE.forEach(setPlace);
-    // 敵将: ボスの部隊(ボス戦でなければ、いちばん強い部隊)が率いる
-    var cmd = stageCmd(s), cmdIdx = -1;
-    if (cmd) {
-      cmdIdx = bossIdx >= 0 ? bossIdx : 0;
-      unitE.forEach(function (e, i) { if (e.power > unitE[cmdIdx].power) cmdIdx = i; });
-      if (bossIdx >= 0) cmdIdx = bossIdx;
-      unitE[cmdIdx].ecmd = cmd;
-    }
     var be = refBreakEven(unitE, refTypesFor(s), terrain);
     // 指揮官スキル込みの実戦では兵種ごとに少し難易度がずれるので、自動テストの結果から補正する
     var tf = 0;
@@ -1509,9 +1515,7 @@ var TF = (function () {
     var w = Math.min(1, Math.max(0, (s - 4) / 16)) * K.normW; // 序盤は補正を弱める(兵種がそろうまで)
     norm = 1 + (norm - 1) * w;
     var m = enemyTotal(s) * (boss ? K.bossTotal : 1) * norm / sumV;
-    var enemies = types.map(function (t, i) {
-      return makeSquad(t, vars[i] * m, i === bossIdx ? { boss: true, hpMul: K.bossHp, atkMul: K.bossAtk } : {});
-    });
+    var enemies = types.map(function (t, i) { return makeSquad(t, vars[i] * m, sqOpt(i)); });
     var reward = stageReward(s);
     var place = PLACES[hashInt(s * 31 + 7) % PLACES.length];
     enemies.forEach(setPlace);
@@ -3719,17 +3723,6 @@ if (typeof module !== 'undefined') module.exports = TF;
           if (tr === 'lake') { g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(c.x - R * 0.3, c.y - 1, R * 0.4, 2); }
         }
       }
-      // 前線(自軍の段と敵の段の境目)
-      var fy0 = center(0, C).y, fy1 = center(0, C + 1).y, fy = (fy0 + fy1) / 2;
-      if (fy > -10 && fy < H + 10) {
-        g.lineJoin = 'round';
-        [[ '#ff4a3d', -2 ], [ '#2fd6a6', 2 ]].forEach(function (a) {
-          g.strokeStyle = a[0]; g.lineWidth = 2; g.shadowColor = a[0]; g.shadowBlur = 10; g.beginPath();
-          for (var x = 0; x <= W; x += 6) { var y = fy + a[1] + Math.sin(x * 0.08 + C) * 3; if (x) g.lineTo(x, y); else g.moveTo(x, y); }
-          g.stroke(); g.shadowBlur = 0;
-        });
-        g.font = '700 8px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'right'; g.textBaseline = 'bottom'; g.fillStyle = 'rgba(255,74,61,.8)'; g.fillText('FRONT LINE', W - 8, fy - 5);
-      }
       // 進軍路
       g.strokeStyle = 'rgba(245,184,61,.55)'; g.lineWidth = 1.6; g.setLineDash([3, 5]); g.shadowColor = '#f5b83d'; g.shadowBlur = 6;
       g.beginPath();
@@ -4225,7 +4218,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var MAP = { x0: -260, x1: 560, y0: -190, y1: 520 };   // 地面の広さ
     var LANES = [-18, 38, 94, 150, 206, 262, 318], LANEW = 56; // 部隊の列(7列)
     var LMID = 3, COLS = LANES;
-    var ZOOM0 = 0.46;                                     // ふだんの拡大率
+    var ZOOM0 = 0.52;                                     // ふだんの拡大率
     var ZOOMD = 0.27;                                     // 配置のときは戦場全体を見渡す
     var ZMIN = 0.15, ZMAX = 1.8;                          // 拡大・縮小の範囲(いちばん引くと戦場全体が見える)
     function laneOfX(x) { var b = 0; for (var i = 1; i < LANES.length; i++) if (Math.abs(x - LANES[i]) < Math.abs(x - LANES[b])) b = i; return b; }
@@ -4248,7 +4241,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     function clampDep(x, y) { return { x: Math.max(DEP.x0, Math.min(DEP.x1, x)), y: Math.max(DEP.y0, Math.min(DEP.y1, y)) }; }
 
     // ---- カメラ(遠近つき・見回し・拡大縮小) ----
-    var CAM = { x: CXW, y: F0 + 14, z: 1, th: 0.93, D: 280 };
+    var CAM = { x: CXW, y: F0 + 14, z: 1, th: 0.78, D: 215 };
     var SN = 0, CS = 0, KREF = 1, FP = 1, CY = 0;
     function setupProj() {
       SN = Math.sin(CAM.th); CS = Math.cos(CAM.th);
@@ -4271,7 +4264,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     // ---- 丘の高さ(地形マップの丘陵の区域から作る。部隊・木・前線も丘の上に乗る) ----
     var ELEV = null;
-    function hillH(b) { return 14 + (b.p1 / 6.283) * 12; }
+    function hillH(b) { return (14 + (b.p1 / 6.283) * 12) * 1.7; }
     function hillLevel(b, v) { var q = 1 - Math.pow(Math.max(0, v) / hillH(b), 1 / 1.1); return Math.sqrt(Math.max(0, q)); } // 高さ v の輪の大きさ
     function buildElev(TM) {
       ELEV = null;
@@ -4613,6 +4606,21 @@ if (typeof module !== 'undefined') module.exports = TF;
       g.setTransform(DPR, 0, 0, DPR, 0, 0);
       var bio = BIOME[B.biome], T = B.tex;
       g.fillStyle = bio.far; g.fillRect(0, 0, W, H);
+      // 地図の奥の端より向こうは、空と遠くの山なみ(地平線のある景色に)
+      var hy = projFlat(CAM.x, MAP.y1).y;
+      if (hy > 0) {
+        var sky = g.createLinearGradient(0, 0, 0, hy);
+        sky.addColorStop(0, '#1b2731'); sky.addColorStop(0.65, 'rgb(' + bio.haze + ')'); sky.addColorStop(1, shade(bio.far, 0.25));
+        g.fillStyle = sky; g.fillRect(0, 0, W, hy + 1);
+        [[0.5, 0.06, 0.6, '#5f7480'], [0.28, 0.035, 1.3, shade(bio.far, -0.05)]].forEach(function (L, li) {
+          g.fillStyle = L[3]; g.globalAlpha = li ? 0.9 : 0.55; g.beginPath(); g.moveTo(0, hy + 1);
+          for (var x = 0; x <= W; x += 6) {
+            var wx = (x - W / 2) / FP * 600 + CAM.x * 0.3;
+            g.lineTo(x, hy - H * L[1] * (0.55 + 0.45 * Math.sin(wx * 0.011 * L[2] + li * 2) * Math.sin(wx * 0.027 * L[2] + 1.7 + li)) - H * L[1] * 0.4);
+          }
+          g.lineTo(W, hy + 1); g.closePath(); g.fill(); g.globalAlpha = 1;
+        });
+      }
       g.imageSmoothingEnabled = true;
       var band = 3;
       for (var sy = 0; sy < H; sy += band) {
@@ -4638,16 +4646,16 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (it.k === 'tree' || it.k === 'rock') drawProp(g, it, p, bio);
         else drawBuilding(g, it);
       });
-      var hz = g.createLinearGradient(0, 0, 0, H * 0.3);
-      hz.addColorStop(0, 'rgba(' + bio.haze + ',.6)'); hz.addColorStop(1, 'rgba(' + bio.haze + ',0)');
-      g.fillStyle = hz; g.fillRect(0, 0, W, H * 0.3);
+      var hz = g.createLinearGradient(0, 0, 0, H * 0.48);
+      hz.addColorStop(0, 'rgba(' + bio.haze + ',.78)'); hz.addColorStop(0.35, 'rgba(' + bio.haze + ',.32)'); hz.addColorStop(1, 'rgba(' + bio.haze + ',0)');
+      g.fillStyle = hz; g.fillRect(0, 0, W, H * 0.48);
       var vg = g.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.8);
       vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.25)');
       g.fillStyle = vg; g.fillRect(0, 0, W, H);
     }
     // 丘: 高さごとの輪を下から積み重ねて立体に描く(左上から光が当たり、右下に影)
     function drawHill(g, b, bio) {
-      var H0 = hillH(b), N = 8, a, th, R, i;
+      var H0 = hillH(b), N = 14, a, th, R, i;
       function ring(s, v, ox, oy) {
         var pts = [], x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
         for (a = 0; a <= 40; a++) {
@@ -4662,15 +4670,15 @@ if (typeof module !== 'undefined') module.exports = TF;
       var base = ring(1, 0);
       if (base.x1 < -40 || base.x0 > W + 40 || base.y1 < -40 || base.y0 > H + 80) return;
       // 地面に落ちる影
-      path(ring(1, 0, H0 * 0.9, -H0 * 0.5)); g.fillStyle = 'rgba(0,0,0,.16)'; g.fill();
+      path(ring(1, 0, H0 * 1.1, -H0 * 0.55)); g.fillStyle = 'rgba(0,0,0,.24)'; g.fill();
       for (i = 0; i < N; i++) {
         var v = H0 * i / N, s = hillLevel(b, v);
         if (s < 0.05) break;
         var r = ring(s, v);
         var c0 = shade(bio.near, 0.0 + 0.055 * i), gr = g.createLinearGradient(r.x0, r.y0, r.x1, r.y1);
-        gr.addColorStop(0, shade(c0, 0.16)); gr.addColorStop(0.55, c0); gr.addColorStop(1, shade(c0, -0.2));
+        gr.addColorStop(0, shade(c0, 0.24)); gr.addColorStop(0.5, c0); gr.addColorStop(1, shade(c0, -0.34));
         path(r); g.fillStyle = gr; g.fill();
-        g.strokeStyle = 'rgba(40,50,30,' + (0.12 + 0.02 * i) + ')'; g.lineWidth = 0.8; g.stroke();
+        g.strokeStyle = 'rgba(40,50,30,' + (0.05 + 0.008 * i) + ')'; g.lineWidth = 0.7; g.stroke();
       }
     }
     function drawProp(g, it, p, bio) {
@@ -4684,8 +4692,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       g.fillStyle = '#4b3a2a'; g.fillRect(p.x - sz * 0.25, p.y - sz * 1.2, sz * 0.5, sz * 1.2);
       for (var L = 0; L < 3; L++) {
         var by = p.y - sz * (1.0 + L * 1.7), hw = sz * (2.2 - L * 0.55), hh = sz * 2.6;
-        g.fillStyle = L % 2 ? bio.tree2 : bio.tree;
-        g.beginPath(); g.moveTo(p.x - hw, by); g.lineTo(p.x + hw, by); g.lineTo(p.x, by - hh); g.closePath(); g.fill();
+        var tc = L % 2 ? bio.tree2 : bio.tree;
+        g.fillStyle = shade(tc, 0.12); g.beginPath(); g.moveTo(p.x - hw, by); g.lineTo(p.x + hw * 0.15, by); g.lineTo(p.x, by - hh); g.closePath(); g.fill();
+        g.fillStyle = shade(tc, -0.3); g.beginPath(); g.moveTo(p.x + hw * 0.15, by); g.lineTo(p.x + hw, by); g.lineTo(p.x, by - hh); g.closePath(); g.fill();
         if (bio.cap) { g.fillStyle = bio.cap; g.beginPath(); g.moveTo(p.x - hw * 0.45, by - hh * 0.55); g.lineTo(p.x + hw * 0.45, by - hh * 0.55); g.lineTo(p.x, by - hh); g.closePath(); g.fill(); }
       }
     }
@@ -5134,9 +5143,10 @@ if (typeof module !== 'undefined') module.exports = TF;
       });
     }
     function aliveFigs(u) { return u.figs.filter(function (f) { return f.alive; }); }
+    var FIGS = 1.55, FIGD = 1.3; // 兵士・車両の見た目の大きさと、部隊の中の間隔
     function figPos(u, f) {
       var c = u.colF || 0;
-      return { x: u.wx + f.ox * u.big * (1 - 0.72 * c), y: u.wy + f.oy * u.big * (1 + 1.8 * c) };
+      return { x: u.wx + f.ox * u.big * FIGD * (1 - 0.72 * c), y: u.wy + f.oy * u.big * FIGD * (1 + 1.8 * c) };
     }
     function figWorld(u) {
       var a = aliveFigs(u);
@@ -5571,6 +5581,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var c = proj(u.wx, u.wy);
       if (c.y < -60 || c.y > H + 60 || c.x < -90 || c.x > W + 90) return;
       var bw = 11 * c.k * u.big * (u.type === 'inf' ? 1 : 0.9);
+      if (!u.dead) { cx.fillStyle = 'rgba(0,0,0,.2)'; cx.beginPath(); cx.ellipse(c.x + bw * 0.25, c.y + 1, bw * 1.25, bw * 0.42, 0, 0, Math.PI * 2); cx.fill(); }
       if (!u.dead && B.buff[u.side].atk > B.clock) {
         cx.fillStyle = 'rgba(255,130,50,' + (0.22 + 0.1 * Math.sin(B.clock * 12)) + ')';
         cx.beginPath(); cx.ellipse(c.x, c.y, bw * 1.15, bw * 0.45, 0, 0, Math.PI * 2); cx.fill();
@@ -5580,7 +5591,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         if (!f.alive) continue;
         var fq = figPos(u, f), p = proj(fq.x, fq.y);
         var bob = u.moving ? Math.abs(Math.sin(B.clock * 9 + B.introT * 9 + B.endT * 9 + f.ph)) * 0.5 * p.k : 0;
-        var w = spr.w * p.k * u.big, h = spr.h * p.k * u.big;
+        var w = spr.w * p.k * u.big * FIGS, h = spr.h * p.k * u.big * FIGS;
         cx.drawImage(spr.c, p.x - w / 2, p.y - h - bob, w, h);
         if (f.fire > 0 && B.clock - f.fire < 0.08 && B.clock >= f.fire) {
           cx.fillStyle = '#fff3a8';
@@ -5641,10 +5652,11 @@ if (typeof module !== 'undefined') module.exports = TF;
       var p = proj(u.wx, u.wy + u.farOy * u.big);
       if (p.y < -40 || p.y > H + 60 || p.x < -60 || p.x > W + 60) return;
       var sz = Math.max(0.7, Math.min(1.15, 0.6 + 0.4 * p.s));
-      var y = p.y - FIGH[u.type] * p.k * u.big - 3;
+      var y = p.y - FIGH[u.type] * p.k * u.big * FIGS - 3;
       var r = 9.5 * sz;
       var shake = B.clock - u.hitT < 0.15 ? (Math.random() - 0.5) * 3 : 0;
-      // 兵種章: 六角形(チームの色の縁が光る)
+      // 兵種章: 部隊の上に浮かぶ六角形(チームの色の縁が光る)。地面まで細い支柱
+      cx.strokeStyle = TEAM[u.side].main; cx.globalAlpha *= 0.55; cx.lineWidth = 1; cx.beginPath(); cx.moveTo(p.x, y); cx.lineTo(p.x, p.y - 2); cx.stroke(); cx.globalAlpha /= 0.55;
       var hx0 = p.x, hy0 = y - r;
       cx.beginPath(); for (var hi = 0; hi < 6; hi++) { var ha = Math.PI / 6 + hi * Math.PI / 3; cx.lineTo(hx0 + Math.cos(ha) * r * 1.05, hy0 + Math.sin(ha) * r * 1.05); } cx.closePath();
       cx.fillStyle = TEAM[u.side].icon; cx.fill();

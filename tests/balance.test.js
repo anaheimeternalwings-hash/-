@@ -465,7 +465,7 @@ check('敵将: ボス戦(ステージ12以降)と一部のステージに敵将�
   assert.strictEqual(K.maxT, 180, '戦闘の時間');
   const keys = Object.keys(TF.ECMD);
   assert(keys.length >= 6);
-  keys.forEach(k => { const c = TF.ECMD[k]; assert(c.name && c.skill && c.desc && c.warn >= 5 && c.cd >= 30 && c.first > c.warn, k); });
+  keys.forEach(k => { const c = TF.ECMD[k]; assert(c.name && c.skill && c.desc && c.warn >= 3 && c.cd >= 30 && c.first > c.warn, k); });
   let n = 0, tot = 0;
   for (let s = 1; s <= 300; s++) {
     const c = TF.stageCmd(s);
@@ -513,12 +513,38 @@ check('敵将: ボス戦(ステージ12以降)と一部のステージに敵将�
   c = castOf(b);
   assert(c && c.hits.length === 1 && c.hits[0].d === 0 && c.hits[0].dmg === 5400, '斬首作戦');
   // 予告中は位置がわかり、倒せば発動しない(見つからない距離で待つ戦車が、予告で見えた敵将を倒す)
-  b = TF.createBattle([mk('tank', 3, { maxHp: 1e9, atk: 400, adv: 0.95 })], [cmd('thunder', { maxHp: 1500 })], 3, { record: true, terrain: T, auto: false });
+  b = TF.createBattle([mk('tank', 3, { maxHp: 1e9, atk: 400, adv: 0.95 })], [cmd('thunder', { maxHp: 600 })], 3, { record: true, terrain: T, auto: false });
   b.moveTo(0, 5.5, 0.3, 0.1);
   b.step(40);
   const wn = b.ev.find(e => e.k === 'eskWarn'), first = b.ev.find(e => e.k === 'atk' && e.d === 1);
   assert(wn && first && first.t >= wn.t, '予告の前から見えていた');
   assert(!b.U[1].alive && !castOf(b), '予告中に倒しても発動した');
+});
+check('敵将はスキルを使える: 後方の本陣で動かずに構える耐久の高い親衛隊が率い、すぐに予告する。互角の戦いではほぼ必ず、自軍がかなり強い(1.5倍)戦いでも半分以上で発動する', () => {
+  const stages = [];
+  for (let s = 12; stages.length < 12; s++) if (TF.stageInfo(s).ecmd) stages.push(s);
+  const rate = { 1: [0, 0], 1.5: [0, 0] };
+  for (const s of stages) {
+    const info = TF.stageInfo(s), e = info.enemies[info.ecmdIdx];
+    assert(e.hold && e.adv <= 0.1, '敵将が本陣にいない ' + s);
+    const types = [], cc = {}, ref = ['inf', 'at', 'tank', 'art'];
+    for (let i = 0; i < info.enemies.length; i++) { const t = ref.find(t => (cc[t] || 0) < Math.min(K.typeCap[t], Math.ceil(info.enemies.length / 4))) || 'inf'; cc[t] = (cc[t] || 0) + 1; types.push(t); }
+    const bl = TF.blindPlace(types, info.terrain);
+    const mk = x => types.map((t, j) => Object.assign(TF.makeSquad(t, x), { lane: bl[j].lane, lx: bl[j].lx, adv: bl[j].adv }));
+    let lo = Math.log(0.05), hi = Math.log(200);
+    for (let it = 0; it < 10; it++) {
+      const mid = (lo + hi) / 2; let w = 0;
+      for (let i = 0; i < 6; i++) if (TF.simulate(mk(Math.exp(mid)), info.enemies, 5000 + i * 7919, false, { terrain: info.terrain }).win) w++;
+      if (w >= 3) hi = mid; else lo = mid;
+    }
+    const even = Math.exp((lo + hi) / 2);
+    for (const k of [1, 1.5]) for (let sd = 0; sd < 4; sd++) {
+      const r = TF.simulate(mk(even * k), info.enemies, 1000 + sd * 7919 + s, true, { terrain: info.terrain });
+      rate[k][0]++; if (r.ev.some(x => x.k === 'eskCast')) rate[k][1]++;
+    }
+  }
+  assert(rate[1][1] / rate[1][0] >= 0.85, '互角の戦いで発動しない ' + JSON.stringify(rate));
+  assert(rate[1.5][1] / rate[1.5][0] >= 0.5, '勝てる戦いで発動しない ' + JSON.stringify(rate));
 });
 check('編成の上限: 兵種ごとに編成できる部隊の数に上限がある(歩兵4・対戦車兵3・戦車3・砲兵2)。おまかせ編成も敵の編成も上限を守る', () => {
   assert.deepStrictEqual(K.typeCap, { inf: 4, at: 3, tank: 3, art: 2 });
