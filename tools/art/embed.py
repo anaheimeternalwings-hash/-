@@ -1,15 +1,17 @@
 # .work/art.json の絵を index.html に埋め込む(/*ART*/ と /*ENDART*/ のあいだを置きかえる)
 #   python3 -I tools/art/embed.py            … リポジトリの index.html を書きかえる
-#   部隊アイコンは 4兵種×3年代 がそろったときだけ使う(古い絵と混ざらないように)
+#   部隊アイコンは兵種ごとに、3年代がそろった兵種だけ使う(同じ兵種で古い絵と混ざらないように)
 import json, os, re, sys
 D = os.path.dirname(os.path.abspath(__file__))
-NEED = ['u.%s.%d' % (t, e) for t in ('inf', 'at', 'tank', 'art') for e in (1, 2, 3)]
+TYPES = ('inf', 'at', 'tank', 'art')
 def embed(html):
     A = json.load(open(D + '/.work/art.json'))
-    miss = [k for k in NEED if k not in A['img']]
-    if miss:
-        for k in [k for k in list(A['img']) if k.startswith('u.')]: A['img'].pop(k); A['meta'].pop(k, None)
-        print('部隊アイコンが足りないので使わない:', miss)
+    for t in TYPES:
+        ks = ['u.%s.%d' % (t, e) for e in (1, 2, 3)]
+        miss = [k for k in ks if k not in A['img']]
+        if miss:
+            for k in ks: A['img'].pop(k, None); A['meta'].pop(k, None)
+            print('部隊アイコンが足りない兵種は今までの絵:', t, miss)
     a, b = '/*ART*/', '/*ENDART*/'
     assert html.count(a) == 1 and html.count(b) == 1
     i, j = html.index(a) + len(a), html.index(b)

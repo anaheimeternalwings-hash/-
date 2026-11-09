@@ -301,4 +301,4 @@ npm install && node tests/ui.test.js  # iPhone SE / 13 / 14 Pro Max の画面で
   - `grid/` は何人分かをまとめて描いた画像(`grids.json` にどのマスが誰かを書く)、`single/` は1人ずつの画像。`cfg.json` は顔の位置
   - `python3 -I tools/art/split.py && python3 -I tools/art/art.py && python3 -I tools/art/embed.py` で、
     切り分け → 小さな WebP に変換(部隊アイコンは白い背景を透明に) → `index.html` へ埋め込み。
-    部隊アイコンは4兵種×3年代がそろうまで、今までの絵を使います
+    部隊アイコンは兵種ごとに、3年代(大戦・冷戦・現代)がそろった兵種から描き下ろしの絵に替わります
