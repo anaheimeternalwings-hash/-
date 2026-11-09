@@ -612,24 +612,32 @@ function midState(over) {
         await page.click('[data-act="tab"][data-tab="arms"]');
         await page.click('[data-act="arm-type"][data-t="tank"]');
       }
-      // 武器の絵は実物の兵器。5レベルごとの新型開発で、武器の絵と戦車のアイコンが変わる
+      // 武器の絵は実物の兵器。5レベルごとの新型開発で武器の絵が変わる。
+      // 部隊のアイコン(描き下ろしの絵)は年代(大戦・冷戦・現代)が変わる開発で変わる(新型2つ目までは大戦、3つ目から冷戦)
       assert(await page.isVisible('#arm-tank-w .wico svg'), '武器の絵がない');
       await page.evaluate(() => { window.__game.state.bp = 100; });
       const icon0 = await page.innerHTML('#arm-tank-w .wico'), unit0 = await page.innerHTML('.armsum .big');
       for (let i = 0; i < 3; i++) await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
       assert.strictEqual(await page.innerHTML('.armsum .big'), unit0, '強化だけで見た目が変わった');
       await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
-      await page.waitForSelector('#modalWrap:not(.hidden) .morph');
-      assert((await page.textContent('#modalWrap')).includes('見た目も新しく'));
+      await page.waitForSelector('#modalWrap:not(.hidden) .devart');
       await page.click('[data-act="modal-close"]');
       assert.strictEqual((await state(page)).arms.tank.w, 6);
       assert.strictEqual((await state(page)).parts[1] || 0, (await page.evaluate(() => window.__game.TF.K.partFirst)) - 1, '試作部品Ⅰが使われていない');
       assert.notStrictEqual(await page.innerHTML('#arm-tank-w .wico'), icon0, '武器の絵が変わらない');
+      await page.evaluate(() => { const s = window.__game.state; s.bp = 200; s.money = 1e9; s.steel = 1e9; s.parts = { 1: 9, 2: 9, 3: 9 }; s.bld.lab.lv = 10; });
+      for (let i = 0; i < 4; i++) await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+      assert.strictEqual((await state(page)).arms.tank.w, 10);
+      await page.click('[data-act="arm-up"][data-t="tank"][data-k="w"]');
+      await page.waitForSelector('#modalWrap:not(.hidden) .morph');
+      assert((await page.textContent('#modalWrap')).includes('見た目も新しく'));
+      await page.click('[data-act="modal-close"]');
+      assert.strictEqual((await state(page)).arms.tank.w, 11);
       assert.notStrictEqual(await page.innerHTML('.armsum .big'), unit0, '戦車のアイコンが変わらない');
       await noHorizontalScroll(page);
       // 部隊タブにも武装が表示される
       await page.click('[data-act="tab"][data-tab="army"]');
-      assert((await page.textContent('#scr-army')).includes(await page.evaluate(() => window.__game.TF.armName('tank', 'w', 6))));
+      assert((await page.textContent('#scr-army')).includes(await page.evaluate(() => window.__game.TF.armName('tank', 'w', 11))));
     }, Object.assign(midState({ money: 1e6, steel: 1e6 }), { bp: undefined }));
     // 勝てば設計図が増え、特殊武装は苦手な敵に「特効!」
     await withPage('iPhone 13', async page => {
