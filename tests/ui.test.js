@@ -891,6 +891,33 @@ function midState(over) {
     assert(after.money < before.money && after.steel < before.steel);
   }, midState()));
 
+  await test('生成した絵: 埋め込んだ指揮官の顔・部隊アイコンはすべて読み込めて画面に使われる(無い絵はコードで描いた絵)', () => withPage('iPhone 13', async page => {
+    const r = await page.evaluate(async () => {
+      const keys = Object.keys(ART), bad = [];
+      for (const k of keys) {
+        const img = new Image(); img.src = ART[k];
+        try { await img.decode(); } catch (e) { bad.push(k + ' 読み込めない'); continue; }
+        const px = k[0] === 'u' ? 128 : 256;
+        if (img.naturalWidth !== px || img.naturalHeight !== px) bad.push(k + ' ' + img.naturalWidth + 'x' + img.naturalHeight);
+        if (!/^(h|e):[a-z]+$|^u:(inf|at|tank|art):[ae]:\d+$/.test(k)) bad.push(k + ' キーの形が違う');
+      }
+      const g = window.__game, TF = g.TF;
+      Object.keys(TF.HERO).forEach(id => { if (g.heroSvg(id).includes('<image') !== !!ART['h:' + id]) bad.push('h:' + id + ' の使い分けが違う'); });
+      ['ghost', 'wall', 'thunder', 'viper', 'witch', 'reaper'].forEach(k => {
+        const s = g.ecmdSvg(k);
+        if (!s) bad.push('敵将 ' + k + ' がない');
+        else if (s.includes('<image') !== !!ART['e:' + k]) bad.push('e:' + k + ' の使い分けが違う');
+      });
+      // 部隊アイコンは味方と敵の両方がそろっている
+      keys.filter(k => k[0] === 'u').forEach(k => { const o = k.replace(/:([ae]):/, (m, s) => ':' + (s === 'a' ? 'e' : 'a') + ':'); if (!ART[o]) bad.push(o + ' がない'); });
+      return { n: keys.length, bad };
+    });
+    assert.deepStrictEqual(r.bad, [], r.bad.join(' / '));
+    await page.click('[data-act="tab"][data-tab="army"]');
+    const hasImg = await page.evaluate(() => !!document.querySelector('#scr-army .urow .uicon image'));
+    assert.strictEqual(hasImg, await page.evaluate(() => !!ART['u:inf:a:1']), '部隊アイコンに生成した絵が使われていない');
+  }, midState()));
+
   if (failures) { console.log(`\n${failures}件の失敗`); process.exit(1); }
   console.log('\nすべて合格');
 })();

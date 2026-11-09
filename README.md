@@ -294,6 +294,8 @@ npm install && node tests/ui.test.js  # iPhone SE / 13 / 14 Pro Max の画面で
 
 ## ファイル構成
 
-- `index.html` … ゲーム本体(これだけで動きます)。`<script id="logic">` がゲームの計算、`<script id="ui">` が画面と演出
+- `index.html` … ゲーム本体(これだけで動きます)。`<script id="logic">` がゲームの計算、`<script id="ui">` が画面と演出、
+  `<script id="art">` が埋め込んだ生成画像(指揮官の顔・部隊アイコン。無い絵はコードで描いた絵を使う)
+- `art/` … SpriteCook で生成した絵(WebP)と絵柄の方針。`python3 tools/art.py` で整えて `index.html` に埋め込む(`art/README.md`)
 - `tests/balance.test.js` … バランスの自動テスト
 - `tests/ui.test.js` … iPhone 画面での操作テスト

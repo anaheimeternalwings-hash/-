@@ -667,6 +667,14 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
   </defs>
 </svg>
 
+<script id="art">
+// 生成した絵(指揮官の顔・部隊アイコン)。art/ の画像を tools/art.py が埋め込む(手で書き換えない)。
+// キー: h:指揮官 / e:敵将 / u:兵種:a(味方)かe(敵):開発段階。ここに無い絵はコードで描いた絵を使う
+var ART = {
+/*ART-BEGIN*/
+/*ART-END*/
+};
+</script>
 <script id="logic">
 var TF = (function () {
   'use strict';
@@ -2487,6 +2495,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     return '#' + ((1 << 24) + (f(r) << 16) + (f(g) << 8) + f(b)).toString(16).slice(1);
   }
   var ALLY_C = '#8ee6cf', ENEMY_C = '#ff9a86';
+  // 埋め込んだ生成画像の data URL(無ければ null)
+  function artUrl(k) { return typeof ART === 'object' && ART && typeof ART[k] === 'string' ? ART[k] : null; }
 
   // ====== 兵器の絵(実在の兵器を横から見たシルエット) ======
   // 64×32 の座標で描く。小火器・弾薬は実物の色、車両・火砲は色(pal)を差し替えて兵種アイコンにも使う
@@ -2721,6 +2731,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     function unit(t, color, w, a, cls) {
       var P = pal(color), s, vb = '0 0 64 64';
       w = Math.max(1, w || 1); a = a || 0;
+      // 生成した絵(開発段階=武器の型ごと。味方は青緑・敵は赤)があればそれを使う
+      var side = color === ALLY_C ? 'a' : color === ENEMY_C ? 'e' : '';
+      var u = side && artUrl('u:' + t + ':' + side + ':' + Math.min(TF.ARMS[t].w.length, w));
+      if (u) return '<svg viewBox="0 0 64 64" class="' + (cls || '') + '"><image href="' + u + '" width="64" height="64"/></svg>';
       if (t === 'tank') { s = tankArt(Math.min(TANKS.length, w) - 1, P); vb = '0 -14 64 52'; }
       else if (t === 'art') { s = artGun(Math.min(7, w), P); vb = '0 -14 64 52'; }
       else if (t === 'inf') {
@@ -2983,8 +2997,14 @@ if (typeof module !== 'undefined') module.exports = TF;
           P('M30.6 34.6L32 37 33.4 34.6Z', '#e8e4da') + P('M27 39.6H37V43C35 44.6 29 44.6 27 43Z', '#e8e4da') + S('M29 39.6V43.8M31 39.6V44.3M33 39.6V44.3M35 39.6V43.8', '#16181a', 0.6) }
     };
     var cache = {};
-    function hero(id) { var o = H[id]; if (!o) return ''; if (!cache[id]) { o.id = id; cache[id] = base(o); } return cache[id]; }
-    function ecmd(k) { var o = E[k]; if (!o) return ''; var key = 'e-' + k; if (!cache[key]) { o.id = key; if (!o.eye) o.eye = '#300'; cache[key] = base(o); } return cache[key]; }
+    // 生成した絵があればそれを使う(svg で包むので、大きさや「未着任の影」の指定はそのまま効く)
+    function pic(k) {
+      var u = artUrl(k); if (!u) return '';
+      return '<svg viewBox="0 0 64 64"><image href="' + u + '" width="64" height="64" preserveAspectRatio="xMidYMid slice"/>' +
+        '<path d="M0 0H64V64H0ZM1.5 1.5V62.5H62.5V1.5Z" fill="rgba(0,0,0,.35)" fill-rule="evenodd"/></svg>';
+    }
+    function hero(id) { var o = H[id]; if (!o) return ''; if (!cache[id]) { o.id = id; cache[id] = pic('h:' + id) || base(o); } return cache[id]; }
+    function ecmd(k) { var o = E[k]; if (!o) return ''; var key = 'e-' + k; if (!cache[key]) { o.id = key; if (!o.eye) o.eye = '#300'; cache[key] = pic('e:' + k) || base(o); } return cache[key]; }
     return { hero: hero, ecmd: ecmd };
   })();
   function heroSvg(id) { return Portrait.hero(id); }
@@ -5801,12 +5821,12 @@ if (typeof module !== 'undefined') module.exports = TF;
     var PIMG = {};
     function portraitImg(key) {
       if (PIMG[key]) return PIMG[key].ok ? PIMG[key].img : null;
-      var svg = key.charAt(0) === 'e' ? ecmdSvg(key.slice(2)) : heroSvg(key.slice(2));
-      if (!svg) return null;
+      var raw = artUrl(key), svg = raw ? '' : key.charAt(0) === 'e' ? ecmdSvg(key.slice(2)) : heroSvg(key.slice(2));
+      if (!raw && !svg) return null;
       var img = new Image(), rec = { img: img, ok: false };
       PIMG[key] = rec;
       img.onload = function () { rec.ok = true; };
-      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '));
+      img.src = raw || 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '));
       return null;
     }
     function drawBanner() {
