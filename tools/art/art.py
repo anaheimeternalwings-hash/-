@@ -36,6 +36,18 @@ def unit(key, im):
         if y < 0 or x < 0 or y >= H or x >= W or bg[y, x] or not wh[y, x]: continue
         bg[y, x] = True
         stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
+    # 囲まれた白いすき間(引き金のまわりなど)も背景にする(ほぼ真っ白で、ある程度の大きさのもの)
+    hole = (a.min(axis=2) > 232) & ((a.max(axis=2) - a.min(axis=2)) < 16) & ~bg
+    seen = np.zeros((H, W), bool)
+    for y0, x0 in zip(*np.where(hole)):
+        if seen[y0, x0]: continue
+        st = [(y0, x0)]; seen[y0, x0] = True; pts = []
+        while st:
+            y, x = st.pop(); pts.append((y, x))
+            for yy, xx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= yy < H and 0 <= xx < W and hole[yy, xx] and not seen[yy, xx]: seen[yy, xx] = True; st.append((yy, xx))
+        if len(pts) >= 14:
+            for y, x in pts: bg[y, x] = True
     alpha = Image.fromarray(np.where(bg, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))
     al = np.asarray(alpha).astype(np.float32)
     # ふちの白いにじみを消す(半透明のところは白を引いて色を戻す)
@@ -44,6 +56,18 @@ def unit(key, im):
     rgb = np.where(k > 0.02, (rgb - 255 * (1 - k)) / np.maximum(k, 0.02), rgb).clip(0, 255)
     rgba = np.dstack([rgb, al]).astype(np.uint8)
     img = Image.fromarray(rgba, 'RGBA')
+    # 細長い兵器(銃など)が斜めに描かれていたら、横向きに直す(主軸の向きをそろえる)
+    if key.startswith('a.'):
+        ys, xs = np.where(al > 24)
+        if len(xs) > 50:
+            cxy = np.stack([xs - xs.mean(), ys - ys.mean()])
+            ev, evec = np.linalg.eigh(np.cov(cxy))
+            v = evec[:, 1]; ang = np.degrees(np.arctan2(v[1], v[0]))
+            if ang > 90: ang -= 180
+            if ang < -90: ang += 180
+            if ev[1] > 9 * ev[0] and 6 < abs(ang) < 60:
+                img = img.rotate(ang, resample=Image.BICUBIC, expand=True)
+                al = np.asarray(img)[:, :, 3].astype(np.float32); W, H = img.size
     ys, xs = np.where(al > 24)
     pad = 6
     box = (max(0, xs.min() - pad), max(0, ys.min() - pad), min(W, xs.max() + pad), min(H, ys.max() + pad))
