@@ -78,7 +78,15 @@ for f in sorted(glob.glob(D + '/grid/*')):
                             if 0 <= yy < H and 0 <= xx < W and fg[yy, xx] and not lab[yy, xx]:
                                 lab[yy, xx] = n; st.append((yy, xx))
                 comps.append({'n': n, 'cnt': cnt, 'box': (xs0, ys0, xs1, ys1)})
-        big = sorted(sorted(comps, key=lambda c: -c['cnt'])[:k], key=lambda c: c['box'][0])
+        big = sorted(comps, key=lambda c: -c['cnt'])[:k]
+        # 段に分ける(縦の中心が同じ段の範囲に入るもの)→ 上の段から、段の中は左から
+        rows = []
+        for c in sorted(big, key=lambda c: (c['box'][1] + c['box'][3]) / 2):
+            cy = (c['box'][1] + c['box'][3]) / 2
+            for r in rows:
+                if r['y0'] <= cy <= r['y1']: r['m'].append(c); break
+            else: rows.append({'y0': c['box'][1], 'y1': c['box'][3], 'm': [c]})
+        big = [c for r in rows for c in sorted(r['m'], key=lambda c: c['box'][0])]
         owner = {}
         pts = []
         for b in big:

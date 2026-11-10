@@ -74,5 +74,157 @@
    "u.art.2",
    "u.art.3"
   ]
+ },
+ "W1": {
+  "strip": 7,
+  "keys": [
+   "a.inf.w.1",
+   "a.inf.w.2",
+   "a.inf.w.3",
+   "a.inf.w.4",
+   "a.inf.w.5",
+   "a.inf.w.6",
+   "a.inf.w.7"
+  ]
+ },
+ "W2": {
+  "strip": 6,
+  "keys": [
+   "a.inf.a.1",
+   "a.inf.a.2",
+   "a.inf.a.3",
+   "a.inf.a.4",
+   "a.inf.a.5",
+   "a.inf.a.6"
+  ]
+ },
+ "W3": {
+  "strip": 6,
+  "keys": [
+   "a.inf.x.1",
+   "a.inf.x.2",
+   "a.inf.x.3",
+   "a.inf.x.4",
+   "a.inf.x.5",
+   "a.inf.x.6"
+  ]
+ },
+ "W4": {
+  "strip": 7,
+  "keys": [
+   "a.at.w.1",
+   "a.at.w.2",
+   "a.at.w.3",
+   "a.at.w.4",
+   "a.at.w.5",
+   "a.at.w.6",
+   "a.at.w.7"
+  ]
+ },
+ "W5": {
+  "strip": 6,
+  "keys": [
+   "a.at.a.1",
+   "a.at.a.2",
+   "a.at.a.3",
+   "a.at.a.4",
+   "a.at.a.5",
+   "a.at.a.6"
+  ]
+ },
+ "W6": {
+  "strip": 6,
+  "keys": [
+   "a.at.x.1",
+   "a.at.x.2",
+   "a.at.x.3",
+   "a.at.x.4",
+   "a.at.x.5",
+   "a.at.x.6"
+  ]
+ },
+ "W7": {
+  "strip": 6,
+  "keys": [
+   "a.tank.w.1",
+   "a.tank.w.2",
+   "a.tank.w.3",
+   "a.tank.w.4",
+   "a.tank.w.5",
+   "a.tank.w.6"
+  ]
+ },
+ "W8": {
+  "strip": 6,
+  "keys": [
+   "a.tank.a.1",
+   "a.tank.a.2",
+   "a.tank.a.3",
+   "a.tank.a.4",
+   "a.tank.a.5",
+   "a.tank.a.6"
+  ]
+ },
+ "W9": {
+  "strip": 6,
+  "keys": [
+   "a.tank.x.1",
+   "a.tank.x.2",
+   "a.tank.x.3",
+   "a.tank.x.4",
+   "a.tank.x.5",
+   "a.tank.x.6"
+  ]
+ },
+ "W10": {
+  "strip": 7,
+  "keys": [
+   "a.art.w.1",
+   "a.art.w.2",
+   "a.art.w.3",
+   "a.art.w.4",
+   "a.art.w.5",
+   "a.art.w.6",
+   "a.art.w.7"
+  ]
+ },
+ "W11": {
+  "strip": 6,
+  "keys": [
+   "a.art.a.1",
+   "a.art.a.2",
+   "a.art.a.3",
+   "a.art.a.4",
+   "a.art.a.5",
+   "a.art.a.6"
+  ]
+ },
+ "W12": {
+  "strip": 6,
+  "keys": [
+   "a.art.x.1",
+   "a.art.x.2",
+   "a.art.x.3",
+   "a.art.x.4",
+   "a.art.x.5",
+   "a.art.x.6"
+  ]
+ },
+ "M1": {
+  "grid": [
+   3,
+   3
+  ],
+  "keys": [
+   "m.grass",
+   "m.forest",
+   "m.mount",
+   "m.desert",
+   "m.dforest",
+   "m.lake",
+   "m.snow",
+   "m.sforest",
+   "m.base"
+  ]
  }
 }

@@ -2,6 +2,7 @@
 #   python3 -I tools/art/art.py
 #  h.<id> / e.<id> : 顔絵(正方形に切り出し 288px)。小さい表示用に顔の位置(fx,fy)も出す
 #  u.<type>.<era>  : 部隊アイコン(白背景を透明にして余白を詰める)
+#  a.<type>.<k>.<n>: 兵器の絵(同じく透明に)、m.<地形>: 出撃の地図のタイル(正方形)
 import json, os, sys, glob, base64, io
 import numpy as np
 from PIL import Image, ImageFilter
@@ -51,10 +52,15 @@ def unit(key, im):
     img = img.resize((max(1, round(w * sc)), max(1, round(h * sc))), Image.LANCZOS)
     meta[key] = [img.size[0], img.size[1]]
     return webp(img, 84)
+def tile(key, im):
+    W, H = im.size; m = int(min(W, H) * 0.04); s = min(W, H) - 2 * m
+    im = im.crop(((W - s) // 2, (H - s) // 2, (W - s) // 2 + s, (H - s) // 2 + s)).resize((192, 192), Image.LANCZOS)
+    meta[key] = [192, 192]
+    return webp(im, 78)
 for f in sorted(glob.glob(D + '/.work/cells/*')) + sorted(glob.glob(D + '/single/*')):  # 同じキーは後(1枚ずつ描き直した絵)が優先
     key = os.path.splitext(os.path.basename(f))[0]
     im = Image.open(f).convert('RGB')
-    b = unit(key, im) if key.startswith('u.') else portrait(key, im)
+    b = unit(key, im) if key[:2] in ('u.', 'a.') else tile(key, im) if key.startswith('m.') else portrait(key, im)
     out[key] = 'data:image/webp;base64,' + base64.b64encode(b).decode()
     print(key, len(b), 'bytes', meta[key])
 json.dump({'img': out, 'meta': meta}, open(D + '/.work/art.json', 'w'), separators=(',', ':'))
