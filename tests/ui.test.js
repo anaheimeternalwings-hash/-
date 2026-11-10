@@ -285,7 +285,8 @@ function midState(over) {
       const plan = await page.evaluate(() => {
         const G = window.__game.battle, d = G.debug(), us = d.units.filter(u => u.alive && (u.side === 0 || u.vis));
         const cv = document.getElementById('bcv').getBoundingClientRect(), lim = document.getElementById('skillBar').getBoundingClientRect().top - cv.top - 12;
-        const u = d.units.find(x => x.side === 0 && x.alive && !x.reserve);
+        // 画面に映っている自軍の部隊(カメラは寄っているので、端の部隊は画面の外にいることがある)
+        const u = d.units.find(x => x.side === 0 && x.alive && !x.reserve && x.x > 30 && x.x < innerWidth - 30 && x.y > 60 && x.y < lim) || d.units.find(x => x.side === 0 && x.alive && !x.reserve);
         let best = null, bd = -1;
         for (let x = 0.5; x <= 5.5; x += 0.5) for (let y = -0.8; y <= -0.1; y += 0.1) {
           const q = G.mapPoint(x, y);

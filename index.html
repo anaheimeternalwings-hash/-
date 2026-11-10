@@ -4206,11 +4206,12 @@ if (typeof module !== 'undefined') module.exports = TF;
     var FIGSP = { inf: 1.85, at: 2.2, tank: 6.4, art: 7.0 };
     var FIGH = { inf: 2.8, at: 2.8, tank: 4.4, art: 4.2 };
     // 戦場の兵士・車両も描き下ろしの絵(部隊アイコンと同じ絵)で描く。大きさは戦場の単位(幅・高さ)
-    var RAST = { inf: [2.9, 2.7], at: [3.6, 3.0], tank: [8.4, 4.8], art: [8.6, 4.4] };
+    var RAST = { inf: [8.4, 7.8], at: [10.5, 8.6], tank: [23, 13.2], art: [24, 12] };
     var HAS_RAST = ['inf', 'at', 'tank', 'art'].every(function (t) { return ART.has('u.' + t + '.1') && ART.has('u.' + t + '.2') && ART.has('u.' + t + '.3'); });
     if (HAS_RAST) {
-      FIGMAX = { inf: 22, at: 12, tank: 5, art: 4 };
-      FIGSP = { inf: 2.6, at: 3.6, tank: 8.6, art: 9.2 };
+      // 引いた画面でも絵が見えるように、1部隊の数を減らして1体ずつ大きく描く
+      FIGMAX = { inf: 7, at: 5, tank: 3, art: 2 };
+      FIGSP = { inf: 9.6, at: 12.5, tank: 23, art: 25 };
       FIGH = { inf: RAST.inf[1], at: RAST.at[1], tank: RAST.tank[1], art: RAST.art[1] };
     }
     var UIMG = {};
@@ -4249,7 +4250,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     var MAP = { x0: -260, x1: 560, y0: -190, y1: 520 };   // 地面の広さ
     var LANES = [-18, 38, 94, 150, 206, 262, 318], LANEW = 56; // 部隊の列(7列)
     var LMID = 3, COLS = LANES;
-    var ZOOM0 = 0.52;                                     // ふだんの拡大率
+    var ZOOM0 = 0.56;
+    var ZFIT = 0.42;                                      // 部隊を全部入れるときも、これより引かない(兵士の絵が見える大きさ)                                     // ふだんの拡大率
     var ZOOMD = 0.27;                                     // 配置のときは戦場全体を見渡す
     var ZMIN = 0.15, ZMAX = 1.8;                          // 拡大・縮小の範囲(いちばん引くと戦場全体が見える)
     function laneOfX(x) { var b = 0; for (var i = 1; i < LANES.length; i++) if (Math.abs(x - LANES[i]) < Math.abs(x - LANES[b])) b = i; return b; }
@@ -5100,7 +5102,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         var far = 0, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
         B.units.forEach(function (u) { if (u.dead || (u.side === 1 && !u.vis)) return; x0 = Math.min(x0, u.wx); x1 = Math.max(x1, u.wx); y0 = Math.min(y0, u.wy); y1 = Math.max(y1, u.wy); });
         if (x1 >= x0) {
-          var span = Math.max(x1 - x0 + 70, (y1 - y0 + 50) * 1.6), zf = Math.floor(Math.max(0.3, Math.min(ZOOM0, 104 / span)) * 25) / 25;
+          var span = Math.max(x1 - x0 + 70, (y1 - y0 + 50) * 1.6), zf = Math.floor(Math.max(ZFIT, Math.min(ZOOM0, 104 / span)) * 25) / 25;
           z0 = Math.min(ZOOM0, zf);
           tx = CXW + Math.round(Math.max(-90, Math.min(90, (x0 + x1) / 2 - CXW)) / 15) * 15;
         }
@@ -5638,7 +5640,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var spr = SPR[u.side][u.type], ally = u.side === 0;
       var c = proj(u.wx, u.wy);
       if (c.y < -60 || c.y > H + 60 || c.x < -90 || c.x > W + 90) return;
-      var bw = 11 * c.k * u.big * (u.type === 'inf' ? 1 : 0.9);
+      var bw = 11 * c.k * u.big * (u.type === 'inf' ? 1 : 0.9) * (HAS_RAST ? 1.7 : 1);
       if (!u.dead) { cx.fillStyle = 'rgba(0,0,0,.2)'; cx.beginPath(); cx.ellipse(c.x + bw * 0.25, c.y + 1, bw * 1.25, bw * 0.42, 0, 0, Math.PI * 2); cx.fill(); }
       if (!u.dead && u.moving && (u.type === 'tank' || u.type === 'art') && Math.random() < 0.25) part(u.wx + (Math.random() - 0.5) * 10, u.wy + (u.side === 0 ? -3 : 3), { vx: (Math.random() - 0.5) * 10, vy: -6 - Math.random() * 6, life: 0.9, r: 1.6 + Math.random(), c: 'dust' });
       if (!u.dead && B.buff[u.side].atk > B.clock) {
