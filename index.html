@@ -619,6 +619,30 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
 .hero .portrait{width:88px;height:88px}
 .hero .nm{letter-spacing:.04em}
 .hero .ttl{color:var(--amber2);letter-spacing:.06em}
+
+/* ===== 基地: 斜め上から見た立体のジオラマ ===== */
+.grid.iso{display:block;position:relative;padding:0;gap:0;margin-left:-10px;margin-right:-10px;aspect-ratio:1000/790;overflow:visible;clip-path:none;border:0;
+  background:radial-gradient(ellipse at 50% 46%,rgba(56,217,176,.13),transparent 62%);box-shadow:none}
+.grid.iso>svg.ground{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.grid.iso .tile{position:absolute;aspect-ratio:auto;display:block;padding:0;margin:0;border:0;background:none;box-shadow:none;clip-path:none;overflow:visible;pointer-events:none;color:inherit}
+.grid.iso .tile:active{transform:none}
+.grid.iso .tile .hit{position:absolute;inset:0;pointer-events:auto;clip-path:polygon(4% 62.5%,4% 30%,50% 3%,96% 30%,96% 62.5%,72% 76%,72% 100%,28% 100%,28% 76%)}
+.grid.iso .tile .art{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;pointer-events:none;filter:drop-shadow(0 5px 5px rgba(0,0,0,.55));transition:filter .12s}
+.grid.iso .tile:active .art{filter:drop-shadow(0 5px 5px rgba(0,0,0,.55)) brightness(1.3)}
+.grid.iso .tile .plate{position:absolute;z-index:20;left:50%;bottom:-2%;transform:translateX(-50%);display:flex;align-items:stretch;white-space:nowrap;pointer-events:none;
+  background:rgba(5,9,11,.78);border:1px solid rgba(56,217,176,.4);box-shadow:0 1px 4px rgba(0,0,0,.6)}
+.grid.iso .tile.hq .plate{border-color:rgba(245,184,61,.8)}
+.grid.iso .tile .plate .lv{position:static;clip-path:none;border-radius:0;background:rgba(245,184,61,.92);color:#1b1300;font-family:var(--mono);font-size:min(8px,2.1vw);font-weight:800;padding:0 3px;display:flex;align-items:center}
+.grid.iso .tile .plate .nm{position:static;background:none;padding:0 4px 0 3px;font-size:min(8.5px,2.2vw);font-weight:700;letter-spacing:.02em;color:#e6eef1;text-shadow:none;line-height:1.5}
+.grid.iso .tile .up{z-index:21;right:auto;left:74%;top:24%;width:14px;height:12px;pointer-events:none}
+/* 描き下ろしの施設の絵: 建物の足もとが土台の手前の角に来るように置く */
+.grid.iso .tile svg.pic.art{left:9%;width:82%;top:auto;bottom:13%;height:74%;background-position:center bottom}
+.grid.iso .tile .bub{z-index:22;right:auto;left:50%;top:2%;transform:translateX(-50%);white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.6)}
+.grid.iso .tile .store{z-index:20;left:28%;right:28%;bottom:calc(-2% - 4px);height:3px}
+.grid.iso .tile.empty{background:none;border:0}
+.grid.iso .tile.empty .hit{clip-path:polygon(4% 62.5%,50% 36%,96% 62.5%,50% 89%)}
+.grid.iso .tile.empty .plus{position:absolute;left:50%;top:60%;transform:translate(-50%,-62%);font-size:30px;pointer-events:none}
+.grid.iso .tile.empty .lbl{position:absolute;left:50%;top:60%;transform:translate(-50%,62%);font-size:10px;white-space:nowrap;pointer-events:none}
 </style>
 </head>
 <body>
@@ -2855,6 +2879,80 @@ if (typeof module !== 'undefined') module.exports = TF;
       (function () { var t = P(6, -8, Z + 8), u = P(6, -8, Z + 17); return '<path d="M' + f1(t[0]) + ' ' + f1(t[1]) + 'V' + f1(u[1]) + '" stroke="#b9c3c8" stroke-width=".8"/><ellipse cx="' + f1(u[0] + 2) + '" cy="' + f1(u[1] + 1) + '" rx="3.6" ry="1.6" fill="#c9d2d6" transform="rotate(-30 ' + f1(u[0] + 2) + ' ' + f1(u[1] + 1) + ')"/><circle cx="' + f1(u[0]) + '" cy="' + f1(u[1]) + '" r="1" fill="' + TL + '"/>'; })();
     return A;
   })();
+  // 基地のジオラマの座標。幅1000の図の中に、区画(c: 右下へ / r: 左下へ)をひし形に並べる
+  var ISO = (function () {
+    var VW = 1000, VH = 790, HX = 146, HY = 84, X0 = 500, Y0 = 252, S = HX / 0.53;   // S: 施設の絵(正方形)の一辺
+    function f1(v) { return Math.round(v * 10) / 10; }
+    function M(c, r, z) { return [X0 + (c - r) * HX, Y0 + (c + r) * HY - (z || 0)]; }
+    function poly(pts, fill, ex) { return '<path d="M' + pts.map(function (q) { return f1(q[0]) + ' ' + f1(q[1]); }).join('L') + 'Z" fill="' + fill + '"' + (ex || '') + '/>'; }
+    function quad(c0, r0, c1, r1, fill, ex, z) { return poly([M(c0, r0, z), M(c1, r0, z), M(c1, r1, z), M(c0, r1, z)], fill, ex); }
+    function line(a, b, col, w, ex) { return '<path d="M' + f1(a[0]) + ' ' + f1(a[1]) + 'L' + f1(b[0]) + ' ' + f1(b[1]) + '" stroke="' + col + '" stroke-width="' + w + '" fill="none"' + (ex || '') + '/>'; }
+    var E0 = -0.62, E1 = 2.62, TH = 46;   // 台座の端(区画の座標)と厚み
+    function ground(bySlot) {
+      var s = '<svg class="ground" viewBox="0 0 ' + VW + ' ' + VH + '" preserveAspectRatio="xMidYMid meet"><defs>' +
+        '<linearGradient id="isoTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46553b"/><stop offset="1" stop-color="#2f3b29"/></linearGradient>' +
+        '<linearGradient id="isoL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3528"/><stop offset="1" stop-color="#1c1a14"/></linearGradient>' +
+        '<linearGradient id="isoR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a261d"/><stop offset="1" stop-color="#12110d"/></linearGradient>' +
+        '<radialGradient id="isoSh" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>' +
+        '<pattern id="isoHatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><rect width="14" height="14" fill="rgba(56,217,176,.05)"/><rect width="5" height="14" fill="rgba(56,217,176,.12)"/></pattern></defs>';
+      var A = M(E0, E0), B = M(E1, E0), C = M(E1, E1), D = M(E0, E1), c, r, i;
+      // 台座の影・側面(土の層)・上面
+      s += '<ellipse cx="' + X0 + '" cy="' + f1(C[1] + TH + 6) + '" rx="470" ry="62" fill="url(#isoSh)"/>';
+      s += poly([D, C, [C[0], C[1] + TH], [D[0], D[1] + TH]], 'url(#isoL)') + poly([C, B, [B[0], B[1] + TH], [C[0], C[1] + TH]], 'url(#isoR)');
+      for (i = 1; i <= 2; i++) s += line([D[0], D[1] + TH * i / 3], [C[0], C[1] + TH * i / 3], 'rgba(0,0,0,.28)', 2) + line([C[0], C[1] + TH * i / 3], [B[0], B[1] + TH * i / 3], 'rgba(0,0,0,.3)', 2);
+      s += poly([A, B, C, D], 'url(#isoTop)');
+      // 草地のむら
+      var rnd = TF.rngFrom(77);
+      for (i = 0; i < 46; i++) { c = E0 + 0.1 + rnd() * (E1 - E0 - 0.2); r = E0 + 0.1 + rnd() * (E1 - E0 - 0.2); var q = M(c, r), rr = 10 + rnd() * 26; s += '<ellipse cx="' + f1(q[0]) + '" cy="' + f1(q[1]) + '" rx="' + f1(rr) + '" ry="' + f1(rr * 0.5) + '" fill="' + (i % 3 ? '#52633f' : '#26301f') + '" opacity=".22"/>'; }
+      // 区画の間の道(コンクリート)と中央線
+      [0.5, 1.5].forEach(function (k) {
+        s += quad(k - 0.085, E0 + 0.04, k + 0.085, E1 - 0.04, '#5b5a4c') + quad(E0 + 0.04, k - 0.085, E1 - 0.04, k + 0.085, '#5b5a4c');
+      });
+      [0.5, 1.5].forEach(function (k) {
+        s += line(M(k, E0 + 0.1), M(k, E1 - 0.1), 'rgba(235,225,180,.5)', 2.2, ' stroke-dasharray="14 12"') + line(M(E0 + 0.1, k), M(E1 - 0.1, k), 'rgba(235,225,180,.5)', 2.2, ' stroke-dasharray="14 12"');
+      });
+      // 外周の道
+      s += poly([A, B, C, D], 'none', ' stroke="#55544a" stroke-width="16" stroke-linejoin="round" opacity=".55"');
+      // 区画の土台(コンクリートの板。まだ何もない区画は点線の枠)
+      for (i = 0; i < 9; i++) {
+        c = i % 3; r = Math.floor(i / 3);
+        var h = 0.405, id = bySlot[i];
+        if (id) {
+          s += quad(c - h, r - h, c + h, r + h, 'rgba(0,0,0,.35)', '', -7);
+          s += poly([M(c - h, r + h), M(c + h, r + h), M(c + h, r + h, -8), M(c - h, r + h, -8)], '#20282d') + poly([M(c + h, r + h), M(c + h, r - h), M(c + h, r - h, -8), M(c + h, r + h, -8)], '#161c20');
+          s += quad(c - h, r - h, c + h, r + h, id === 'hq' ? '#3a4046' : '#333d43', ' stroke="' + (id === 'hq' ? 'rgba(245,184,61,.75)' : 'rgba(150,170,180,.28)') + '" stroke-width="' + (id === 'hq' ? 3 : 2) + '"');
+        } else {
+          s += quad(c - h, r - h, c + h, r + h, 'url(#isoHatch)', ' stroke="rgba(56,217,176,.7)" stroke-width="2.5" stroke-dasharray="12 9"');
+        }
+      }
+      // 奥の2辺の柵(支柱と金網)
+      var posts = '', top = [], n = 13;
+      [[E0, E0, E1, E0], [E0, E0, E0, E1]].forEach(function (e, k) {
+        var pts = [];
+        for (i = 0; i <= n; i++) { c = e[0] + (e[2] - e[0]) * i / n; r = e[1] + (e[3] - e[1]) * i / n; var p0 = M(c, r), p1 = M(c, r, 30); pts.push(p1); posts += line(p0, p1, '#8f9a8a', 3); }
+        s += '<path d="M' + pts.map(function (q) { return f1(q[0]) + ' ' + f1(q[1]); }).join('L') + '" stroke="#a9b3a3" stroke-width="2" fill="none"/>' +
+          '<path d="M' + pts.map(function (q) { return f1(q[0]) + ' ' + f1(q[1] + 13); }).join('L') + '" stroke="rgba(169,179,163,.55)" stroke-width="1.5" fill="none"/>';
+      });
+      s += posts;
+      // 奥の角の監視塔と旗
+      var tw = M(E0 + 0.13, E0 + 0.13);
+      s += '<path d="M' + f1(tw[0] - 9) + ' ' + f1(tw[1]) + 'L' + f1(tw[0] - 6) + ' ' + f1(tw[1] - 58) + 'M' + f1(tw[0] + 9) + ' ' + f1(tw[1]) + 'L' + f1(tw[0] + 6) + ' ' + f1(tw[1] - 58) + 'M' + f1(tw[0] - 8) + ' ' + f1(tw[1] - 20) + 'L' + f1(tw[0] + 7) + ' ' + f1(tw[1] - 40) + 'M' + f1(tw[0] + 8) + ' ' + f1(tw[1] - 20) + 'L' + f1(tw[0] - 7) + ' ' + f1(tw[1] - 40) + '" stroke="#6f7a6c" stroke-width="3" fill="none"/>' +
+        '<rect x="' + f1(tw[0] - 15) + '" y="' + f1(tw[1] - 78) + '" width="30" height="20" fill="#4a5347" stroke="#2c332a" stroke-width="2"/><path d="M' + f1(tw[0] - 19) + ' ' + f1(tw[1] - 78) + 'L' + f1(tw[0]) + ' ' + f1(tw[1] - 92) + 'L' + f1(tw[0] + 19) + ' ' + f1(tw[1] - 78) + 'Z" fill="#39413a"/>' +
+        '<rect x="' + f1(tw[0] - 9) + '" y="' + f1(tw[1] - 72) + '" width="18" height="7" fill="#ffc35a" opacity=".85"/>';
+      // 手前の2辺の縁(警告色の縞)と灯り
+      s += line(D, C, '#d99a26', 5, ' stroke-dasharray="18 14"') + line(C, B, '#a8761d', 5, ' stroke-dasharray="18 14"');
+      [[D, C], [C, B]].forEach(function (e) { for (i = 1; i < 6; i++) { var x = e[0][0] + (e[1][0] - e[0][0]) * i / 6, y = e[0][1] + (e[1][1] - e[0][1]) * i / 6; s += '<circle cx="' + f1(x) + '" cy="' + f1(y - 3) + '" r="9" fill="#ffc35a" opacity=".16"/><circle cx="' + f1(x) + '" cy="' + f1(y - 3) + '" r="3" fill="#ffe2a0"/>'; } });
+      // 上面の縁の光
+      s += poly([A, B, C, D], 'none', ' stroke="rgba(56,217,176,.55)" stroke-width="2"');
+      return s + '</svg>';
+    }
+    // 区画 i の施設の絵(正方形)を置く位置。土台の中心が絵の(50%, 62.5%)に来る
+    function tileStyle(i) {
+      var c = i % 3, r = Math.floor(i / 3), q = M(c, r);
+      return 'left:' + f1((q[0] - S / 2) / VW * 100) + '%;top:' + f1((q[1] - S * 0.625) / VH * 100) + '%;width:' + f1(S / VW * 100) + '%;height:' + f1(S / VH * 100) + '%';
+    }
+    return { ground: ground, tileStyle: tileStyle, VW: VW, VH: VH };
+  })();
   function bSvg(id) { return ART.has('b.' + id) ? ART.svg('b.' + id, 'art') : '<svg viewBox="0 0 64 64" class="art">' + BART[id] + '</svg>'; }
 
   // ====== 指揮官・敵将の肖像(軍の身上書ふう: 斜めの光・顔の影・輪郭の光) ======
@@ -3149,13 +3247,14 @@ if (typeof module !== 'undefined') module.exports = TF;
     var html = '<div class="hint"><span class="tag">指令</span><span>' + esc(nextGoal()) + '</span></div>';
     html += '<div class="collect card"><div class="info">貯まっている資源<br><b class="num">' + icoMoneyInline() + '<span id="cM">' + fmt(gm) + '</span></b>  <b class="num">' + icoSteelInline() + '<span id="cS">' + fmt(gs) + '</span></b>' +
       '<br>放置上限 ' + TF.capHours(st) + '時間</div><button class="btn green" id="btnCollect" data-act="collect"' + (gm + gs > 0 ? '' : ' disabled') + '>回収</button></div>';
-    html += '<div class="grid" id="grid">';
     var bySlot = {};
     Object.keys(st.bld).forEach(function (k) { bySlot[st.bld[k].slot] = k; });
+    // 基地は斜め上から見た立体のジオラマ: 台座の上に 3×3 の区画をひし形に並べ、奥の施設から順に重ねる
+    html += '<div class="grid iso" id="grid">' + ISO.ground(bySlot);
     for (var i = 0; i < 9; i++) {
-      var id = bySlot[i];
+      var id = bySlot[i], ipos = ISO.tileStyle(i);
       if (!id) {
-        html += '<button class="tile empty" data-act="tile" data-slot="' + i + '"><div class="plus">+</div><div class="lbl">建設</div></button>';
+        html += '<button class="tile empty" data-act="tile" data-slot="' + i + '" style="' + ipos + '"><i class="hit"></i><div class="plus">+</div><div class="lbl">建設</div></button>';
         continue;
       }
       var b = st.bld[id];
@@ -3168,8 +3267,8 @@ if (typeof module !== 'undefined') module.exports = TF;
         extra += '<div class="bub' + (si.full ? ' full' : '') + (si.stored >= 1 ? '' : ' hidden') + '" id="bub-' + id + '">' + (id === 'supply' ? icoMoney() : icoSteel()) + '<span>' + fmt(si.stored) + '</span></div>';
         up = false;
       }
-      html += '<button class="tile' + (id === 'hq' ? ' hq' : '') + '" data-act="tile" data-slot="' + i + '">' + bSvg(id) +
-        '<div class="nm">' + TF.BLD[id].name + '</div><div class="lv">Lv' + b.lv + '</div>' + (up ? '<div class="up">↑</div>' : '') + extra + '</button>';
+      html += '<button class="tile' + (id === 'hq' ? ' hq' : '') + '" data-act="tile" data-slot="' + i + '" style="' + ipos + '"><i class="hit"></i>' + bSvg(id) +
+        '<div class="plate"><div class="lv">Lv' + b.lv + '</div><div class="nm">' + TF.BLD[id].name + '</div></div>' + (up ? '<div class="up">↑</div>' : '') + extra + '</button>';
     }
     html += '</div>';
     var power = TF.formSquads(st, st.form).reduce(function (a, q) { return a + q.power; }, 0);

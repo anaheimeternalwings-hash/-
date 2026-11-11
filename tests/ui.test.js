@@ -918,6 +918,30 @@ function midState(over) {
     assert((await page.textContent('#scr-army')).includes('桜井 ユイ'), '部隊タブに出ない');
   }, midState({ oldSave: true, cleared: 60, sel: 61, heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 25, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
+  await test('基地は立体のジオラマ: 9つの区画が台座の上にひし形に並び、奥の施設が上・手前の施設が下。施設をタップするとその施設が開く', () => withPage('iPhone 13', async page => {
+    assert(await page.isVisible('#grid.iso svg.ground'), '台座がない');
+    const pos = await page.evaluate(() => [...document.querySelectorAll('#grid .tile')].map(e => { const r = e.getBoundingClientRect(); return { slot: +e.dataset.slot, x: r.left + r.width / 2, y: r.top + r.height * 0.625, w: r.width }; }));
+    assert.strictEqual(pos.length, 9);
+    const P = i => pos.find(p => p.slot === i);
+    // 区画0がいちばん奥(上)、4(司令部)が中央、8がいちばん手前(下)。2が右の角、6が左の角
+    assert(P(0).y < P(4).y - 20 && P(4).y < P(8).y - 20, '奥から手前へ並んでいない');
+    assert(Math.abs(P(0).x - P(4).x) < 2 && Math.abs(P(4).x - P(8).x) < 2, '中央の列がそろっていない');
+    assert(P(6).x < P(4).x - 60 && P(2).x > P(4).x + 60 && Math.abs(P(6).y - P(2).y) < 2 && Math.abs(P(2).y - P(4).y) < 2, '左右の角の位置');
+    // 施設の絵の中心・土台の中心をタップすると、その区画の施設が開く(手前の施設に隠れた所は手前の施設が開く)
+    const names = await page.evaluate(() => { const st = window.__game.state, by = {}; Object.keys(st.bld).forEach(k => { by[st.bld[k].slot] = window.__game.TF.BLD[k].name; }); return by; });
+    for (const i of [0, 4, 8, 2, 6]) {
+      for (const fy of [0.5, 0.625]) {
+        await page.mouse.click(P(i).x, P(i).y + (fy - 0.625) * P(i).w);
+        await page.waitForSelector('#sheetWrap:not(.hidden)');
+        const tx = await page.textContent('#sheet');
+        assert(tx.includes(names[i] || '建設'), '区画' + i + 'をタップして別のものが開いた: ' + tx.slice(0, 20));
+        await page.click('.sheet .close');
+        await page.waitForSelector('#sheetWrap', { state: 'hidden' });
+      }
+    }
+    await noHorizontalScroll(page);
+  }, midState({})));
+
   await test('施設の強化で資源が減り、レベルが上がる', () => withPage('iPhone 13', async page => {
     const before = await state(page);
     await page.click('[data-act="tile"][data-slot="1"]');
