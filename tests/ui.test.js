@@ -244,17 +244,25 @@ function midState(over) {
     assert(!(await page.isVisible('#btnAuto.on')), 'AUTOがONのまま');
     await page.waitForFunction(() => window.__game.battle.debug().phase === 'fight');
     // 自軍の部隊から敵の部隊へドラッグ(見えている敵だけ狙える。索敵範囲に入るまで待つ)
-    await page.waitForFunction(() => window.__game.battle.debug().units.some(u => u.side === 1 && u.alive && u.vis), null, { timeout: 15000 });
+    // (カメラは寄っているので、画面に映っている部隊どうしで。なぞっている間にやられたらやり直す)
+    const onScr = `(u => u.x > 24 && u.x < innerWidth - 24 && u.y > 70 && u.y < document.getElementById('skillBar').getBoundingClientRect().top - document.getElementById('bcv').getBoundingClientRect().top - 12)`;
+    await page.waitForFunction(f => { const on = eval(f), us = window.__game.battle.debug().units; return us.some(u => u.side === 1 && u.alive && u.vis && on(u)) && us.some(u => u.side === 0 && u.alive && !u.reserve && on(u)); }, onScr, { timeout: 20000 });
     await page.waitForTimeout(300);
-    const dbg = await page.evaluate(() => window.__game.battle.debug());
     const box = await page.evaluate(() => { const r = document.getElementById('bcv').getBoundingClientRect(); return { x: r.left, y: r.top }; });
-    const a = dbg.units.find(u => u.side === 0 && u.alive), e = dbg.units.filter(u => u.side === 1 && u.alive && u.vis).pop();
-    await page.mouse.move(box.x + a.x, box.y + a.y - 6);
-    await page.mouse.down();
-    for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + a.x + (e.x - a.x) * i / 6, box.y + a.y - 6 + (e.y - a.y) * i / 6);
-    await page.mouse.up();
-    const d2 = await page.evaluate(() => window.__game.battle.debug());
-    assert.strictEqual(d2.units.find(u => u.id === a.id).order, e.id, '攻撃指示が入っていない');
+    let ordered = false;
+    for (let tries = 0; tries < 4 && !ordered; tries++) {
+      const pick = await page.evaluate(f => { const on = eval(f), us = window.__game.battle.debug().units; return { a: us.find(u => u.side === 0 && u.alive && !u.reserve && on(u)), e: us.filter(u => u.side === 1 && u.alive && u.vis && on(u)).pop() }; }, onScr);
+      if (!pick.a || !pick.e) { await page.waitForTimeout(500); continue; }
+      const a = pick.a, e = pick.e;
+      await page.mouse.move(box.x + a.x, box.y + a.y - 6);
+      await page.mouse.down();
+      for (let i = 1; i <= 6; i++) await page.mouse.move(box.x + a.x + (e.x - a.x) * i / 6, box.y + a.y - 6 + (e.y - a.y) * i / 6);
+      await page.mouse.up();
+      const d2 = await page.evaluate(() => window.__game.battle.debug());
+      const a2 = d2.units.find(u => u.id === a.id), e2 = d2.units.find(u => u.id === e.id);
+      if (a2.alive && e2.alive) { assert.strictEqual(a2.order, e.id, '攻撃指示が入っていない'); ordered = true; }
+    }
+    assert(ordered, '攻撃指示を試せなかった');
     // 手動ではスキルは勝手に発動しない。たまったらボタンで発動
     await page.waitForFunction(() => {
       const d = window.__game.battle.debug();
@@ -395,6 +403,7 @@ function midState(over) {
 
   await test('配置: 出撃すると広大な戦場で部隊を配置。敵は索敵範囲に入るまで見えない。ドラッグで自軍の側の好きな場所(列の間・前後も)に置ける。戦闘開始で置いた場所から戦う', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
+    const wrSortie = parseInt((await page.textContent('.winbox .wr')).replace(/[^0-9]/g, ' ').trim().split(' ')[0], 10);
     // 混成の編成で(おまかせ編成は使わない)
     await page.click('[data-act="sortie"]');
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
@@ -402,9 +411,12 @@ function midState(over) {
     const txt = await page.textContent('#deployBar');
     let d = await page.evaluate(() => window.__game.battle.debug());
     assert(d.terrain.blobs.length >= 6, '地形の区域がない');
-    // 敵は索敵範囲に入るまで見えない(配置中はどこにも見えない)。予想勝率は敵の布陣を想定したもの
+    // 敵は索敵範囲に入るまで見えない(配置中はどこにも見えない)。
+    // 予想勝率は、おまかせ配置のままなら出撃画面と同じ数字(部隊を動かすと、その分だけ上下する)
     assert(d.units.filter(u => u.side === 1).every(u => !u.vis), '配置中に敵が見えている');
-    await page.waitForFunction(() => (document.getElementById('dpWr') || {}).textContent.includes('想定'), null, { timeout: 8000 });
+    await page.waitForFunction(() => /予想勝率 \d+%/.test((document.getElementById('dpWr') || {}).textContent || ''), null, { timeout: 8000 });
+    const wrDeploy = parseInt((await page.textContent('#dpWr')).match(/予想勝率 (\d+)%/)[1], 10);
+    assert.strictEqual(wrDeploy, wrSortie, '配置画面の予想勝率が出撃画面と違う ' + wrDeploy + ' / ' + wrSortie);
     const names = await page.evaluate(() => Object.keys(window.__game.TF.TERRAIN).map(k => window.__game.TF.TERRAIN[k].name));
     assert(names.some(n => txt.includes(n)), '地形の説明が出ない');
     const allies = d.units.filter(u => u.side === 0);
@@ -873,7 +885,7 @@ function midState(over) {
   }, midState({ cleared: 45, sel: 46, parts: { 1: 2, 2: 1, 3: 1, 4: 2 } })));
 
   await test('絵: 指揮官・敵将の顔は描き下ろしの絵(ファイルに埋め込み・外部から読まない)。小さい枠では顔に寄せる。部隊アイコンが描き下ろしなら敵は左右反転', () => withPage('iPhone 13', async page => {
-    const isArt = 's => !!s && s.classList.contains("art") && getComputedStyle(s).backgroundImage.startsWith("url(\\"data:image/webp")';
+    const isArt = 's => !!s && s.classList.contains("pic") && getComputedStyle(s).backgroundImage.startsWith("url(\\"data:image/webp")';
     await page.click('[data-act="tab"][data-tab="army"]');
     const r = await page.evaluate(f => { const ok = eval(f); const ps = [...document.querySelectorAll('#scr-army .card.hero .portrait svg')]; return { n: ps.length, art: ps.filter(ok).length }; }, isArt);
     assert.strictEqual(r.n, 10, '指揮官の顔が10人分ない');
@@ -881,9 +893,9 @@ function midState(over) {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     assert(await page.evaluate(f => eval(f)(document.querySelector('#ecmdInfo .eportrait svg')), isArt), '敵将の顔が描き下ろしでない');
     await page.click('[data-act="auto"]');
-    const z = await page.evaluate(() => { const s = document.querySelector('.slot .portrait.xs svg.art'); return s ? getComputedStyle(s).backgroundSize : null; });
+    const z = await page.evaluate(() => { const s = document.querySelector('.slot .portrait.xs svg.pic'); return s ? getComputedStyle(s).backgroundSize : null; });
     assert(z && z.startsWith('175%'), '小さい枠で顔に寄らない ' + z);
-    const u = await page.evaluate(() => { const en = document.querySelector('.slot svg.art.en'), al = document.querySelector('.slot svg.art.al'); return { en: en ? getComputedStyle(en).transform : null, al: !!al }; });
+    const u = await page.evaluate(() => { const en = document.querySelector('.slot svg.pic.en'), al = document.querySelector('.slot svg.pic.al'); return { en: en ? getComputedStyle(en).transform : null, al: !!al }; });
     if (u.al) assert(u.en && u.en.startsWith('matrix(-1'), '敵の部隊アイコンが左右反転しない ' + JSON.stringify(u));
   }, midState({ cleared: 13, sel: 14 })));
 

@@ -226,5 +226,27 @@
    "m.sforest",
    "m.base"
   ]
+ },
+ "B1": {
+  "strip": 9,
+  "keys": [
+   "b.hq",
+   "b.barracks",
+   "b.factory",
+   "b.atpost",
+   "b.artpost",
+   "b.lab",
+   "b.supply",
+   "b.steel",
+   "b.depot"
+  ]
+ },
+ "S1": {
+  "strip": 3,
+  "keys": [
+   "s.heli",
+   "s.air",
+   "s.drone"
+  ]
  }
 }

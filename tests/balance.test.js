@@ -1,6 +1,8 @@
 // バランス自動テスト
 //   node tests/balance.test.js          … 標準(ステージ120まで)
 //   STAGES=200 node tests/balance.test.js … より長く
+//   JOBS=1 node tests/balance.test.js   … 通しプレイを1つずつ動かす(ふだんは CPU の数まで並列)
+//   RULES=0 node tests/balance.test.js  … ルールの確認を飛ばして、通しプレイだけ
 //
 // index.html の <script id="logic"> をそのまま取り出して動かすので、
 // ゲーム本体と同じ計算でテストされます。
@@ -8,6 +10,8 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('assert');
+const os = require('os');
+const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
 const HTML = path.join(__dirname, '..', 'index.html');
 function loadTF() {
@@ -21,7 +25,11 @@ const K = TF.K;
 const STEEL_PRICE = 1.6;
 
 let failures = 0;
+// 通しプレイは別スレッドで並列に動かす(スレッドの中では、ルールの確認はしない)
+const RULES = isMainThread && process.env.RULES !== '0';
+let section = 'rules';
 function check(name, fn) {
+  if (section === 'rules' && !RULES) return;
   try { fn(); console.log('  ✔ ' + name); }
   catch (e) { failures++; console.log('  ✘ ' + name + '\n      ' + e.message); }
 }
@@ -29,7 +37,7 @@ function check(name, fn) {
 // ---------------------------------------------------------------
 // 1. ルールの確認
 // ---------------------------------------------------------------
-console.log('\n[ルール]');
+if (RULES) console.log('\n[ルール]');
 check('相性: 歩兵は対戦車兵と砲兵に強く、戦車に弱い', () => {
   assert(TF.AFF.inf.at > 1 && TF.AFF.inf.art > 1 && TF.AFF.inf.tank < 1);
 });
@@ -164,9 +172,19 @@ check('新しいスキルの効果: 回復・連射・煙幕・撃ち返し・�
   assert(!base.ev.some(e => e.k === 'refl'));
   const air = sk(run('amagi')).find(e => e.sk === 'air');
   assert(air && air.hits.length >= 2, '爆撃要請がまとめて当たらない');
+  // 弱点看破: しばらくの間、隠れている敵もすべて見え、敵全体の被ダメージが増える
   const mb = run('ayase'), mkEv = sk(mb).find(e => e.sk === 'mark');
-  const foes = mb.U.filter(u => u.side === 1);
-  assert(mkEv && mb.U[mkEv.d].atk === Math.max(...foes.map(u => u.atk)), '弱点看破がいちばん強い敵を狙わない');
+  assert(mkEv && mkEv.dur === TF.SKILL.mark.dur, '弱点看破が発動しない');
+  {
+    const T = TF.flatTerrain(), mkq = (t, lane, o) => Object.assign({ type: t, maxHp: 1e6, atk: 1, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+    const b2 = TF.createBattle([mkq('inf', 0, { adv: 0, hold: true, hero: 'ayase' })], [mkq('art', 6, { adv: 0, hold: true })], 3, { record: true, terrain: T });
+    b2.step(1);
+    assert(!b2.seen(0, 1), '発動の前から見えている');
+    b2.step(TF.SKILL.mark.first + 1.5);
+    assert(b2.seen(0, 1), '弱点看破で隠れている敵が見えない');
+    b2.step(TF.SKILL.mark.first + 1 + TF.SKILL.mark.dur + 1);
+    assert(!b2.seen(0, 1), '効果が切れても見えている');
+  }
 });
 check('ステージは上限なく続く(ステージ5000でも敵・報酬が有限で戦闘できる)', () => {
   [1, 10, 100, 1000, 5000].forEach(s => {
@@ -582,21 +600,25 @@ check('敵の連携: ステージごとに作戦(待ち伏せ・総攻撃・陽�
   }
   assert(reached >= 4, '回り込んで後ろまで来ない ' + reached);
   assert(artHits > 0, '回り込んだ部隊が砲兵を撃たない');
-  // 集中攻撃: 敵の弾は、見えている自軍の部隊の一部に集まる(自軍よりも偏る)
-  let sTop = 0, pTop = 0;
-  for (let seed = 1; seed <= 6; seed++) {
-    const b = TF.createBattle(pb.p, pb.e, seed, { record: true, terrain: pb.terrain, reserves: pb.reserves, posts: true });
-    b.step(Infinity);
-    for (const side of [1, 0]) {
+  // 集中攻撃: 敵の弾は、見えている自軍の部隊の一部に集まる(集中の仕組みを切ったときよりも偏る)
+  const topShare = () => {
+    let sum = 0;
+    for (let seed = 1; seed <= 6; seed++) {
+      const b = TF.createBattle(pb.p, pb.e, seed, { record: true, terrain: pb.terrain, reserves: pb.reserves, posts: true });
+      b.step(Infinity);
       const by = {};
-      b.ev.filter(e => e.k === 'atk' && b.U[e.s].side === side && e.t < 12).forEach(e => { const k = Math.floor(e.t / 2) + ':' + e.d; by[k] = (by[k] || 0) + 1; });
+      b.ev.filter(e => e.k === 'atk' && b.U[e.s].side === 1 && e.t < 12).forEach(e => { const k = Math.floor(e.t / 2) + ':' + e.d; by[k] = (by[k] || 0) + 1; });
       const win = {}; Object.keys(by).forEach(k => { const w = k.split(':')[0]; win[w] = win[w] || []; win[w].push(by[k]); });
       const share = Object.values(win).map(a => Math.max(...a) / a.reduce((x, y) => x + y, 0));
-      const m = share.reduce((x, y) => x + y, 0) / Math.max(1, share.length);
-      if (side === 1) sTop += m; else pTop += m;
+      sum += share.reduce((x, y) => x + y, 0) / Math.max(1, share.length);
     }
-  }
-  assert(sTop > pTop, '敵の集中攻撃が自軍より偏らない ' + sTop.toFixed(2) + ' ' + pTop.toFixed(2));
+    return sum;
+  };
+  const fw = K.focusW, sTop = topShare();
+  K.focusW = 1;
+  let pTop;
+  try { pTop = topShare(); } finally { K.focusW = fw; }
+  assert(sTop > pTop, '敵の集中攻撃が偏らない(集中あり ' + sTop.toFixed(2) + ' / なし ' + pTop.toFixed(2) + ')');
 });
 check('マップの型: ステージごとに地形の並び方が変わる(9ステージで9種類すべて・となりのステージとは違う型)。拠点の場所も毎回違う', () => {
   const keys = Object.keys(TF.LAYOUTS);
@@ -653,7 +675,7 @@ check('布陣は見えない: おまかせ配置・配置中の予想勝率は�
   const p1 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 0 })), s), p2 = TF.prepareBattle(st, f.map(x => Object.assign({}, x, { lane: 6 })), s);
   assert.deepStrictEqual(p1.e.map(e => e.lane), p2.e.map(e => e.lane), '敵の布陣がこちらの配置で変わった');
 });
-check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、範囲に入るまで敵味方とも見えない。見えない敵は狙わない。攻撃している間は位置が見える(砲兵は観測している敵だけ撃てる)。時間がたつだけでは見つからず、部隊を動かして探す', () => {
+check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、範囲に入るまで敵味方とも見えない。見えない敵は狙わない。攻撃している間は位置が見える(砲兵は観測している敵か、近くの味方が誘導できる敵だけ撃てる)。時間がたつだけでは見つからず、部隊を動かして探す', () => {
   // 索敵範囲は兵種ごと(歩兵がいちばん広く、砲兵がいちばん狭い)。見つかりやすさも兵種ごと(対戦車兵がいちばん見つかりにくく、戦車がいちばん目立つ)
   assert(K.det.inf > K.det.at && K.det.at > K.det.tank && K.det.tank > K.det.art && K.det.art > 0);
   assert(K.sig.at < K.sig.inf && K.sig.inf < K.sig.art && K.sig.art < K.sig.tank);
@@ -690,7 +712,8 @@ check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、�
     if (!shot) assert(!b.seen(1, 0, tt), '撃つ前の砲兵が見えている');
   }
   assert(shot && b.seen(1, 0, shot.t + 0.01), '撃った砲兵が見つからない');
-  // 攻撃して位置がばれた敵は近くの部隊が狙えるが、砲兵は味方が索敵範囲で見つけている(観測している)敵しか撃てない
+  // 攻撃して位置がばれた敵は近くの部隊が狙える。砲兵は、味方が索敵範囲で見つけている(観測している)敵か、
+  // 位置がばれた敵のうち近くの味方(砲兵以外)が着弾を誘導できる敵だけ撃てる(味方が近くにいない敵は撃てない)
   {
     const m2 = (t, lane, o) => mk(t, lane, Object.assign({ maxHp: 1e9 }, o || {}));
     const ob = TF.createBattle([m2('art', 0, { adv: 0.1 }), m2('tank', 3, { adv: 0.95 })], [m2('inf', 3, { adv: 0, hold: true }), m2('art', 6, { adv: 0 })], 5, { record: true, terrain: T, auto: false });
@@ -699,7 +722,9 @@ check('索敵: 兵種ごとに索敵範囲と見つかりにくさが違い、�
     assert(ob.ev.some(e => e.k === 'atk' && e.s >= 2), '敵が撃っていない');
     assert(ob.seen(0, 2, 20) && ob.seen(0, 3, 20), '攻撃している敵が見えない');
     assert(ob.ev.some(e => e.k === 'atk' && e.s === 1), '位置がばれた敵を戦車が撃たない');
-    assert(!ob.ev.some(e => e.k === 'atk' && e.s === 0), '観測していない敵を砲兵が撃った');
+    assert(K.artSpot >= 1.5 && K.artSpot <= 2.5, '誘導できる距離 ' + K.artSpot);
+    assert(ob.ev.some(e => e.k === 'atk' && e.s === 0 && e.d === 2), '近くの味方が誘導できる敵を砲兵が撃たない');
+    assert(!ob.ev.some(e => e.k === 'atk' && e.s === 0 && e.d === 3), '味方が近くにいない敵を砲兵が撃った');
   }
   // 見つかりにくさ: 同じ距離でも、戦車は見えて対戦車兵は見えない
   const pair = ft => { const c = TF.createBattle([mk('inf', 3, { adv: 0.9 })], [mk(ft, 3, { adv: 0.2, hold: true })], 7, { terrain: T }); return c; };
@@ -1042,21 +1067,48 @@ function report(label, res) {
 }
 
 const TARGET = +process.env.STAGES || 120;
-console.log(`\n[自動プレイ] ステージ${TARGET}まで(プレイヤーの方針を変えて4通り)`);
+section = 'play';
+// 通しプレイの一覧(それぞれ別スレッドで動かす)
+const PLAYS = [
+  { key: 'greedy', label: '堅実なプレイヤー(相性を見て強化)', opt: { target: TARGET, maxBattles: 20000 } },
+  // 気まぐれなプレイヤーは、乱数しだいで買う強化が大きく変わる(詰まり方も乱数で大きく違う)ので、3通りの乱数で調べる
+  ...[0, 1, 2].map(k => ({ key: 'random' + k, label: '気まぐれなプレイヤー(欲しい強化をランダムに決めて貯める)・乱数' + (k + 1), opt: { target: TARGET, maxBattles: 20000, strategy: 'random', seedOff: k } })),
+  { key: 'mono', label: '戦車ひと筋のプレイヤー(相性を無視)', opt: { target: Math.min(TARGET, 100), maxBattles: 20000, strategy: 'mono' } },
+  { key: 'idle', label: '放置派(30戦ごとに4時間放置・生産施設あり)', opt: { target: Math.min(TARGET, 80), maxBattles: 20000, production: true, sessionBattles: 30, idleMs: 4 * 3600e3 } },
+  { key: 'active80', label: null, opt: { target: Math.min(TARGET, 80), maxBattles: 20000 } }
+];
+if (!isMainThread) {
+  parentPort.postMessage(playthrough(workerData.opt));
+} else {
+  runAll().catch(e => { console.error(e); process.exit(1); });
+}
+function runPlays() {
+  const jobs = Math.max(1, Math.min(PLAYS.length, +process.env.JOBS || os.cpus().length));
+  const out = {}, queue = PLAYS.slice();
+  return new Promise((resolve, reject) => {
+    let running = 0;
+    const next = () => {
+      if (!queue.length && !running) return resolve(out);
+      while (running < jobs && queue.length) {
+        const p = queue.shift();
+        running++;
+        const w = new Worker(__filename, { workerData: { opt: p.opt } });
+        w.once('message', r => { out[p.key] = r; console.log(`    (${p.label || '比較用: 放置なしでステージ' + p.opt.target + 'まで'} が終わりました: ${r.battles}戦)`); });
+        w.once('error', reject);
+        w.once('exit', code => { running--; if (code !== 0 && !out[p.key]) reject(new Error(p.key + ' が異常終了 ' + code)); else next(); });
+      }
+    };
+    next();
+  });
+}
+async function runAll() {
+console.log(`\n[自動プレイ] ステージ${TARGET}まで(プレイヤーの方針を変えて4通り。${Math.max(1, Math.min(PLAYS.length, +process.env.JOBS || os.cpus().length))}つずつ並列)`);
 const t0 = Date.now();
-
-const greedy = playthrough({ target: TARGET, maxBattles: 20000 });
-report('堅実なプレイヤー(相性を見て強化)', greedy);
-// 気まぐれなプレイヤーは、乱数しだいで買う強化が大きく変わる(詰まり方も乱数で大きく違う)ので、3通りの乱数で調べる
-const randoms = [0, 1, 2].map(k => playthrough({ target: TARGET, maxBattles: 20000, strategy: 'random', seedOff: k }));
-randoms.forEach((r, k) => report('気まぐれなプレイヤー(欲しい強化をランダムに決めて貯める)・乱数' + (k + 1), r));
+const R = await runPlays();
+const greedy = R.greedy, randoms = [R.random0, R.random1, R.random2], mono = R.mono, idle = R.idle, active80 = R.active80;
+PLAYS.forEach(p => { if (p.label) report(p.label, R[p.key]); });
 const random = randoms[0];
 const randomStuck = randoms.map(r => r.stuckMax).sort((a, b) => a - b);
-const mono = playthrough({ target: Math.min(TARGET, 100), maxBattles: 20000, strategy: 'mono' });
-report('戦車ひと筋のプレイヤー(相性を無視)', mono);
-const idle = playthrough({ target: Math.min(TARGET, 80), maxBattles: 20000, production: true, sessionBattles: 30, idleMs: 4 * 3600e3 });
-const active80 = playthrough({ target: Math.min(TARGET, 80), maxBattles: 20000 });
-report('放置派(30戦ごとに4時間放置・生産施設あり)', idle);
 
 console.log('\n[判定]');
 check('どの方針でも目標ステージに到達する(永久に詰まらない)', () => {
@@ -1094,3 +1146,4 @@ check('戦闘はほぼ決着がつく(時間切れ1%未満)', () => {
 console.log(`\n(${((Date.now() - t0) / 1000).toFixed(0)}秒)`);
 if (failures) { console.log(`\n${failures}件の失敗`); process.exit(1); }
 console.log('\nすべて合格');
+}

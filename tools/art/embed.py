@@ -22,6 +22,9 @@ def embed(html):
     MK = ['m.grass', 'm.forest', 'm.mount', 'm.desert', 'm.dforest', 'm.lake', 'm.snow', 'm.sforest', 'm.base']
     if any(x not in A['img'] for x in MK):
         for x in MK: A['img'].pop(x, None); A['meta'].pop(x, None)
+    for ks in (['b.hq', 'b.barracks', 'b.factory', 'b.atpost', 'b.artpost', 'b.lab', 'b.supply', 'b.steel', 'b.depot'], ['s.heli', 's.air', 's.drone']):
+        if any(x not in A['img'] for x in ks):
+            for x in ks: A['img'].pop(x, None); A['meta'].pop(x, None)
     a, b = '/*ART*/', '/*ENDART*/'
     assert html.count(a) == 1 and html.count(b) == 1
     i, j = html.index(a) + len(a), html.index(b)
