@@ -4407,12 +4407,12 @@ if (typeof module !== 'undefined') module.exports = TF;
     var FIGSP = { inf: 1.85, at: 2.2, tank: 6.4, art: 7.0 };
     var FIGH = { inf: 2.8, at: 2.8, tank: 4.4, art: 4.2 };
     // 戦場の兵士・車両も描き下ろしの絵(部隊アイコンと同じ絵)で描く。大きさは戦場の単位(幅・高さ)
-    var RAST = { inf: [8.4, 7.8], at: [10.5, 8.6], tank: [23, 13.2], art: [24, 12] };
+    var RAST = { inf: [4.4, 4.1], at: [5.5, 4.5], tank: [12, 6.9], art: [12.4, 6.2] };  // 描くときは FIGS 倍(歩兵で幅6.8・戦車で幅18.6ほど。家は幅6〜11)
     var HAS_RAST = ['inf', 'at', 'tank', 'art'].every(function (t) { return ART.has('u.' + t + '.1') && ART.has('u.' + t + '.2') && ART.has('u.' + t + '.3'); });
     if (HAS_RAST) {
-      // 引いた画面でも絵が見えるように、1部隊の数を減らして1体ずつ大きく描く
-      FIGMAX = { inf: 7, at: 5, tank: 3, art: 2 };
-      FIGSP = { inf: 9.6, at: 12.5, tank: 23, art: 25 };
+      // 1部隊は歩兵10人・対戦車兵6組・戦車4両・砲兵3門
+      FIGMAX = { inf: 10, at: 6, tank: 4, art: 3 };
+      FIGSP = { inf: 5.5, at: 6.9, tank: 14.6, art: 15.2 };
       FIGH = { inf: RAST.inf[1], at: RAST.at[1], tank: RAST.tank[1], art: RAST.art[1] };
     }
     var UIMG = {};
@@ -4452,8 +4452,8 @@ if (typeof module !== 'undefined') module.exports = TF;
     var MAP = { x0: -260, x1: 560, y0: -190, y1: 520 };   // 地面の広さ
     var LANES = [-18, 38, 94, 150, 206, 262, 318], LANEW = 56; // 部隊の列(7列)
     var LMID = 3, COLS = LANES;
-    var ZOOM0 = 0.56;
-    var ZFIT = 0.42;                                      // 部隊を全部入れるときも、これより引かない(兵士の絵が見える大きさ)                                     // ふだんの拡大率
+    var ZOOM0 = 0.6;
+    var ZFIT = 0.46;                                      // 部隊を全部入れるときも、これより引かない(兵士の絵が見える大きさ)                                     // ふだんの拡大率
     var ZOOMD = 0.27;                                     // 配置のときは戦場全体を見渡す
     var ZMIN = 0.15, ZMAX = 1.8;                          // 拡大・縮小の範囲(いちばん引くと戦場全体が見える)
     function laneOfX(x) { var b = 0; for (var i = 1; i < LANES.length; i++) if (Math.abs(x - LANES[i]) < Math.abs(x - LANES[b])) b = i; return b; }
@@ -4499,8 +4499,10 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     // ---- 丘の高さ(地形マップの丘陵の区域から作る。部隊・木・前線も丘の上に乗る) ----
     var ELEV = null;
-    function hillH(b) { return (14 + (b.p1 / 6.283) * 12) * 1.7; }
-    function hillLevel(b, v) { var q = 1 - Math.pow(Math.max(0, v) / hillH(b), 1 / 1.1); return Math.sqrt(Math.max(0, q)); } // 高さ v の輪の大きさ
+    // 丘の高さ: 狭いほうの半径の3割ほど(形のへこんだ所や画面の奥でも、奥の斜面がカメラから隠れない傾きに収まる)
+    function hillH(b) { return Math.max(3.5, Math.min(16, 0.34 * Math.min(b.rx * LANEW, b.ry * HALF) * (1 - b.a1 - b.a2))); }
+    function hillProf(q) { return q < 1 ? (1 - q) * (1 - q) : 0; }  // 中心からの距離(の2乗 q)→ 高さの割合。裾(q=1)と頂上(q=0)で傾きが0
+    function hillLevel(b, v) { var q = 1 - Math.sqrt(Math.max(0, Math.min(1, v / hillH(b)))); return Math.sqrt(Math.max(0, q)); } // 高さ v の輪の大きさ
     function buildElev(TM) {
       ELEV = null;
       var hills = (TM && TM.blobs || []).filter(function (b) { return b.k === 'hill'; });
@@ -4517,7 +4519,7 @@ if (typeof module !== 'undefined') module.exports = TF;
             var b = hills[m], dx = (lx - b.x) / b.rx, dy = (fy - b.y) / b.ry, r2 = dx * dx + dy * dy;
             if (r2 > 1.75) continue;
             var R = TF.blobR(b, Math.atan2(dy, dx)), q = r2 / (R * R);
-            if (q < 1) { var v = hillH(b) * Math.pow(1 - q, 1.1); if (v > best) best = v; }
+            if (q < 1) { var v = hillH(b) * hillProf(q); if (v > best) best = v; }
           }
           h[j * g.nx + i] = best;
         }
@@ -4674,13 +4676,13 @@ if (typeof module !== 'undefined') module.exports = TF;
           ['inf', 'at', 'tank', 'art'].forEach(function (t) {
             var im = uImg('u.' + t + '.' + artEra(tierOf(side, t)));
             if (!im) { miss = true; return; }
-            var wu = RAST[t][0], hu = RAST[t][1], c = document.createElement('canvas');
-            c.width = Math.ceil(wu * ppu); c.height = Math.ceil(hu * ppu);
+            var wu = RAST[t][0], hu = RAST[t][1], c = document.createElement('canvas'), RS = 1.6;
+            c.width = Math.ceil(wu * ppu * RS); c.height = Math.ceil(hu * ppu * RS);
             var g = c.getContext('2d'), pad = 0.08 * c.height;
             var sc = Math.min((c.width - pad * 2) / im.width, (c.height - pad) / im.height), w = im.width * sc, h = im.height * sc;
             g.save();
             if (side === 1) { g.translate(c.width, 0); g.scale(-1, 1); }
-            g.shadowColor = side === 0 ? 'rgba(56,217,176,.95)' : 'rgba(255,77,77,.95)'; g.shadowBlur = Math.max(2, 0.18 * ppu);
+            g.shadowColor = side === 0 ? 'rgba(56,217,176,.95)' : 'rgba(255,77,77,.95)'; g.shadowBlur = Math.max(2, 0.1 * ppu * RS);
             g.drawImage(im, (c.width - w) / 2, c.height - h, w, h);
             g.restore();
             SPR[side][t] = { c: c, w: wu, h: hu };
@@ -4910,7 +4912,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     }
     // 丘: 高さごとの輪を下から積み重ねて立体に描く(左上から光が当たり、右下に影)
     function drawHill(g, b, bio) {
-      var H0 = hillH(b), N = 14, a, th, R, i;
+      var H0 = hillH(b), N = 12, a, th, R, i;
       function ring(s, v, ox, oy) {
         var pts = [], x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
         for (a = 0; a <= 40; a++) {
@@ -4925,15 +4927,17 @@ if (typeof module !== 'undefined') module.exports = TF;
       var base = ring(1, 0);
       if (base.x1 < -40 || base.x0 > W + 40 || base.y1 < -40 || base.y0 > H + 80) return;
       // 地面に落ちる影
-      path(ring(1, 0, H0 * 1.1, -H0 * 0.55)); g.fillStyle = 'rgba(0,0,0,.24)'; g.fill();
+      path(ring(1.04, 0, H0 * 0.8, -H0 * 0.4)); g.fillStyle = 'rgba(0,0,0,.24)'; g.fill();
       for (i = 0; i < N; i++) {
         var v = H0 * i / N, s = hillLevel(b, v);
         if (s < 0.05) break;
         var r = ring(s, v);
-        var c0 = shade(bio.near, 0.0 + 0.055 * i), gr = g.createLinearGradient(r.x0, r.y0, r.x1, r.y1);
-        gr.addColorStop(0, shade(c0, 0.24)); gr.addColorStop(0.5, c0); gr.addColorStop(1, shade(c0, -0.34));
+        // 左上から光: 輪ごとに、左上は明るく・右下は暗く。上の輪ほど少し明るい
+        var c0 = shade(bio.near, 0.02 + 0.16 * i / N), gr = g.createLinearGradient(r.x0, r.y0, r.x1, r.y1);
+        gr.addColorStop(0, shade(c0, 0.3)); gr.addColorStop(0.45, c0); gr.addColorStop(1, shade(c0, -0.34));
         path(r); g.fillStyle = gr; g.fill();
-        g.strokeStyle = 'rgba(40,50,30,' + (0.05 + 0.008 * i) + ')'; g.lineWidth = 0.7; g.stroke();
+        if (i === 0) { g.strokeStyle = 'rgba(30,36,22,.28)'; g.lineWidth = 1; g.stroke(); }
+        else if (i % 3 === 0) { g.strokeStyle = 'rgba(40,50,30,.08)'; g.lineWidth = 0.7; g.stroke(); }
       }
     }
     function drawProp(g, it, p, bio) {
@@ -5850,7 +5854,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       var spr = SPR[u.side][u.type], ally = u.side === 0;
       var c = proj(u.wx, u.wy);
       if (c.y < -60 || c.y > H + 60 || c.x < -90 || c.x > W + 90) return;
-      var bw = 11 * c.k * u.big * (u.type === 'inf' ? 1 : 0.9) * (HAS_RAST ? 1.7 : 1);
+      var bw = 11 * c.k * u.big * (u.type === 'inf' ? 1 : 0.9) * (HAS_RAST ? 1.1 : 1);
       if (!u.dead) { cx.fillStyle = 'rgba(0,0,0,.2)'; cx.beginPath(); cx.ellipse(c.x + bw * 0.25, c.y + 1, bw * 1.25, bw * 0.42, 0, 0, Math.PI * 2); cx.fill(); }
       if (!u.dead && u.moving && (u.type === 'tank' || u.type === 'art') && Math.random() < 0.25) part(u.wx + (Math.random() - 0.5) * 10, u.wy + (u.side === 0 ? -3 : 3), { vx: (Math.random() - 0.5) * 10, vy: -6 - Math.random() * 6, life: 0.9, r: 1.6 + Math.random(), c: 'dust' });
       if (!u.dead && B.buff[u.side].atk > B.clock) {
@@ -6875,7 +6879,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       },
       // テスト用: 前線から rel だけ前(+)/後ろ(-)の地点の画面座標
       lastSkill: function () { if (!B) return null; var e = B.ev.slice(0, B.ei).filter(function (x) { return x.k === 'skill' && B.units[x.s] && B.units[x.s].side === 0; }).pop(); return e ? e.sk : null; },
-      worldToScreen: function (x, y) { if (!B) return null; var p = proj(x, y); return { x: p.x, y: p.y }; },
+      worldToScreen: function (x, y) { if (!B) return null; var p = proj(x, y); return { x: p.x, y: p.y, k: p.k }; },
+      hills: function () { if (!B) return []; return (B.info.terrain.blobs || []).filter(function (b) { return b.k === 'hill'; }).map(function (b) { return { x: fxW(b.x), y: fyW(b.y), rw: b.rx * LANEW, rd: b.ry * HALF, h: hillH(b), top: ELEV ? elevAt(fxW(b.x), fyW(b.y)) : 0 }; }); },
+      figSize: function () { return { inf: [RAST.inf[0] * FIGS, RAST.inf[1] * FIGS], tank: [RAST.tank[0] * FIGS, RAST.tank[1] * FIGS], n: FIGMAX }; },
       debugForm: function () { return B && B.phase === 'deploy' ? deployForm() : null; },
       // テスト用: マップの点(x=列の番号, y=-1〜1)の画面座標
       mapPoint: function (x, y) { if (!B) return null; var p = proj(fxW(x), fyW(y)); return { x: p.x, y: p.y }; },

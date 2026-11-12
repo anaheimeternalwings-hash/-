@@ -472,6 +472,46 @@ function midState(over) {
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
+  await test('戦場の縮尺: 部隊の絵は家とつり合う大きさ。丘は広さに合ったなだらかな高さ(狭いほうの半径の半分以下)で、越えるとき画面上の動きが逆戻りしたり急に跳ねたりしない', () => withPage('iPhone 13', async page => {
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight'; }, null, { timeout: 15000 });
+    const r = await page.evaluate(() => {
+      const G = window.__game.battle, out = [];
+      for (const h of G.hills()) {
+        // 丘の中心を通って進む点(1ずつ)の、画面上の縦の動き。手前→奥、左→右の2通り
+        const scan = pts => {
+          let back = 0, kink = 0, prev = null, pd = null;
+          for (const q of pts) {
+            const p = G.worldToScreen(q[0], q[1]);
+            if (prev !== null) { const d = (prev - p.y) / p.k; if (pd !== null) kink = Math.max(kink, Math.abs(d - pd)); pd = d; if (q[2] && d < 0) back = Math.max(back, -d); }
+            prev = p.y;
+          }
+          return { back, kink };
+        };
+        const dep = [], wid = [];
+        for (let y = h.y - h.rd * 1.4; y <= h.y + h.rd * 1.4; y += 1) dep.push([h.x, y, 1]);
+        for (let x = h.x - h.rw * 1.4; x <= h.x + h.rw * 1.4; x += 1) wid.push([x, h.y, 0]);
+        out.push({ h: h.h, top: h.top, rmin: Math.min(h.rw, h.rd), dep: scan(dep), wid: scan(wid) });
+      }
+      return { hills: out, fig: G.figSize() };
+    });
+    assert(r.hills.length >= 1, 'このステージに丘がない');
+    console.log('      丘: ' + r.hills.map(h => '高さ' + h.h.toFixed(1) + '/半径' + h.rmin.toFixed(0) + ' 逆戻り' + h.dep.back.toFixed(3) + ' 変化' + Math.max(h.dep.kink, h.wid.kink).toFixed(2)).join(' / '));
+    r.hills.forEach(h => {
+      assert(h.h >= 3 && h.h <= h.rmin * 0.5, '丘の高さが広さに合っていない ' + JSON.stringify(h));
+      assert(Math.abs(h.top - h.h) < h.h * 0.2, '頂上の高さがずれている ' + JSON.stringify(h));
+      assert(h.dep.back < 0.05, '奥の斜面で画面上の動きが逆戻りする(斜面がカメラから隠れる) ' + JSON.stringify(h));
+      assert(h.dep.kink < 0.5 && h.wid.kink < 0.5, '丘の裾や頂上で動きが急に変わる ' + JSON.stringify(h));
+    });
+    // 部隊の絵: 歩兵は家(幅6〜11)と同じくらい、戦車は家2軒ぶんまで。1部隊は数人〜数両の群れ
+    assert(r.fig.inf[0] >= 5 && r.fig.inf[0] <= 8.5 && r.fig.tank[0] >= 12 && r.fig.tank[0] <= 21, '部隊の絵の大きさ ' + JSON.stringify(r.fig));
+    assert(r.fig.n.inf >= 8 && r.fig.n.tank >= 3, '1部隊の数 ' + JSON.stringify(r.fig.n));
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
+  }, midState({ cleared: 29, sel: 30 })));
+
   await test('移動: 戦闘が始まると部隊は配置した場所からマップ上を進み、出会った所で戦う(画面の位置は戦闘の計算どおり)。2本指で大きく引くと戦場全体が見える', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     // 混成の編成で(おまかせ編成は使わない)
