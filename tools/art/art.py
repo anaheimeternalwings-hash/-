@@ -29,6 +29,7 @@ def unit(key, im):
     H, W, _ = a.shape
     # 白に近い点(背景候補)のうち、ふちからつながっているものを背景にする
     wh = (a.min(axis=2) > 200) & ((a.max(axis=2) - a.min(axis=2)) < 30)
+    if key.startswith('b.'): wh = (a.min(axis=2) > 186) & ((a.max(axis=2) - a.min(axis=2)) < 26)  # 施設: 足もとの薄い影も背景として消す
     bg = np.zeros((H, W), bool)
     stack = [(y, 0) for y in range(H)] + [(y, W - 1) for y in range(H)] + [(0, x) for x in range(W)] + [(H - 1, x) for x in range(W)]
     while stack:
@@ -38,6 +39,8 @@ def unit(key, im):
         stack += [(y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)]
     # 囲まれた白いすき間(引き金のまわりなど)も背景にする(ほぼ真っ白で、ある程度の大きさのもの)
     hole = (a.min(axis=2) > 232) & ((a.max(axis=2) - a.min(axis=2)) < 16) & ~bg
+    if key.startswith('b.') and cfg.get(key, {}).get('holes'): hole = (a.min(axis=2) > 200) & ((a.max(axis=2) - a.min(axis=2)) < 22) & ~bg
+    if key.startswith('b.') and not cfg.get(key, {}).get('holes'): hole[:] = False  # 施設は中の白い所(アンテナ・屋根の光)を残す(cfg で holes を付けた施設だけ抜く)
     seen = np.zeros((H, W), bool)
     for y0, x0 in zip(*np.where(hole)):
         if seen[y0, x0]: continue

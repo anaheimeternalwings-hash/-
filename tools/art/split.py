@@ -36,7 +36,12 @@ for f in sorted(glob.glob(D + '/grid/*')):
     g = G[name]; im = Image.open(f).convert('RGB')
     if 'crop' in g: im = im.crop(tuple(g['crop']))
     a = np.asarray(im).astype(np.int16)
-    if 'grid' in g:
+    if 'cells' in g:
+        # 切り出す範囲をじかに指定(絵の下に文字が入っているときなど)
+        for key, box in zip(g['keys'], g['cells']):
+            im.crop(tuple(box)).save(D + '/.work/cells/' + key + '.png')
+            print(name, key, tuple(box))
+    elif 'grid' in g:
         cols, rows = g['grid']
         lum = a.mean(axis=2)
         cx = cuts((lum < 28).mean(axis=0) > 0.8, cols)
