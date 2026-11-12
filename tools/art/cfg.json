@@ -103,5 +103,14 @@
  },
  "b.artpost": {
   "holes": true
+ },
+ "s.heli": {
+  "flip": true
+ },
+ "s.air": {
+  "flip": true
+ },
+ "s.drone": {
+  "flip": true
  }
 }

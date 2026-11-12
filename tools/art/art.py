@@ -75,6 +75,7 @@ def unit(key, im):
     pad = 6
     box = (max(0, xs.min() - pad), max(0, ys.min() - pad), min(W, xs.max() + pad), min(H, ys.max() + pad))
     img = img.crop(box)
+    if cfg.get(key, {}).get('flip'): img = img.transpose(Image.FLIP_LEFT_RIGHT)  # 左向きに描かれた絵は右向きにそろえる
     w, h = img.size; sc = 300 / max(w, h)
     img = img.resize((max(1, round(w * sc)), max(1, round(h * sc))), Image.LANCZOS)
     meta[key] = [img.size[0], img.size[1]]
