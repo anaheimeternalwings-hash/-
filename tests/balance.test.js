@@ -1076,7 +1076,8 @@ const PLAYS = [
   // 気まぐれなプレイヤーは、乱数しだいで買う強化が大きく変わる(詰まり方も乱数で大きく違う)ので、3通りの乱数で調べる
   ...[0, 1, 2].map(k => ({ key: 'random' + k, label: '気まぐれなプレイヤー(欲しい強化をランダムに決めて貯める)・乱数' + (k + 1), opt: { target: TARGET, maxBattles: 20000, strategy: 'random', seedOff: k } })),
   { key: 'mono', label: '戦車ひと筋のプレイヤー(相性を無視)', opt: { target: Math.min(TARGET, 100), maxBattles: 20000, strategy: 'mono' } },
-  { key: 'idle', label: '放置派(30戦ごとに4時間放置・生産施設あり)', opt: { target: Math.min(TARGET, 80), maxBattles: 20000, production: true, sessionBattles: 30, idleMs: 4 * 3600e3 } },
+  // 放置派: 少し遊んでは長く放置する(10戦ごとに8時間)。30戦ごとに4時間のような遊び方だと、戦闘の報酬が大半で、放置の効果は誤差に埋もれる
+  { key: 'idle', label: '放置派(10戦ごとに8時間放置・生産施設あり)', opt: { target: Math.min(TARGET, 80), maxBattles: 20000, production: true, sessionBattles: 10, idleMs: 8 * 3600e3 } },
   { key: 'active80', label: null, opt: { target: Math.min(TARGET, 80), maxBattles: 20000 } }
 ];
 if (!isMainThread) {
@@ -1138,8 +1139,9 @@ check('相性を見て強化するほうが、相性を無視するより早く�
   for (let s = 1; s <= Math.min(TARGET, 100); s++) { a += greedy.perStage[s]; b += mono.perStage[s]; }
   assert(a < b, `${a} vs ${b}`);
 });
-check('生産施設と放置で、同じステージまでの戦闘回数が減る', () => {
-  assert(idle.battles < active80.battles, `${idle.battles} vs ${active80.battles}`);
+check('生産施設と放置で、同じステージまでの戦闘回数が1割以上減る', () => {
+  assert(idle.battles <= active80.battles * 0.9, `${idle.battles} vs ${active80.battles}`);
+  console.log(`      放置派 ${idle.battles}戦 / 放置なし ${active80.battles}戦`);
 });
 check('戦闘はほぼ決着がつく(時間切れ1%未満)', () => {
   [greedy, mono].concat(randoms).forEach(r => assert(r.timeouts / r.battles < 0.01));
