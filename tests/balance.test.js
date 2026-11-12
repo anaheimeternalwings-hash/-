@@ -538,7 +538,9 @@ check('敵将: ボス戦(ステージ12以降)と一部のステージに敵将�
   assert(wn && first && first.t >= wn.t, '予告の前から見えていた');
   assert(!b.U[1].alive && !castOf(b), '予告中に倒しても発動した');
 });
-check('敵将はスキルを使える: 後方の本陣で動かずに構える耐久の高い親衛隊が率い、すぐに予告する。互角の戦いではほぼ必ず、自軍がかなり強い(1.5倍)戦いでも半分以上で発動する', () => {
+check('敵将はスキルを使える: 後方の本陣で動かずに構える耐久の高い親衛隊が率い、開始2.5秒以内に予告して6.5秒までに最初のスキルを使う。互角の戦いではほぼ必ず、自軍がかなり強い(1.5倍)戦いでも8割以上で発動する。ボスの耐久はふつうの部隊の3倍以上', () => {
+  Object.keys(TF.ECMD).forEach(k => { const c = TF.ECMD[k]; assert(c.first - c.warn + K.ecmdJit <= 2.5 + 1e-9 && c.first + K.ecmdJit <= 6.5 + 1e-9, '最初の発動が遅い ' + k); });
+  assert(K.bossHp >= 3, 'ボスの耐久 ' + K.bossHp);
   const stages = [];
   for (let s = 12; stages.length < 12; s++) if (TF.stageInfo(s).ecmd) stages.push(s);
   const rate = { 1: [0, 0], 1.5: [0, 0] };
@@ -561,8 +563,8 @@ check('敵将はスキルを使える: 後方の本陣で動かずに構える�
       rate[k][0]++; if (r.ev.some(x => x.k === 'eskCast')) rate[k][1]++;
     }
   }
-  assert(rate[1][1] / rate[1][0] >= 0.85, '互角の戦いで発動しない ' + JSON.stringify(rate));
-  assert(rate[1.5][1] / rate[1.5][0] >= 0.5, '勝てる戦いで発動しない ' + JSON.stringify(rate));
+  assert(rate[1][1] / rate[1][0] >= 0.95, '互角の戦いで発動しない ' + JSON.stringify(rate));
+  assert(rate[1.5][1] / rate[1.5][0] >= 0.8, '勝てる戦いで発動しない ' + JSON.stringify(rate));
 });
 check('編成の上限: 兵種ごとに編成できる部隊の数に上限がある(歩兵4・対戦車兵3・戦車3・砲兵2)。おまかせ編成も敵の編成も上限を守る', () => {
   assert.deepStrictEqual(K.typeCap, { inf: 4, at: 3, tank: 3, art: 2 });

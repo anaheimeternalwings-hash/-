@@ -979,12 +979,12 @@ var TF = (function () {
     resRate: 1, resCost: 5, resStart: 2, resMax: 10, resMul: 0.6,
     // 配置: 前進(与/被ダメージ↑・狙われやすい)、後退(与/被ダメージ↓・狙われにくい。砲兵は与ダメージが下がらない)
     stDeal: { '1': 1.25, '-1': 0.75 }, stTake: { '1': 1.25, '-1': 0.6 }, stAim: { '1': 1.6, '-1': 0.5 },
-    ecmdRate: 0.3, ecmdFocus: 6, ecmdHp: 3.5, ecmdAdv: 0.04, artSpot: 2.0,
+    ecmdRate: 0.3, ecmdFocus: 6, ecmdJit: 1, ecmdHp: 3.5, ecmdAdv: 0.04, artSpot: 2.0,
     // 兵種ごとに編成できる部隊の数の上限(ほかに置ける兵種がないときだけ超えてよい)
     typeCap: { inf: 4, at: 3, tank: 3, art: 2 },
     // 敵の連携: 集中攻撃(同じ目標を狙いやすい倍率・目標を選び直す間隔)
     focusW: 5, focusT: 4,
-    normW: 1, lossExp: 0.5, firstMul: 2, bossMul: 2, bossHp: 2.6, bossAtk: 1.4, bossTotal: 1.08, normMin: 0.6, normMax: 1.6,
+    normW: 1, lossExp: 0.5, firstMul: 2, bossMul: 2, bossHp: 3.1, bossAtk: 1.4, bossTotal: 1.08, normMin: 0.6, normMax: 1.6,
     typeAdj: { inf: 1.04, at: 0.95, tank: 0.97, art: 1.05 },
     baseCapH: 2, depotCapH: 1, depotMaxLv: 22,
     // 敵の総合戦力倍率 T(s) = b + a*s^p + c*s^2
@@ -1222,12 +1222,12 @@ var TF = (function () {
   // ボス戦と一部のステージに出てくる。1人で戦況をひっくり返すほどのスキルを持つ。
   // 発動の warn 秒前に予告があり、その間は位置が見える。予告中に倒せば発動しない
   var ECMD = {
-    ghost:   { name: '亡霊',   skill: '亡者の行進', unlock: 12, first: 10, cd: 40, warn: 4, desc: '倒された敵の部隊をすべて兵力50%でよみがえらせる' },
-    wall:    { name: '鉄壁',   skill: '不落要塞',   unlock: 12, first: 6, cd: 35, warn: 4, dur: 12, mul: 0.2, heal: 0.25, desc: '12秒間、敵全体の被ダメージを5分の1にし、兵力を25%回復する' },
-    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 6, cd: 35, warn: 4, r: 1.6, dmg: 0.5, desc: '自軍がいちばん集まった場所(半径1.6列)の部隊すべてに、兵力の50%のダメージ' },
+    ghost:   { name: '亡霊',   skill: '亡者の行進', unlock: 12, first: 5.5, cd: 40, warn: 4, desc: '倒された敵の部隊をすべて兵力50%でよみがえらせる' },
+    wall:    { name: '鉄壁',   skill: '不落要塞',   unlock: 12, first: 5, cd: 35, warn: 4, dur: 12, mul: 0.2, heal: 0.25, desc: '12秒間、敵全体の被ダメージを5分の1にし、兵力を25%回復する' },
+    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 5, cd: 35, warn: 4, r: 1.6, dmg: 0.5, desc: '自軍がいちばん集まった場所(半径1.6列)の部隊すべてに、兵力の50%のダメージ' },
     viper:   { name: '毒蛇',   skill: '電子妨害',   unlock: 40, first: 5, cd: 35, warn: 4, dur: 12, desc: '12秒間、自軍の索敵がすべて使えなくなる(敵がまったく見えず、撃てない)' },
-    witch:   { name: '魔女',   skill: '寝返り工作', unlock: 55, first: 7, cd: 45, warn: 4, desc: '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする' },
-    reaper:  { name: '死神',   skill: '斬首作戦',   unlock: 70, first: 6, cd: 40, warn: 4, dmg: 0.6, desc: '指揮官のいる自軍の部隊すべてに、兵力の60%のダメージ' }
+    witch:   { name: '魔女',   skill: '寝返り工作', unlock: 55, first: 5, cd: 45, warn: 4, desc: '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする' },
+    reaper:  { name: '死神',   skill: '斬首作戦',   unlock: 70, first: 5, cd: 40, warn: 4, dmg: 0.6, desc: '指揮官のいる自軍の部隊すべてに、兵力の60%のダメージ' }
   };
   var ECMD_KEYS = Object.keys(ECMD);
   // ステージの敵将: ボス戦はかならず、ふつうのステージは12から3割ほど。出てくる敵将はステージが進むと増える
@@ -1713,7 +1713,7 @@ var TF = (function () {
       } else { u.x = u.lx; u.y = advY(side, u.adv); }
       if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
       // 敵将のスキル(予告 → 発動)
-      if (q.ecmd && ECMD[q.ecmd] && !at) { u.esk = q.ecmd; u.eskNext = ECMD[q.ecmd].first + rnd() * 3; u.eskWarn = false; }
+      if (q.ecmd && ECMD[q.ecmd] && !at) { u.esk = q.ecmd; u.eskNext = ECMD[q.ecmd].first + rnd() * K.ecmdJit; u.eskWarn = false; }
       U.push(u); live[side].push(u);
       return u;
     }
@@ -5654,6 +5654,7 @@ if (typeof module !== 'undefined') module.exports = TF;
         return;
       }
       if (B.ewarn && B.ewarn.s === ev.s) B.ewarn = null;
+      B.ecast = (B.ecast || 0) + 1;
       if (!quiet) { B.banner = { t: 0, name: '敵将「' + c.name + '」', skill: c.skill, side: 1, sub: c.desc, portrait: 'e:' + ev.sk }; B.shake = Math.max(B.shake, 8); }
       if (ev.sk === 'ghost') {
         (ev.revive || []).forEach(function (r0) {
@@ -6315,6 +6316,7 @@ if (typeof module !== 'undefined') module.exports = TF;
       drawJam();
       drawBanner();
       drawHint();
+      drawEcmdAlert();
       if (B.ending) drawEnding();
       drawCardGhost();
       drawDeploy();
@@ -6835,6 +6837,39 @@ if (typeof module !== 'undefined') module.exports = TF;
         cx.beginPath(); cx.ellipse(q.x, q.y - 4, ww * 1.25, ww * 0.6, 0, 0, Math.PI * 2); cx.stroke();
       });
     }
+    // 敵将のスキルの予告: 画面の上に、発動までの秒数をずっと出す(敵将が画面の外にいても気づけるように)。
+    // 敵将が画面の外にいるときは、その方向を矢印で示す
+    function drawEcmdAlert() {
+      var w0 = B.ewarn; if (!w0 || B.ending || B.phase !== 'fight') return;
+      var u = B.units[w0.s]; if (!u || u.dead) return;
+      var c = TF.ECMD[w0.sk], left = Math.max(0, w0.at - B.clock), k = Math.max(0, Math.min(1, left / c.warn)), ph = 0.5 + 0.5 * Math.sin(fxNow() * 10);
+      var bw = Math.min(W - 24, 330), bh = 42, x = W / 2 - bw / 2, y = 106;
+      B.ealertT = B.clock;
+      cx.save();
+      cx.fillStyle = 'rgba(46,8,8,.92)'; cx.fillRect(x, y, bw, bh);
+      cx.strokeStyle = 'rgba(255,90,70,' + (0.55 + 0.45 * ph) + ')'; cx.lineWidth = 1.5 + ph; cx.strokeRect(x + 0.5, y + 0.5, bw - 1, bh - 1);
+      var pim = portraitImg('e:' + w0.sk), tx = x + 10;
+      if (pim) { cx.drawImage(pim, x + 3, y + 3, bh - 9, bh - 9); tx = x + bh + 1; }
+      cx.textBaseline = 'middle'; cx.textAlign = 'left';
+      cx.font = '700 10px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = '#ffb3a8'; cx.fillText('敵将「' + c.name + '」がスキルを準備中 ・ 倒せば止められる', tx, y + 11, bw - (tx - x) - 62);
+      cx.font = '900 15px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = '#fff'; cx.fillText('〈' + c.skill + '〉', tx - 4, y + 27, bw - (tx - x) - 62);
+      cx.textAlign = 'right';
+      cx.font = '700 9px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = '#ffb3a8'; cx.fillText('発動まで', x + bw - 9, y + 10);
+      cx.font = '900 21px "SF Mono",ui-monospace,Menlo,monospace'; cx.fillStyle = ph > 0.5 ? '#ff6a5a' : '#ffd9d2'; cx.fillText(left.toFixed(1), x + bw - 9, y + 27);
+      cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(x, y + bh - 4, bw, 4);
+      cx.fillStyle = '#ff4d4d'; cx.shadowColor = '#ff4d4d'; cx.shadowBlur = 6; cx.fillRect(x, y + bh - 4, bw * k, 4); cx.shadowBlur = 0;
+      // 敵将が画面の外(または上の表示の裏)にいるとき: その方向の端に矢印
+      var p = proj(u.wx, u.wy), y0 = y + bh + 20, y1 = H - 190;
+      if (p.x < 14 || p.x > W - 14 || p.y < y0 - 8 || p.y > y1 + 8) {
+        var ax = Math.max(24, Math.min(W - 24, p.x)), ay = Math.max(y0, Math.min(y1, p.y)), an = Math.atan2(p.y - ay, p.x - ax);
+        cx.translate(ax, ay);
+        cx.fillStyle = 'rgba(46,8,8,.9)'; cx.beginPath(); cx.arc(0, 0, 15, 0, Math.PI * 2); cx.fill();
+        cx.strokeStyle = 'rgba(255,90,70,' + (0.6 + 0.4 * ph) + ')'; cx.lineWidth = 2; cx.stroke();
+        cx.fillStyle = '#fff'; cx.font = '900 12px -apple-system,"Hiragino Sans",sans-serif'; cx.textAlign = 'center'; cx.fillText('将', 0, 0.5);
+        cx.rotate(an); cx.fillStyle = '#ff4d4d'; cx.beginPath(); cx.moveTo(25 + 3 * ph, 0); cx.lineTo(17, -6); cx.lineTo(17, 6); cx.closePath(); cx.fill();
+      }
+      cx.restore();
+    }
     function drawJam() {
       if (!(B.jamUntil > B.clock)) return;
       cx.save();
@@ -6860,7 +6895,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, deployCard: deployCard, launchSupport: launchSupport, deployGo: deployGo, deployAuto: deployAuto, active: function () { return !!B; },
       debug: function () {
         if (!B) return null;
-        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, ewarn: B.ewarn ? { s: B.ewarn.s, sk: B.ewarn.sk } : null, jam: B.jamUntil > B.clock, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
+        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, ewarn: B.ewarn ? { s: B.ewarn.s, sk: B.ewarn.sk } : null, ealert: B.ealertT !== undefined && B.clock - B.ealertT < 0.5, ecast: B.ecast || 0, jam: B.jamUntil > B.clock, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
           captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
           walls: B.walls.filter(function (w) { return w.ok; }).length, wallsTotal: B.walls.length,
           ruins: B.blds.filter(function (b) { return b.ruin; }).length,

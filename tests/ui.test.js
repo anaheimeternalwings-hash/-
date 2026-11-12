@@ -843,7 +843,7 @@ function midState(over) {
   }, midState({ cleared: 40, sel: 41, form: ['tank', 'tank', 'tank', 'inf', 'inf', 'at'].map(t => ({ type: t, hero: null })),
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } } })));
 
-  await test('敵将: 敵将のいるステージは出撃画面にスキルが出て、戦闘には「将」の部隊がいる。結果画面で敵の作戦が明かされる', () => withPage('iPhone 13', async page => {
+  await test('敵将: 敵将のいるステージは出撃画面にスキルが出て、戦闘には「将」の部隊がいる。開始すぐにスキルの予告が始まり、画面の上に発動までの秒数が出る。結果画面で敵の作戦が明かされる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     const tx = await page.textContent('#ecmdInfo');
     assert(tx.includes('敵将「') && tx.includes('予告'), '敵将の説明が出ない ' + tx);
@@ -852,6 +852,12 @@ function midState(over) {
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight'; }, null, { timeout: 15000 });
     const d = await page.evaluate(() => window.__game.battle.debug());
     assert(d.units.some(u => u.side === 1 && u.ecmd), '敵将の部隊がいない');
+    // 戦闘が始まってすぐ(5秒以内)に予告が始まり、画面の上に発動までの秒数が出る
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && (x.ewarn || x.clock > 6 || x.ending); }, null, { timeout: 20000 });
+    const dw = await page.evaluate(() => window.__game.battle.debug());
+    assert(dw.ewarn && dw.clock < 5, 'スキルの予告が始まらない ' + JSON.stringify({ clock: dw.clock, ewarn: dw.ewarn }));
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x.ealert || !x.ewarn; }, null, { timeout: 5000 });
+    assert((await page.evaluate(() => window.__game.battle.debug().ealert)), '発動までの秒数が画面に出ない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
     assert((await page.textContent('#resTactic')).includes('敵の作戦'), '敵の作戦が出ない');
