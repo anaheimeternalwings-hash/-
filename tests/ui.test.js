@@ -269,8 +269,8 @@ function midState(over) {
       return d && d.units.some(u => u.side === 0 && u.alive && u.skNext !== null && d.clock >= u.skNext);
     }, null, { timeout: 20000 });
     assert.strictEqual((await page.evaluate(() => window.__game.battle.debug())).skills, 0, '手動なのにスキルが自動発動した');
-    await page.waitForSelector('#skillBar .skb.ready:not(.dead)');
-    await page.evaluate(() => { const b = document.querySelector('#skillBar .skb.ready:not(.dead)'); b.click(); });
+    // (ボタンは作り直されることがあるので、見つけた瞬間に押す)
+    await page.waitForFunction(() => { const b = document.querySelector('#skillBar .skb.ready:not(.dead)'); if (!b) return false; b.click(); return true; }, null, { timeout: 20000 });
     assert.strictEqual((await page.evaluate(() => { const d = window.__game.battle.debug(); return d.skills; })), 1, 'ボタンでスキルが発動しない');
     // AUTOに切り替えると設定も保存される
     await page.click('[data-act="auto-toggle"]');

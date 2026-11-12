@@ -50,7 +50,9 @@ for f in sorted(glob.glob(D + '/grid/*')):
         for r in range(rows):
             for c in range(cols):
                 x0, x1 = cx[c]; y0, y1 = cy[r]
-                im.crop((x0, y0, x1, y1)).save(D + '/.work/cells/' + g['keys'][i] + '.png'); i += 1
+                i += 1
+                if not g['keys'][i - 1]: continue  # null のマスは使わない
+                im.crop((x0, y0, x1, y1)).save(D + '/.work/cells/' + g['keys'][i - 1] + '.png')
                 print(name, g['keys'][i - 1], (x0, y0, x1, y1))
     else:
         # 白い背景に並んだ絵: 背景をふちから塗りつぶし、残りをつながった塊ごとに分ける。

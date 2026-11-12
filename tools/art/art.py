@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageFilter
 D = os.path.dirname(os.path.abspath(__file__))
 cfg = json.load(open(D + '/cfg.json'))
-CELLS = set(k for g in json.load(open(D + '/grids.json')).values() for k in g['keys'])
+CELLS = set(k for g in json.load(open(D + '/grids.json')).values() for k in g['keys'] if k)
 out = {}
 meta = {}
 def webp(im, q):
@@ -18,6 +18,7 @@ def portrait(key, im):
     W, H = im.size
     cell = key in CELLS  # まとめ描きから切り出した絵は、セルいっぱいを使う
     s = c.get('size', min(W, H) * (1 if cell else 0.82)); cx = c.get('cx', W / 2); top = c.get('top', 0 if cell else H * 0.03)
+    if 'inset' in c: s = min(W, H) * (1 - 2 * c['inset']); cx = W / 2 + c.get('dx', 0) * W; top = H * (c['inset'] + c.get('dy', 0))  # まわりの余白(紙の縁)を切り落とす
     x0 = max(0, min(W - s, cx - s / 2)); y0 = max(0, min(H - s, top))
     im = im.crop((int(x0), int(y0), int(x0 + s), int(y0 + s))).resize((288, 288), Image.LANCZOS)
     fx, fy = c.get('face', [0.5, 0.45])
