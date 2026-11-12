@@ -1,18 +1,4 @@
 {
- "G3": {
-  "grid": [
-   3,
-   2
-  ],
-  "keys": [
-   null,
-   null,
-   "e.thunder",
-   null,
-   null,
-   null
-  ]
- },
  "W1": {
   "strip": 7,
   "keys": [
