@@ -623,22 +623,35 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
 /* ===== 基地: 斜め上から見た立体のジオラマ ===== */
 .grid.iso{display:block;position:relative;padding:0;gap:0;margin-left:-10px;margin-right:-10px;aspect-ratio:1000/790;overflow:visible;clip-path:none;border:0;
   background:radial-gradient(ellipse at 50% 46%,rgba(56,217,176,.13),transparent 62%);box-shadow:none}
-.grid.iso>svg.ground{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.grid.iso svg.ground{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+/* 拡大・縮小: 中身(.isoz)を動かす。拡大していないときは、なぞると画面が上下に動く(ふつうのスクロール) */
+.grid.iso{overflow:hidden;touch-action:pan-y}
+.grid.iso.zoomed{touch-action:none;box-shadow:inset 0 0 0 1px rgba(56,217,176,.35)}
+.isoz{position:absolute;inset:0;transform-origin:0 0;will-change:transform}
+.isoctl{position:absolute;right:10px;bottom:6px;z-index:40;display:flex;gap:6px}
+.isoctl button{width:32px;height:32px;display:grid;place-items:center;padding:0;font-size:17px;font-weight:800;line-height:1;color:var(--ally);background:rgba(5,9,11,.86);border:1px solid rgba(56,217,176,.55);
+  clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.isoctl button:active{background:rgba(56,217,176,.25)}
+.isoctl button[data-d="0"]{display:none;font-size:11px;font-family:var(--mono);color:var(--amber);border-color:rgba(245,184,61,.6)}
+.grid.iso.zoomed .isoctl button[data-d="0"]{display:grid}
+.isohint{position:absolute;left:12px;bottom:10px;z-index:40;font-size:9.5px;letter-spacing:.06em;color:var(--dim);pointer-events:none;opacity:.8}
+.grid.iso.zoomed .isohint{display:none}
 .grid.iso .tile{position:absolute;aspect-ratio:auto;display:block;padding:0;margin:0;border:0;background:none;box-shadow:none;clip-path:none;overflow:visible;pointer-events:none;color:inherit}
 .grid.iso .tile:active{transform:none}
 .grid.iso .tile .hit{position:absolute;inset:0;pointer-events:auto;clip-path:polygon(4% 62.5%,4% 30%,50% 3%,96% 30%,96% 62.5%,72% 76%,72% 100%,28% 100%,28% 76%)}
 .grid.iso .tile .art{position:absolute;left:0;top:0;width:100%;height:100%;margin:0;pointer-events:none;filter:drop-shadow(0 5px 5px rgba(0,0,0,.55));transition:filter .12s}
 .grid.iso .tile:active .art{filter:drop-shadow(0 5px 5px rgba(0,0,0,.55)) brightness(1.3)}
-.grid.iso .tile .plate{position:absolute;z-index:20;left:50%;bottom:-2%;transform:translateX(-50%);display:flex;align-items:stretch;white-space:nowrap;pointer-events:none;
+.grid.iso .tile .plate{position:absolute;z-index:20;left:50%;bottom:-2%;transform:translateX(-50%) scale(var(--inv,1));transform-origin:50% 100%;display:flex;align-items:stretch;white-space:nowrap;pointer-events:none;
   background:rgba(5,9,11,.78);border:1px solid rgba(56,217,176,.4);box-shadow:0 1px 4px rgba(0,0,0,.6)}
 .grid.iso .tile.hq .plate{border-color:rgba(245,184,61,.8)}
 .grid.iso .tile .plate .lv{position:static;clip-path:none;border-radius:0;background:rgba(245,184,61,.92);color:#1b1300;font-family:var(--mono);font-size:min(8px,2.1vw);font-weight:800;padding:0 3px;display:flex;align-items:center}
 .grid.iso .tile .plate .nm{position:static;background:none;padding:0 4px 0 3px;font-size:min(8.5px,2.2vw);font-weight:700;letter-spacing:.02em;color:#e6eef1;text-shadow:none;line-height:1.5}
 .grid.iso .tile .up{z-index:21;right:auto;left:74%;top:24%;width:14px;height:12px;pointer-events:none}
+.grid.iso .tile .up::before{transform:scale(var(--inv,1));transform-origin:0 100%}
 /* 描き下ろしの施設の絵: 建物の足もとの中心が土台の中心に来るように置く(下からの位置は絵ごとに ART が決める) */
 .grid.iso .tile svg.bpic{position:absolute;left:13%;width:74%;top:auto;bottom:16%;height:70%;margin:0;pointer-events:none;background-position:center bottom;filter:drop-shadow(0 3px 3px rgba(0,0,0,.45));transition:filter .12s}
 .grid.iso .tile:active svg.bpic{filter:drop-shadow(0 3px 3px rgba(0,0,0,.45)) brightness(1.25)}
-.grid.iso .tile .bub{z-index:22;right:auto;left:50%;top:2%;transform:translateX(-50%);white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.6)}
+.grid.iso .tile .bub{z-index:22;right:auto;left:50%;top:2%;transform:translateX(-50%) scale(var(--inv,1));transform-origin:50% 100%;white-space:nowrap;pointer-events:none;box-shadow:0 2px 6px rgba(0,0,0,.6)}
 .grid.iso .tile .store{z-index:20;left:28%;right:28%;bottom:calc(-2% - 4px);height:3px}
 .grid.iso .tile.empty{background:none;border:0}
 .grid.iso .tile.empty .hit{clip-path:polygon(4% 62.5%,50% 36%,96% 62.5%,50% 89%)}
@@ -3260,7 +3273,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     var bySlot = {};
     Object.keys(st.bld).forEach(function (k) { bySlot[st.bld[k].slot] = k; });
     // 基地は斜め上から見た立体のジオラマ: 台座の上に 3×3 の区画をひし形に並べ、奥の施設から順に重ねる
-    html += '<div class="grid iso" id="grid">' + ISO.ground(bySlot);
+    html += '<div class="grid iso" id="grid"><div class="isoz" id="isoZ">' + ISO.ground(bySlot);
     for (var i = 0; i < 9; i++) {
       var id = bySlot[i], ipos = ISO.tileStyle(i);
       if (!id) {
@@ -3280,7 +3293,8 @@ if (typeof module !== 'undefined') module.exports = TF;
       html += '<button class="tile' + (id === 'hq' ? ' hq' : '') + '" data-act="tile" data-slot="' + i + '" style="' + ipos + '"><i class="hit"></i>' + bSvg(id) +
         '<div class="plate"><div class="lv">Lv' + b.lv + '</div><div class="nm">' + TF.BLD[id].name + '</div></div>' + (up ? '<div class="up">↑</div>' : '') + extra + '</button>';
     }
-    html += '</div>';
+    html += '</div><div class="isohint">2本指で拡大・縮小</div><div class="isoctl"><button data-act="base-zoom" data-d="0" aria-label="もとの大きさ">1×</button>' +
+      '<button data-act="base-zoom" data-d="-1" aria-label="縮小">－</button><button data-act="base-zoom" data-d="1" aria-label="拡大">＋</button></div></div>';
     var power = TF.formSquads(st, st.form).reduce(function (a, q) { return a + q.power; }, 0);
     html += '<div class="basestats">' +
       '<div class="card"><div class="k">部隊の枠</div><div class="v">' + TF.slots(st) + ' / 8</div></div>' +
@@ -3288,7 +3302,80 @@ if (typeof module !== 'undefined') module.exports = TF;
       '<div class="card"><div class="k">編成中の総戦力</div><div class="v num">' + fmt(power) + '</div></div>' +
       '<div class="card"><div class="k">最高到達</div><div class="v">ステージ' + st.cleared + '</div></div></div>';
     $('scr-base').innerHTML = html;
+    BaseView.apply();
   }
+  var BaseView = (function () {
+    var v = { z: 1, x: 0, y: 0 }, g = null, blockUntil = 0, ZMAX = 3;
+    function box() { var gr = $('grid'); return gr ? gr.getBoundingClientRect() : null; }
+    function apply() {
+      var e = $('isoZ'), b = box();
+      if (!e || !b) return;
+      v.z = Math.max(1, Math.min(ZMAX, v.z));
+      v.x = Math.min(0, Math.max(b.width * (1 - v.z), v.x)); v.y = Math.min(0, Math.max(b.height * (1 - v.z), v.y));
+      e.style.transform = 'translate(' + v.x.toFixed(1) + 'px,' + v.y.toFixed(1) + 'px) scale(' + v.z.toFixed(3) + ')';
+      $('grid').classList.toggle('zoomed', v.z > 1.01);
+      $('grid').style.setProperty('--inv', Math.pow(1 / v.z, 0.8).toFixed(3));  // 札や矢印は、拡大してもあまり大きくしない
+    }
+    // 画面上の点(px, py: ジオラマの枠の左上から)を中心に拡大率を変える
+    function zoomAt(nz, px, py) {
+      var cx = (px - v.x) / v.z, cy = (py - v.y) / v.z;
+      v.z = Math.max(1, Math.min(ZMAX, nz)); v.x = px - cx * v.z; v.y = py - cy * v.z;
+      apply();
+    }
+    function step(d) {
+      var b = box(); if (!b) return;
+      if (!d) { v.z = 1; v.x = v.y = 0; apply(); } else zoomAt(v.z * (d > 0 ? 1.5 : 1 / 1.5), b.width / 2, b.height / 2);
+    }
+    function inGrid(e) { return e.target && e.target.closest && e.target.closest('#grid'); }
+    function pts(e) { var b = box(); return [].map.call(e.touches, function (t) { return { x: t.clientX - b.left, y: t.clientY - b.top }; }); }
+    function startPinch(p) { var mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2; g = { k: 'pinch', d0: Math.max(1, Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y)), z0: v.z, cx: (mx - v.x) / v.z, cy: (my - v.y) / v.z }; }
+    function startPan(q, on) { g = v.z > 1.01 ? { k: 'pan', x0: q.x, y0: q.y, vx: v.x, vy: v.y, on: !!on } : null; }
+    document.addEventListener('touchstart', function (e) {
+      if (!inGrid(e) || !box()) { g = null; return; }
+      var p = pts(e);
+      if (p.length >= 2) startPinch(p); else startPan(p[0]);
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      if (!g || !box()) return;
+      var p = pts(e);
+      if (g.k === 'pinch' && p.length >= 2) {
+        e.preventDefault();
+        var mx = (p[0].x + p[1].x) / 2, my = (p[0].y + p[1].y) / 2;
+        v.z = Math.max(1, Math.min(ZMAX, g.z0 * Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) / g.d0));
+        v.x = mx - g.cx * v.z; v.y = my - g.cy * v.z;
+        apply(); blockUntil = Date.now() + 400;
+      } else if (g.k === 'pan' && p.length === 1) {
+        var dx = p[0].x - g.x0, dy = p[0].y - g.y0;
+        if (!g.on && Math.hypot(dx, dy) < 6) return;
+        g.on = true; e.preventDefault();
+        v.x = g.vx + dx; v.y = g.vy + dy;
+        apply(); blockUntil = Date.now() + 400;
+      }
+    }, { passive: false });
+    document.addEventListener('touchend', function (e) {
+      if (!g) return;
+      if (!e.touches.length || !box()) { g = null; return; }
+      if (g.k === 'pinch' && e.touches.length === 1) startPan(pts(e)[0], true);   // 指を1本離したら、そのまま移動に
+    });
+    document.addEventListener('touchcancel', function () { g = null; });
+    // パソコン: ホイールで拡大・縮小、拡大中はドラッグで移動
+    document.addEventListener('wheel', function (e) {
+      if (!inGrid(e)) return;
+      var b = box(); if (!b) return;
+      e.preventDefault();
+      zoomAt(v.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - b.left, e.clientY - b.top);
+    }, { passive: false });
+    var md = null;
+    document.addEventListener('mousedown', function (e) { md = inGrid(e) && v.z > 1.01 ? { x: e.clientX, y: e.clientY, vx: v.x, vy: v.y, on: false } : null; });
+    document.addEventListener('mousemove', function (e) {
+      if (!md || !(e.buttons & 1)) { md = null; return; }
+      var dx = e.clientX - md.x, dy = e.clientY - md.y;
+      if (!md.on && Math.hypot(dx, dy) < 6) return;
+      md.on = true; v.x = md.vx + dx; v.y = md.vy + dy; apply(); blockUntil = Date.now() + 400;
+    });
+    document.addEventListener('mouseup', function () { md = null; });
+    return { apply: apply, step: step, zoomAt: zoomAt, state: v, blocked: function () { return Date.now() < blockUntil; } };
+  })();
   function icoMoneyInline() { return '<svg viewBox="0 0 24 24" style="display:inline-block;width:15px;height:15px;vertical-align:-2px;margin-right:2px"><use href="#i-money"/></svg>'; }
   function icoSteelInline() { return '<svg viewBox="0 0 24 24" style="display:inline-block;width:15px;height:15px;vertical-align:-2px;margin-right:2px"><use href="#i-steel"/></svg>'; }
 
@@ -4115,6 +4202,7 @@ if (typeof module !== 'undefined') module.exports = TF;
   // ====== 操作 ======
   var actions = {
     tab: function (el) { show(el.dataset.tab); },
+    'base-zoom': function (el) { BaseView.step(+el.dataset.d); },
     'part-info': function (el) {
       var g = +el.dataset.g;
       toast(TF.partName(g) + ': ' + partWhere(g) + 'で手に入ります(初クリアで' + TF.K.partFirst + '個)');
@@ -4290,6 +4378,7 @@ if (typeof module !== 'undefined') module.exports = TF;
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
+    if (el.dataset.act === 'tile' && BaseView.blocked()) return; // 基地を拡大・移動した指を離しただけ
     var fn = actions[el.dataset.act];
     if (fn) { e.preventDefault(); fn(el); }
   });
@@ -6843,7 +6932,7 @@ if (typeof module !== 'undefined') module.exports = TF;
     save();
   }
   function hasStored() { var info = TF.storedInfo(st, now()); return ((info.supply ? info.supply.stored : 0) + (info.steel ? info.steel.stored : 0)) > 0; }
-  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, battle: Battle, map: MapView, heroSvg: heroSvg, ecmdSvg: ecmdSvg, bestFarm: function () { farmCache = null; return bestFarm(); } };
+  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, baseView: BaseView, battle: Battle, map: MapView, heroSvg: heroSvg, ecmdSvg: ecmdSvg, bestFarm: function () { farmCache = null; return bestFarm(); } };
   boot();
 })();
 </script>

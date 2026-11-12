@@ -942,6 +942,49 @@ function midState(over) {
     await noHorizontalScroll(page);
   }, midState({})));
 
+  await test('基地の拡大・縮小: 2本指で広げると拡大、拡大中は1本指でなぞって移動(なぞった直後に施設は開かない)。拡大したまま施設をタップで開ける。ボタンでも拡大・縮小・もとに戻せる', () => withPage('iPhone 13', async page => {
+    const view = () => page.evaluate(() => Object.assign({}, window.__game.baseView.state));
+    const box = await page.evaluate(() => { const r = document.getElementById('grid').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    const cdp = await page.context().newCDPSession(page);
+    const cx = box.x + box.w * 0.5, cy = box.y + box.h * 0.55;
+    assert.strictEqual((await view()).z, 1);
+    // 2本指で広げる
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx - 20, y: cy, id: 1 }, { x: cx + 20, y: cy, id: 2 }] });
+    for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx - 20 - i * 4, y: cy, id: 1 }, { x: cx + 20 + i * 4, y: cy, id: 2 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    let v = await view();
+    assert(v.z > 1.8 && v.z <= 3, '拡大しない ' + JSON.stringify(v));
+    assert(await page.isVisible('#grid.zoomed'), '拡大中の表示にならない');
+    // 1本指でなぞると移動する。指を離しても施設は開かない
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] });
+    for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + i * 10, y: cy + i * 6, id: 1 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const v2 = await view();
+    assert(v2.x > v.x + 20 && v2.y > v.y + 10, '移動しない ' + JSON.stringify([v, v2]));
+    await page.waitForTimeout(500);
+    assert(await page.isHidden('#sheetWrap'), 'なぞっただけで施設が開いた');
+    // 拡大したまま、司令部(中央)をタップすると開く
+    const hq = await page.evaluate(() => { const r = document.querySelector('.tile[data-slot="4"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.55 }; });
+    await page.mouse.click(hq.x, hq.y);
+    await page.waitForSelector('#sheetWrap:not(.hidden)');
+    assert((await page.textContent('#sheet')).includes('司令部'), '拡大中に司令部が開かない');
+    await page.click('.sheet .close');
+    // ボタン: 1× でもとに戻り、＋ で拡大、－ で縮小
+    await page.click('[data-act="base-zoom"][data-d="0"]');
+    assert.deepStrictEqual(await view(), { z: 1, x: 0, y: 0 });
+    assert(await page.isHidden('[data-act="base-zoom"][data-d="0"]'), 'もとの大きさのときは 1× ボタンを出さない');
+    await page.click('[data-act="base-zoom"][data-d="1"]');
+    assert(Math.abs((await view()).z - 1.5) < 0.01);
+    await page.click('[data-act="base-zoom"][data-d="-1"]');
+    assert.strictEqual((await view()).z, 1);
+    // もとの大きさのときは、なぞっても基地は動かない(画面のスクロールになる)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy, id: 1 }] });
+    for (let i = 1; i <= 4; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + i * 8, y: cy, id: 1 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    assert.deepStrictEqual(await view(), { z: 1, x: 0, y: 0 });
+    await noHorizontalScroll(page);
+  }, midState({})));
+
   await test('施設の強化で資源が減り、レベルが上がる', () => withPage('iPhone 13', async page => {
     const before = await state(page);
     await page.click('[data-act="tile"][data-slot="1"]');
