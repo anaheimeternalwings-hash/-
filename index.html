@@ -768,7 +768,7 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
 /* 結果: S評価・作戦の行 */
 .rline .rk{flex:none;width:24px;height:24px;display:grid;place-items:center;font-family:var(--mono);font-weight:900;color:#05080a;background:#ffd24d;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
 .rline .rk.op{background:var(--amber);font-family:inherit;font-size:12px}
-.rwmini{display:flex;gap:6px;font-size:12px;flex-wrap:wrap;justify-content:flex-end}
+.rwmini{display:flex;gap:8px;font-size:12px;flex-wrap:wrap;margin-top:2px}
 .rwmini .cost{font-size:12px}.rwmini .cost svg{width:13px;height:13px}
 
 /* ---- 最初の案内(吹き出しと光る輪) ---- */
@@ -778,8 +778,16 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
   box-shadow:0 8px 24px rgba(0,0,0,.6);clip-path:none;border-radius:4px}
 #coach::after{content:"";position:absolute;left:var(--ax,50%);bottom:-8px;margin-left:-8px;border:8px solid transparent;border-top-color:#f5b83d;border-bottom:0}
 #coach.below::after{bottom:auto;top:-8px;border:8px solid transparent;border-bottom-color:#ffd98a;border-top:0}
-#coach button{flex:none;width:36px;height:36px;font-size:15px;font-weight:900;color:#5a3d06;border-left:1px solid rgba(0,0,0,.2)}
+#coach button{flex:none;width:44px;height:44px;margin:-6px 0;font-size:15px;font-weight:900;color:#5a3d06;border-left:1px solid rgba(0,0,0,.2)}
 #coach.hidden,#coachRing.hidden{display:none}
+
+/* ---- 幅の狭い画面(320px)でも、上の資金・鋼材の数字が切れないように ---- */
+@media (max-width:350px){
+  #top{gap:5px;padding-left:8px;padding-right:8px}
+  .res{padding:4px 6px 4px 4px;gap:4px}
+  .res svg{width:18px;height:18px}
+  .res b{font-size:13px;letter-spacing:-.04em}
+}
 </style>
 </head>
 <body>
@@ -2993,7 +3001,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       if (!fx || !running() || cfg.mute || cfg.se <= 0) return;
       var t = ctx.currentTime;
       if (lastAt[name] !== undefined && t - lastAt[name] < fx.min) return;
-      if (voices > 46 && name.indexOf('shot.') === 0) return; // 鳴りすぎないように
+      // 鳴りすぎないように(同時に鳴る音が多いときは、発砲・着弾から間引く)
+      if (voices > 40 && name.indexOf('shot.') === 0) return;
+      if (voices > 56 && (name === 'boom' || name === 'crit' || name === 'tick' || name === 'found')) return;
       lastAt[name] = t;
       try { fx.f(t + 0.005, v === undefined ? 1 : v, p); } catch (e) { }
       // 大きな音のあいだ、BGMを少し下げる
@@ -4583,8 +4593,10 @@ if (typeof module !== 'undefined') module.exports = TF;
         hexPath(c.x, c.y, r * 1.05);
         g.fillStyle = done ? '#0d4a3f' : isNext ? '#8a1a14' : '#3a0f0d'; g.fill();
         g.strokeStyle = boss ? '#f5b83d' : done ? '#2fd6a6' : '#ff6a5c'; g.lineWidth = boss ? 2 : 1.4; g.shadowColor = g.strokeStyle; g.shadowBlur = done || isNext || boss ? 8 : 0; g.stroke(); g.shadowBlur = 0;
-        g.fillStyle = done ? '#a6f7e2' : '#fff'; g.font = '800 ' + Math.round(r * (done ? 0.9 : 0.78)) + 'px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(done ? '✓' : String(row), c.x, c.y + 0.5);
+        // 制圧したマスには最高評価(S・A・B。まだ記録がなければ ✓)
+        var rk = done ? TF.bestRank(st, row) : null;
+        g.fillStyle = rk === 'S' ? '#ffd24d' : rk === 'B' ? '#b9c7ce' : done ? '#a6f7e2' : '#fff'; g.font = '800 ' + Math.round(r * (done ? 0.9 : 0.78)) + 'px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(done ? rk || '✓' : String(row), c.x, c.y + 0.5);
         if (boss) { g.fillStyle = '#f5b83d'; g.font = '800 8px "SF Mono",ui-monospace,Menlo,monospace'; g.fillText('◆BOSS◆', c.x, c.y - r - 7); }
         if (done || isNext || row === st.sel) {
           var lab = row + ' ' + TF.stageInfo(row).place;
@@ -4671,8 +4683,8 @@ if (typeof module !== 'undefined') module.exports = TF;
         '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num" data-count="' + sum.s + '">+' + fmt(sum.s) + '</b></div>' +
         '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num" data-count="' + sum.bp + '">+' + fmt(sum.bp) + '</b></div>' +
         (sum.part ? '<div class="rline rare">' + icoPart() + '<span class="grow"><b>' + TF.partName(sum.part.g) + '</b></span><b class="num">+' + sum.part.n + '</b></div>' : '') +
-        (sum.sBonus ? '<div class="rline rare" id="resSBonus"><span class="rk">S</span><span class="grow"><b>S評価 初回ボーナス</b></span><span class="rwmini">' + rewardHtml(sum.sBonus) + '</span></div>' : '') +
-        (sum.op ? '<div class="rline rare" id="resOp"><span class="rk op">作</span><span class="grow"><b>作戦「' + esc(sum.op.name) + '」制圧!</b></span><span class="rwmini">' + rewardHtml(sum.op) + '</span></div>' : '') +
+        (sum.sBonus ? '<div class="rline rare" id="resSBonus"><span class="rk">S</span><span class="grow"><b>S評価 初回ボーナス</b><span class="rwmini">' + rewardHtml(sum.sBonus) + '</span></span></div>' : '') +
+        (sum.op ? '<div class="rline rare" id="resOp"><span class="rk op">作</span><span class="grow"><b>作戦「' + esc(sum.op.name) + '」制圧!</b><span class="rwmini">' + rewardHtml(sum.op) + '</span></span></div>' : '') +
         (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') +
         (!sum.sBonus && rank !== 'S' && sum.best !== 'S' ? '<div class="small" style="text-align:center;color:var(--khaki)">被害を3割以下に抑えると S評価(初回ボーナスあり)</div>' : '') +
         (sum.msNew > 0 ? '<div class="small" id="resMs" style="text-align:center;color:var(--good)">任務を達成! 基地の「司令室」で報酬を受け取れます</div>' : '') + '</div>';
@@ -5234,6 +5246,9 @@ if (typeof module !== 'undefined') module.exports = TF;
       box.innerHTML = '<span id="coachTx"></span><button data-act="guide-skip" aria-label="案内をやめる">✕</button>';
       ring = document.createElement('div'); ring.id = 'coachRing'; ring.className = 'hidden';
       document.body.appendChild(ring); document.body.appendChild(box);
+      // 画面を動かしたら、すぐ輪を付け直す
+      ['main', 'sheet'].forEach(function (id) { $(id).addEventListener('scroll', function () { if (timer) update(); }, { passive: true }); });
+      window.addEventListener('resize', function () { if (timer) update(); });
     }
     function hide() { if (box) { box.classList.add('hidden'); ring.classList.add('hidden'); } last = ''; }
     function update() {

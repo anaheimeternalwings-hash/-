@@ -1287,7 +1287,7 @@ function midState(over) {
       delete old.flags.v2;
       // 保存データは最初の1回だけ入れる(開き直したときは、ゲームが保存した続きを使う)
       await ctx.addInitScript(([k, s]) => { if (!localStorage.getItem('__inj')) { localStorage.setItem(k, s); localStorage.setItem('__inj', '1'); } }, [KEY, JSON.stringify(old)]);
-      let page = await ctx.newPage();
+      const page = await ctx.newPage();
       await openGame(page);
       await page.waitForSelector('[data-act="v2-ok"]');
       assert((await page.textContent('#modal')).includes('Ver.2'));
@@ -1298,10 +1298,12 @@ function midState(over) {
       await page.click('[data-act="v2-ok"]');
       await page.waitForSelector('#sheet .gitem');
       assert(await page.locator('#sheet [data-act="medal-claim"]:not([disabled])').count() >= 2, 'これまでの戦績の勲章が受け取れない');
-      await page.close();
-      page = await ctx.newPage();
+      assert.strictEqual((await state(page)).flags.v2, 1);
+      // 開き直しても、もう出ない
+      await page.click('.sheet .close');
       await openGame(page);
       await page.waitForTimeout(400);
+      assert.strictEqual((await state(page)).flags.v2, 1, '保存されていない');
       assert(await page.isHidden('[data-act="v2-ok"]'), 'お知らせが2回出た');
     } finally { await browser.close(); }
   });
@@ -1326,7 +1328,8 @@ function midState(over) {
       const guide = () => page.evaluate(() => window.__game.guide.debug());
       const want = async (sel, word) => {
         await page.waitForFunction(([s, w]) => { const g = window.__game.guide.debug(); return g.shown && g.step && g.step.sel === s && g.text.includes(w); }, [sel, word], { timeout: 8000 }).catch(async () => { throw new Error('案内が出ない: ' + sel + ' / いま ' + JSON.stringify(await guide())); });
-        // 光る輪が、押す場所を囲んでいる。吹き出しは画面の中
+        // 光る輪が、押す場所を囲んでいる。吹き出しは画面の中(画面が動いた直後は、付け直すまで少し待つ)
+        await page.waitForFunction(s => { const t = document.querySelector(s).getBoundingClientRect(), q = document.getElementById('coachRing').getBoundingClientRect(); return q.left <= t.left + 1 && q.top <= t.top + 1 && q.right >= t.right - 1 && q.bottom >= t.bottom - 1; }, sel, { timeout: 3000 }).catch(() => {});
         const r = await page.evaluate(s => { const t = document.querySelector(s).getBoundingClientRect(), q = document.getElementById('coachRing').getBoundingClientRect(), b = document.getElementById('coach').getBoundingClientRect(); return { t: [t.left, t.top, t.right, t.bottom], q: [q.left, q.top, q.right, q.bottom], b: [b.left, b.top, b.right, b.bottom], w: innerWidth, h: innerHeight }; }, sel);
         assert(r.q[0] <= r.t[0] + 1 && r.q[1] <= r.t[1] + 1 && r.q[2] >= r.t[2] - 1 && r.q[3] >= r.t[3] - 1, '輪がずれている ' + JSON.stringify(r));
         assert(r.b[0] >= 0 && r.b[2] <= r.w + 0.5 && r.b[1] >= 0 && r.b[3] <= r.h + 0.5, '吹き出しがはみ出す ' + JSON.stringify(r));

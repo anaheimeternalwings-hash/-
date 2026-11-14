@@ -166,7 +166,9 @@
       if (!fx || !running() || cfg.mute || cfg.se <= 0) return;
       var t = ctx.currentTime;
       if (lastAt[name] !== undefined && t - lastAt[name] < fx.min) return;
-      if (voices > 46 && name.indexOf('shot.') === 0) return; // 鳴りすぎないように
+      // 鳴りすぎないように(同時に鳴る音が多いときは、発砲・着弾から間引く)
+      if (voices > 40 && name.indexOf('shot.') === 0) return;
+      if (voices > 56 && (name === 'boom' || name === 'crit' || name === 'tick' || name === 'found')) return;
       lastAt[name] = t;
       try { fx.f(t + 0.005, v === undefined ? 1 : v, p); } catch (e) { }
       // 大きな音のあいだ、BGMを少し下げる

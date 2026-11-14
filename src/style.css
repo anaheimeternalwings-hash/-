@@ -754,7 +754,7 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
 /* 結果: S評価・作戦の行 */
 .rline .rk{flex:none;width:24px;height:24px;display:grid;place-items:center;font-family:var(--mono);font-weight:900;color:#05080a;background:#ffd24d;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
 .rline .rk.op{background:var(--amber);font-family:inherit;font-size:12px}
-.rwmini{display:flex;gap:6px;font-size:12px;flex-wrap:wrap;justify-content:flex-end}
+.rwmini{display:flex;gap:8px;font-size:12px;flex-wrap:wrap;margin-top:2px}
 .rwmini .cost{font-size:12px}.rwmini .cost svg{width:13px;height:13px}
 
 /* ---- 最初の案内(吹き出しと光る輪) ---- */
@@ -764,5 +764,13 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
   box-shadow:0 8px 24px rgba(0,0,0,.6);clip-path:none;border-radius:4px}
 #coach::after{content:"";position:absolute;left:var(--ax,50%);bottom:-8px;margin-left:-8px;border:8px solid transparent;border-top-color:#f5b83d;border-bottom:0}
 #coach.below::after{bottom:auto;top:-8px;border:8px solid transparent;border-bottom-color:#ffd98a;border-top:0}
-#coach button{flex:none;width:36px;height:36px;font-size:15px;font-weight:900;color:#5a3d06;border-left:1px solid rgba(0,0,0,.2)}
+#coach button{flex:none;width:44px;height:44px;margin:-6px 0;font-size:15px;font-weight:900;color:#5a3d06;border-left:1px solid rgba(0,0,0,.2)}
 #coach.hidden,#coachRing.hidden{display:none}
+
+/* ---- 幅の狭い画面(320px)でも、上の資金・鋼材の数字が切れないように ---- */
+@media (max-width:350px){
+  #top{gap:5px;padding-left:8px;padding-right:8px}
+  .res{padding:4px 6px 4px 4px;gap:4px}
+  .res svg{width:18px;height:18px}
+  .res b{font-size:13px;letter-spacing:-.04em}
+}

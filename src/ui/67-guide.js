@@ -32,6 +32,9 @@
       box.innerHTML = '<span id="coachTx"></span><button data-act="guide-skip" aria-label="案内をやめる">✕</button>';
       ring = document.createElement('div'); ring.id = 'coachRing'; ring.className = 'hidden';
       document.body.appendChild(ring); document.body.appendChild(box);
+      // 画面を動かしたら、すぐ輪を付け直す
+      ['main', 'sheet'].forEach(function (id) { $(id).addEventListener('scroll', function () { if (timer) update(); }, { passive: true }); });
+      window.addEventListener('resize', function () { if (timer) update(); });
     }
     function hide() { if (box) { box.classList.add('hidden'); ring.classList.add('hidden'); } last = ''; }
     function update() {

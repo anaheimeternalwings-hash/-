@@ -323,8 +323,10 @@
         hexPath(c.x, c.y, r * 1.05);
         g.fillStyle = done ? '#0d4a3f' : isNext ? '#8a1a14' : '#3a0f0d'; g.fill();
         g.strokeStyle = boss ? '#f5b83d' : done ? '#2fd6a6' : '#ff6a5c'; g.lineWidth = boss ? 2 : 1.4; g.shadowColor = g.strokeStyle; g.shadowBlur = done || isNext || boss ? 8 : 0; g.stroke(); g.shadowBlur = 0;
-        g.fillStyle = done ? '#a6f7e2' : '#fff'; g.font = '800 ' + Math.round(r * (done ? 0.9 : 0.78)) + 'px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillText(done ? '✓' : String(row), c.x, c.y + 0.5);
+        // 制圧したマスには最高評価(S・A・B。まだ記録がなければ ✓)
+        var rk = done ? TF.bestRank(st, row) : null;
+        g.fillStyle = rk === 'S' ? '#ffd24d' : rk === 'B' ? '#b9c7ce' : done ? '#a6f7e2' : '#fff'; g.font = '800 ' + Math.round(r * (done ? 0.9 : 0.78)) + 'px "SF Mono",ui-monospace,Menlo,monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(done ? rk || '✓' : String(row), c.x, c.y + 0.5);
         if (boss) { g.fillStyle = '#f5b83d'; g.font = '800 8px "SF Mono",ui-monospace,Menlo,monospace'; g.fillText('◆BOSS◆', c.x, c.y - r - 7); }
         if (done || isNext || row === st.sel) {
           var lab = row + ' ' + TF.stageInfo(row).place;
@@ -411,8 +413,8 @@
         '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num" data-count="' + sum.s + '">+' + fmt(sum.s) + '</b></div>' +
         '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num" data-count="' + sum.bp + '">+' + fmt(sum.bp) + '</b></div>' +
         (sum.part ? '<div class="rline rare">' + icoPart() + '<span class="grow"><b>' + TF.partName(sum.part.g) + '</b></span><b class="num">+' + sum.part.n + '</b></div>' : '') +
-        (sum.sBonus ? '<div class="rline rare" id="resSBonus"><span class="rk">S</span><span class="grow"><b>S評価 初回ボーナス</b></span><span class="rwmini">' + rewardHtml(sum.sBonus) + '</span></div>' : '') +
-        (sum.op ? '<div class="rline rare" id="resOp"><span class="rk op">作</span><span class="grow"><b>作戦「' + esc(sum.op.name) + '」制圧!</b></span><span class="rwmini">' + rewardHtml(sum.op) + '</span></div>' : '') +
+        (sum.sBonus ? '<div class="rline rare" id="resSBonus"><span class="rk">S</span><span class="grow"><b>S評価 初回ボーナス</b><span class="rwmini">' + rewardHtml(sum.sBonus) + '</span></span></div>' : '') +
+        (sum.op ? '<div class="rline rare" id="resOp"><span class="rk op">作</span><span class="grow"><b>作戦「' + esc(sum.op.name) + '」制圧!</b><span class="rwmini">' + rewardHtml(sum.op) + '</span></span></div>' : '') +
         (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') +
         (!sum.sBonus && rank !== 'S' && sum.best !== 'S' ? '<div class="small" style="text-align:center;color:var(--khaki)">被害を3割以下に抑えると S評価(初回ボーナスあり)</div>' : '') +
         (sum.msNew > 0 ? '<div class="small" id="resMs" style="text-align:center;color:var(--good)">任務を達成! 基地の「司令室」で報酬を受け取れます</div>' : '') + '</div>';
