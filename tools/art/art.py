@@ -61,7 +61,8 @@ def unit(key, im):
     rgba = np.dstack([rgb, al]).astype(np.uint8)
     img = Image.fromarray(rgba, 'RGBA')
     # 細長い兵器(銃など)が斜めに描かれていたら、横向きに直す(主軸の向きをそろえる)
-    if key.startswith('a.'):
+    # (砲兵の砲は、砲身を上げた姿が正しいので直さない)
+    if key.startswith('a.') and not key.startswith('a.art.'):
         ys, xs = np.where(al > 24)
         if len(xs) > 50:
             cxy = np.stack([xs - xs.mean(), ys - ys.mean()])

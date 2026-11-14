@@ -35,6 +35,15 @@ for f in sorted(glob.glob(D + '/grid/*')):
     if name not in G: print('skip', name); continue
     g = G[name]; im = Image.open(f).convert('RGB')
     if 'crop' in g: im = im.crop(tuple(g['crop']))
+    # 絵に入ってしまった文字を消す(paint: その範囲を、左右のふちの色でなめらかに埋める)、墨のしぶきなどを消す(white: 白で塗る)
+    if 'paint' in g or 'white' in g:
+        px = np.asarray(im).astype(np.float32).copy()
+        for x0, y0, x1, y1 in g.get('paint', []):
+            L = px[y0:y1, x0 - 3:x0].mean(axis=1, keepdims=True); R = px[y0:y1, x1:x1 + 3].mean(axis=1, keepdims=True)
+            k = np.linspace(0, 1, x1 - x0)[None, :, None]
+            px[y0:y1, x0:x1] = L * (1 - k) + R * k
+        for x0, y0, x1, y1 in g.get('white', []): px[y0:y1, x0:x1] = 255
+        im = Image.fromarray(px.clip(0, 255).astype(np.uint8))
     a = np.asarray(im).astype(np.int16)
     if 'cells' in g:
         # 切り出す範囲をじかに指定(絵の下に文字が入っているときなど)
