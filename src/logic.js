@@ -285,6 +285,10 @@ var TF = (function () {
     // 配置: 前進(与/被ダメージ↑・狙われやすい)、後退(与/被ダメージ↓・狙われにくい。砲兵は与ダメージが下がらない)
     stDeal: { '1': 1.25, '-1': 0.75 }, stTake: { '1': 1.25, '-1': 0.6 }, stAim: { '1': 1.6, '-1': 0.5 },
     ecmdRate: 0.3, ecmdFocus: 6, ecmdJit: 2, ecmdHp: 3.5, ecmdAdv: 0.04, artSpot: 2.0,
+    // 妨害(手動のときだけ): 敵将の発動まで残り jamT 秒になった時点でたまっていた指揮官スキルを、発動までに使うと、
+    // その敵将スキルの効果が jamMul 倍(半分)になる。1回の予告につき1回。
+    // 「残り jamT 秒より前からたまっていた」ことが条件なので、たまったらすぐ使うだけでは妨害にならず、1つ取っておく判断が要る
+    jamT: 3, jamMul: 0.5,
     // 兵種ごとに編成できる部隊の数の上限(ほかに置ける兵種がないときだけ超えてよい)
     typeCap: { inf: 4, at: 3, tank: 3, art: 2 },
     rankS: 0.7, rankA: 0.45, flawless: 0.95,
@@ -1049,7 +1053,7 @@ var TF = (function () {
     var fortUntil = [-1, -1], jamUntil = [-1, -1]; // 敵将のスキル: 不落要塞・電子妨害
     var focus = [-1, -1], focusT = [-1, -1]; // 集中攻撃の目標(敵の側だけが使う)
     var ev = opt.record ? [] : null;
-    var t = 0, winner = -1, done = false, maxT = K.maxT, stops = 0;
+    var t = 0, winner = -1, done = false, maxT = K.maxT, stops = 0, jams = 0;
     var auto = opt.auto !== false; // false: 自軍のスキル・増援・配置は手動
     function laneDist(a, b) { return distAt(a, b, t); }
     // ---- 索敵(地形マップのある戦闘だけ) ----
@@ -1405,30 +1409,31 @@ var TF = (function () {
     }
     // 敵将のスキル
     function ecmdCast(u) {
-      var c = ECMD[u.esk], foes = live[1 - u.side], j, out = { t: t, k: 'eskCast', s: u.id, sk: u.esk };
+      var c = ECMD[u.esk], foes = live[1 - u.side], j, out = { t: t, k: 'eskCast', s: u.id, sk: u.esk }, jm = u.jammed ? K.jamMul : 1; // 妨害されていたら効果は半分
+      if (u.jammed) out.jam = 1;
       if (u.esk === 'ghost') {
         var rv = [], bp = posAt(u, t);
         U.forEach(function (x) {
           if (x.side !== u.side || x.alive || x.reserveOnly) return;
-          x.alive = true; x.hp = Math.max(1, Math.round(x.maxHp * c.hp)); x.order = null; x.goal = null; x.mv = null;
+          x.alive = true; x.hp = Math.max(1, Math.round(x.maxHp * c.hp * jm)); x.order = null; x.goal = null; x.mv = null;
           if (hasPos(x) && hasPos(u)) { var a = rnd() * 6.283; x.x = Math.max(K.mapX[0], Math.min(K.mapX[1], bp.x + Math.cos(a) * 0.5)); x.y = Math.max(K.mapY[0], Math.min(K.mapY[1], bp.y + Math.sin(a) * 0.25)); x.lx = x.x; }
           x.next = t + 0.6; live[x.side].push(x); rv.push({ d: x.id, hp: x.hp });
         });
         out.revive = rv;
       } else if (u.esk === 'wall') {
-        fortUntil[u.side] = t + c.dur;
+        fortUntil[u.side] = t + c.dur * jm;
         var hs = [];
-        live[u.side].forEach(function (x) { var g = Math.min(x.maxHp - x.hp, Math.round(x.maxHp * c.heal)); if (g > 0) { x.hp += g; hs.push({ d: x.id, heal: g }); } });
-        out.dur = c.dur; out.heals = hs;
+        live[u.side].forEach(function (x) { var g = Math.min(x.maxHp - x.hp, Math.round(x.maxHp * c.heal * jm)); if (g > 0) { x.hp += g; hs.push({ d: x.id, heal: g }); } });
+        out.dur = c.dur * jm; out.heals = hs;
       } else if (u.esk === 'thunder') {
         if (!foes.length) return;
         var best = foes[0], bs = -1;
         foes.forEach(function (f0) { var n = 0; foes.forEach(function (f1) { if (distAt(f0, f1, t) <= c.r) n += f1.maxHp; }); if (n > bs) { bs = n; best = f0; } });
         var tg = foes.filter(function (f1) { return distAt(best, f1, t) <= c.r; }), hits = [];
-        for (j = 0; j < tg.length; j++) { var h = damage(tg[j], Math.max(1, Math.round(tg[j].maxHp * c.dmg * (t < armUntil[tg[j].side] ? SKILL.armor.mul : 1))), u.side); hits.push({ d: tg[j].id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 }); }
+        for (j = 0; j < tg.length; j++) { var h = damage(tg[j], Math.max(1, Math.round(tg[j].maxHp * c.dmg * jm * (t < armUntil[tg[j].side] ? SKILL.armor.mul : 1))), u.side); hits.push({ d: tg[j].id, dmg: Math.abs(h), kill: h < 0 ? 1 : 0 }); }
         out.hits = hits; var cp = hasPos(best) ? posAt(best, t) : null; out.x = cp ? cp.x : null; out.y = cp ? cp.y : null;
       } else if (u.esk === 'viper') {
-        jamUntil[1 - u.side] = t + c.dur; out.dur = c.dur;
+        jamUntil[1 - u.side] = t + c.dur * jm; out.dur = c.dur * jm;
       } else if (u.esk === 'witch') {
         var cand = foes.filter(function (f) { return !f.hero; });
         if (!cand.length) cand = foes.slice();
@@ -1438,11 +1443,12 @@ var TF = (function () {
         settle(tu);
         live[tu.side].splice(live[tu.side].indexOf(tu), 1);
         tu.side = u.side; tu.order = null; tu.goal = null; tu.sk = null; tu.skNext = Infinity; tu.hold = false; tu.next = t + 0.5;
+        if (jm < 1) tu.hp = Math.max(1, Math.round(tu.hp * jm)); // 妨害: 寝返った部隊は、兵力が半分になって敵に加わる
         live[tu.side].push(tu);
         out.d = tu.id;
       } else if (u.esk === 'reaper') {
         var hh = [];
-        foes.filter(function (f) { return f.hero; }).forEach(function (f) { var h2 = damage(f, Math.max(1, Math.round(f.maxHp * c.dmg)), u.side); hh.push({ d: f.id, dmg: Math.abs(h2), kill: h2 < 0 ? 1 : 0 }); });
+        foes.filter(function (f) { return f.hero; }).forEach(function (f) { var h2 = damage(f, Math.max(1, Math.round(f.maxHp * c.dmg * jm)), u.side); hh.push({ d: f.id, dmg: Math.abs(h2), kill: h2 < 0 ? 1 : 0 }); });
         out.hits = hh;
       }
       if (ev) ev.push(out);
@@ -1450,6 +1456,11 @@ var TF = (function () {
     // 応急手当は、傷ついた味方がいないときは使わずに待つ(AUTO・敵)
     function healNeeded(side) { return live[side].some(function (x) { return x.hp < x.maxHp * 0.8; }); }
     function manualSkill(u) { return !auto && u.side === 0; }
+    // readyAt: そのスキルがたまった時刻。発動まで残り jamT 秒になる前からたまっていたスキルだけが妨害になる
+    function jamTarget(readyAt) {
+      for (var j = 0; j < live[1].length; j++) { var f = live[1][j]; if (f.eskWarn && !f.jammed && f.eskNext - t <= K.jamT && readyAt <= f.eskNext - K.jamT) return f; }
+      return null;
+    }
     // 時刻 T までの行動をすべて処理する
     function step(T) {
       while (!done) {
@@ -1474,7 +1485,7 @@ var TF = (function () {
         if (dep >= 0) { deploy(dep, dep === 0 ? bestReserveType() : null); continue; }
         if (isSk === 'esk') {
           if (!actor.eskWarn) { actor.eskWarn = true; if (ev) ev.push({ t: t, k: 'eskWarn', s: actor.id, sk: actor.esk, at: actor.eskNext }); }
-          else { actor.eskWarn = false; ecmdCast(actor); actor.eskNext = t + ECMD[actor.esk].cd; flushKills(); if (!live[1 - actor.side].length) { winner = actor.side; done = true; } }
+          else { actor.eskWarn = false; ecmdCast(actor); actor.jammed = false; actor.eskNext = t + ECMD[actor.esk].cd; flushKills(); if (!live[1 - actor.side].length) { winner = actor.side; done = true; } }
           continue;
         }
         if (isSk && actor.sk === 'heal' && !healNeeded(actor.side)) { actor.skNext = t + 1; continue; }
@@ -1490,7 +1501,7 @@ var TF = (function () {
       for (i = 0; i < U.length; i++) { var x = U[i]; if (x.side === 0) { hpP += x.hp; mxP += x.maxHp; } else { hpE += x.hp; mxE += x.maxHp; } }
       var kills = 0;
       for (i = 0; i < U.length; i++) if (U[i].side === 1 && !U[i].alive) kills++;
-      return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, kills: kills, estop: stops, ev: ev };
+      return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, kills: kills, estop: stops, jam: jams, ev: ev };
     }
     return {
       U: U, ev: ev, step: step, result: result,
@@ -1576,10 +1587,28 @@ var TF = (function () {
         if (done || !u.alive) return false;
         t = tt;
         if (SKILL_AIM[u.sk] && !visFoes(0).length) return false; // 見えている敵がいない
+        var readyAt = u.skNext;
         cast(u);
         u.skLast = t; u.skNext = t + SKILL[u.sk].cd;
+        // 妨害: 取っておいたスキルを、発動まで残りわずかの敵将に合わせた
+        var jf = jamTarget(readyAt);
+        if (jf) {
+          jf.jammed = true; jams++;
+          if (ev) ev.push({ t: t, k: 'jam', s: u.id, d: jf.id, sk: jf.esk });
+        }
         if (!live[1].length) { winner = 0; done = true; }
         return true;
+      },
+      // 予告中の敵将と、妨害できるかどうか(open = 発動まで残り jamT 秒以内で、まだ妨害していない)。いなければ null。画面のボタン用
+      jamInfo: function (now) {
+        var T = now === undefined ? t : Math.max(t, now), out = null;
+        live[1].forEach(function (f) {
+          if (!f.eskWarn || out) return;
+          out = { id: f.id, left: Math.max(0, f.eskNext - T), done: !!f.jammed, open: f.eskNext - T <= K.jamT && !f.jammed, by: [] };
+          // by: いま使えば妨害になる自軍の部隊(残り jamT 秒より前からスキルがたまっている)
+          if (out.open) live[0].forEach(function (u) { if (u.sk && u.skNext <= f.eskNext - K.jamT && u.skNext <= T) out.by.push(u.id); });
+        });
+        return out;
       }
     };
   }
@@ -1669,7 +1698,7 @@ var TF = (function () {
     var info = stageInfo(s);
     return { form: form, p: p, e: info.enemies, info: info, reserves: battleReserves(st, s), posts: true, terrain: info.terrain };
   }
-  // ext = { rank: 'S'|'A'|'B', kills: 撃破した敵部隊の数, manual: 手動で戦った, estop: 敵将のスキルを阻止した数, pHp: 残った兵力の割合 }
+  // ext = { rank: 'S'|'A'|'B', kills: 撃破した敵部隊の数, manual: 手動で戦った, estop: 敵将のスキルを阻止した数, jam: 妨害した数, pHp: 残った兵力の割合 }
   function applyResult(st, s, win, form, roll, ext) {
     var info = stageInfo(s);
     form = form || st.form || [];
@@ -1710,6 +1739,7 @@ var TF = (function () {
     ext = ext || {};
     if (ext.kills > 0) note(st, 'kill', ext.kills);
     if (ext.estop > 0) note(st, 'estop', ext.estop);
+    if (ext.jam > 0) note(st, 'jam', ext.jam);
     if (win) {
       var rk = RANK_N[ext.rank] || 1, prev = st.rank && st.rank[s] || 0;
       out.rank = RANK_L[rk]; out.best = RANK_L[Math.max(rk, prev)];
@@ -1777,6 +1807,7 @@ var TF = (function () {
     boss:    { name: 'ボス戦に勝利する', n: [1], min: 10 },
     ecmd:    { name: '敵将のいる戦闘に勝利する', n: [1], min: 13 },
     manual:  { name: '手動(AUTO OFF)で勝利する', n: [1], min: 3 },
+    jam:     { name: '敵将のスキルを{n}回妨害する(手動)', n: [1, 2], min: 13 },
     first:   { name: '新しいステージを{n}つ制圧する', n: [1, 2] },
     upgrade: { name: '施設を{n}回強化する', n: [2, 3, 4] },
     arm:     { name: '兵器を{n}回強化する', n: [2, 3], need: 'lab' },
@@ -1829,6 +1860,7 @@ var TF = (function () {
     { id: 'operation', name: '作戦章', desc: '作戦を制圧する(10ステージごとのボスを撃破)', unit: '作戦', t: [1, 3, 6, 10, 15], v: function (st) { return Math.floor(st.cleared / 10); } },
     { id: 'tactician', name: '采配章', desc: '手動(AUTO OFF)で勝利する', unit: '勝', t: [1, 10, 50], v: function (st) { return stat(st, 'manual'); } },
     { id: 'breaker', name: '阻止章', desc: '予告中の敵将を倒して、スキルを阻止する', unit: '回', t: [1, 5, 20], v: function (st) { return stat(st, 'estop'); } },
+    { id: 'jammer', name: '妨害章', desc: '敵将の発動直前に、手動でスキルを合わせて妨害する', unit: '回', t: [1, 10, 40], v: function (st) { return stat(st, 'jam'); } },
     { id: 'duelist', name: '将星章', desc: '敵将のいる戦闘に勝利する', unit: '勝', t: [1, 10, 40], v: function (st) { return stat(st, 'ecmd'); } },
     { id: 'flawless', name: '無傷章', desc: '被害5%以下で勝利する', unit: '勝', t: [1, 10, 50], v: function (st) { return stat(st, 'flawless'); } },
     { id: 'builder', name: '築城章', desc: '施設を建設・強化する', unit: '回', t: [10, 50, 150, 300], v: function (st) { return stat(st, 'upgrade'); } },

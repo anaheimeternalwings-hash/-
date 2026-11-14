@@ -1280,32 +1280,29 @@ function midState(over) {
   }, strong({ money: 1e7, steel: 1e7 })));
 
   await test('前の版のセーブで開くと、新しい版のお知らせが1回だけ出る。データはそのままで、勲章の画面へ案内される', async () => {
-    const browser = await chromium.launch();
-    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
-    try {
-      const old = midState({ cleared: 34, sel: 35 });
-      delete old.flags.v2;
-      // 保存データは最初の1回だけ入れる(開き直したときは、ゲームが保存した続きを使う)
-      await ctx.addInitScript(([k, s]) => { if (!localStorage.getItem('__inj')) { localStorage.setItem(k, s); localStorage.setItem('__inj', '1'); } }, [KEY, JSON.stringify(old)]);
-      const page = await ctx.newPage();
-      await openGame(page);
+    const old = midState({ cleared: 34, sel: 35 });
+    delete old.flags.v2;
+    let saved = null;
+    await withPage('iPhone 13', async page => {
       await page.waitForSelector('[data-act="v2-ok"]');
       assert((await page.textContent('#modal')).includes('Ver.2'));
-      let st = await state(page);
+      const st = await state(page);
       assert.strictEqual(st.cleared, 34);
       assert.strictEqual(st.money, old.money);
       assert.deepStrictEqual(st.rank, {});
       await page.click('[data-act="v2-ok"]');
       await page.waitForSelector('#sheet .gitem');
       assert(await page.locator('#sheet [data-act="medal-claim"]:not([disabled])').count() >= 2, 'これまでの戦績の勲章が受け取れない');
-      assert.strictEqual((await state(page)).flags.v2, 1);
-      // 開き直しても、もう出ない
-      await page.click('.sheet .close');
-      await openGame(page);
-      await page.waitForTimeout(400);
-      assert.strictEqual((await state(page)).flags.v2, 1, '保存されていない');
+      // 「もう見た」ことが保存されている
+      saved = await page.evaluate(k => JSON.parse(localStorage.getItem(k)), KEY);
+      assert.strictEqual(saved.flags.v2, 1, '保存されていない');
+    }, old);
+    // 保存されたデータで開き直しても、もう出ない
+    await withPage('iPhone 13', async page => {
+      await page.waitForTimeout(500);
       assert(await page.isHidden('[data-act="v2-ok"]'), 'お知らせが2回出た');
-    } finally { await browser.close(); }
+      assert.strictEqual((await state(page)).cleared, 34);
+    }, saved);
   });
 
   await test('最初の案内: あいさつからそのまま最初の戦闘へ。勝ったら基地で、押す場所が光る輪と吹き出しで示される(補給所 → 兵舎の強化 → 出撃)', async () => {
@@ -1408,6 +1405,44 @@ function midState(over) {
       assert(await page.isHidden('[data-act="dep-yes"]'), '配置の紹介が2回出た');
     } finally { await browser.close(); }
   });
+
+  await test('妨害: 手動でスキルを取っておき、敵将の発動まで残り3秒で使うと「妨害!」。取っておいたボタンが光り、上の帯が案内する。発動の帯は「効果は半分」。記録に数えられる', () => withPage('iPhone 13', async page => {
+    const dbg = () => page.evaluate(() => window.__game.battle.debug());
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    assert((await page.textContent('#ecmdInfo')).includes('妨害'), '出撃画面に妨害の説明がない');
+    await page.click('[data-act="auto"]');
+    await page.click('[data-act="mode"][data-m="manual"]');
+    await page.click('[data-act="sortie"]');
+    // 予告が始まるまで、スキルは押さない(= 取っておく)。残り3秒より前は、ボタンは光らない
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.ewarn; }, null, { timeout: 40000, polling: 30 });
+    let d = await dbg();
+    assert(d.jamInfo && !d.jamInfo.open && !d.jamOpen && d.jamInfo.left > 3, '予告が始まってすぐ妨害できる ' + JSON.stringify(d.jamInfo));
+    assert.strictEqual(await page.locator('.skb.jam').count(), 0);
+    // 残り3秒になると、取っておいたスキルのボタンが光って「妨害!」
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && (x.jamOpen || x.ending || !x.ewarn); }, null, { timeout: 40000, polling: 20 });
+    d = await dbg();
+    assert(d.jamOpen && d.jamInfo.left <= 3, '残り3秒になっても妨害できない ' + JSON.stringify(d.jamInfo));
+    await page.waitForSelector('.skb.jam');
+    assert((await page.textContent('.skb.jam >> nth=0')).includes('妨害'));
+    await page.click('.skb.jam >> nth=0');
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return !x || x.jams === 1; });
+    assert.strictEqual((await dbg()).jams, 1, '妨害にならない');
+    assert.strictEqual((await page.evaluate(() => window.__game.snd.debug())).played.jam, 1, '妨害の音が鳴らない');
+    assert((await dbg()).ewarn.jammed, '上の帯が「妨害成功」にならない');
+    // 1回の予告につき1回: もう光らない
+    await page.waitForTimeout(300);
+    assert.strictEqual(await page.locator('.skb.jam').count(), 0, '妨害のあとも光っている');
+    assert.strictEqual((await dbg()).jamInfo.done, true);
+    // 敵将が発動したら、帯は「妨害で効果は半分」(発動の前に決着したときは、帯は出ない。半分になることは計算のテストで確かめている)
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return !x || x.ending || x.ecast >= 1; }, null, { timeout: 20000, polling: 20 });
+    d = await dbg();
+    if (d && !d.ending) {
+      assert(d.banner && d.banner.side === 1 && /半分/.test(d.banner.sub || ''), '発動の帯に「効果は半分」が出ない ' + JSON.stringify(d.banner));
+      await page.click('[data-act="skip"]');
+    }
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 20000 });
+    assert.strictEqual((await state(page)).stats.jam, 1, '妨害が記録されていない');
+  }, midState({ cleared: 13, sel: 14 })));
 
   if (failures) { console.log(`\n${failures}件の失敗`); process.exit(1); }
   console.log('\nすべて合格');

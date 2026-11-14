@@ -43,7 +43,8 @@
     if (info.ecmd) {
       var ec = TF.ECMD[info.ecmd];
       html += '<div class="ecmd" id="ecmdInfo"><div class="eportrait">' + ecmdSvg(info.ecmd) + '</div><div class="grow"><b>敵将「' + esc(ec.name) + '」</b> スキル〈' + esc(ec.skill) + '〉: ' + esc(ec.desc) +
-        '<div class="small">発動の' + ec.warn + '秒前に予告があり、そのあいだ敵将の位置がわかります。予告中に倒せば止められます</div></div></div>';
+        '<div class="small">発動の' + ec.warn + '秒前に予告があり、そのあいだ敵将の位置がわかります。予告中に倒せば止められます</div>' +
+        '<div class="small jamtip"><b>妨害(手動のとき)</b>: 指揮官スキルを1つ使わずに取っておき、発動まで残り' + TF.K.jamT + '秒になったら使うと、このスキルの効果が半分になります</div></div></div>';
     }
     html += '</div>';
     // 自軍
@@ -374,7 +375,7 @@
     Battle.play(prep, seed, st.speed, st.auto !== false, function (res) {
       if (!st.pending) return;
       st.pending.win = res.win; st.pending.timeout = res.timeout; st.pending.pHp = res.pHp; st.pending.time = res.time;
-      st.pending.kills = res.kills; st.pending.manual = res.manual; st.pending.estop = res.estop;
+      st.pending.kills = res.kills; st.pending.manual = res.manual; st.pending.estop = res.estop; st.pending.jam = res.jam;
       finishBattle();
     }, {
       deploy: !(st.flags && st.flags.skipDeploy),
@@ -393,7 +394,7 @@
     var wasCleared = st.cleared;
     TF.msState(st, dayNum());
     var canBefore = TF.msClaimable(st);
-    var sum = TF.applyResult(st, p.s, p.win, p.form, partRoll(p.seed), { rank: TF.rankOf({ win: p.win, pHp: p.pHp || 0 }), kills: p.kills || 0, manual: !!p.manual, estop: p.estop || 0, pHp: p.pHp || 0 });
+    var sum = TF.applyResult(st, p.s, p.win, p.form, partRoll(p.seed), { rank: TF.rankOf({ win: p.win, pHp: p.pHp || 0 }), kills: p.kills || 0, manual: !!p.manual, estop: p.estop || 0, jam: p.jam || 0, pHp: p.pHp || 0 });
     sum.msNew = TF.msClaimable(st) - canBefore;
     st.pending = null;
     if (sum.part) st.flags.itemNew = 1; // 新しいアイテム: かばんのボタンに印

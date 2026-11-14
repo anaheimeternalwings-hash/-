@@ -783,6 +783,7 @@
       if (ev.k === 'lane') { laneMoveVisual(ev, true); return; }
       if (ev.k === 'refl') { applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); return; }
       if (ev.k === 'eskWarn' || ev.k === 'eskCast') { ecmdEvent(ev, true); return; }
+      if (ev.k === 'jam') { B.jam = (B.jam || 0) + 1; return; }
       if (ev.k === 'skill' && ev.heals) { ev.heals.forEach(function (h) { var hu = B.units[h.d]; if (hu) { hu.hp = Math.min(hu.maxHp, hu.hp + h.heal); reviveFigs(hu); } }); return; }
       if (ev.k === 'post') { postEvent(ev, true); return; }
       if (ev.k === 'atk') { if (!ev.miss) applyImpact({ d: ev.d, dmg: ev.dmg, kill: ev.kill, quiet: true }); }
@@ -1194,6 +1195,16 @@
       var s = B.units[ev.s];
       if (ev.k === 'lane') { laneMoveVisual(ev, false); return; }
       if (ev.k === 'eskWarn' || ev.k === 'eskCast') { ecmdEvent(ev, false); return; }
+      if (ev.k === 'jam') {
+        // 妨害: 取っておいたスキルを、発動直前の敵将に合わせた(その敵将スキルの効果が半分になる)
+        B.jam = (B.jam || 0) + 1;
+        if (B.ewarn && B.ewarn.s === ev.d) { B.ewarn.jammed = true; B.ewarn.jamT = fxNow(); }
+        var jc = B.units[ev.d];
+        SND.play('jam'); B.shake = Math.max(B.shake, 7);
+        if (jc) { text(jc.wx, jc.wy, '妨害!', '#7df0ff', 24, 56); part(jc.wx, jc.wy, { life: 0.5, r: 16, c: 'shock' }); B.beams.push({ x0: s.wx, y0: s.wy, x1: jc.wx, y1: jc.wy, life: 0.35, max: 0.35, c: 'refl' }); }
+        showHint('妨害成功! 〈' + TF.ECMD[ev.sk].skill + '〉の効果は半分になる', 2.6);
+        return;
+      }
       if (ev.k === 'refl') {
         // 鉄壁反撃: 撃たれた部隊から撃った部隊へ光が返る
         var rt = B.units[ev.d];
@@ -1283,13 +1294,14 @@
         if (quiet) return;
         B.ewarn = { s: ev.s, sk: ev.sk, at: ev.at };
         SND.play('ewarn');
+        if (!B.auto) showHint('スキルを1つ取っておこう。発動まで残り' + TF.K.jamT + '秒で使うと「妨害」', 4);
         banner({ t: 0, name: '敵将「' + c.name + '」', skill: c.skill + 'を準備中', side: 1, sub: 'あと' + c.warn + '秒 ・ 倒せば止められる', portrait: 'e:' + ev.sk });
         if (s) text(s.wx, s.wy, '敵将を発見!', '#ff8a7a', 16, 46);
         return;
       }
       if (B.ewarn && B.ewarn.s === ev.s) B.ewarn = null;
       B.ecast = (B.ecast || 0) + 1;
-      if (!quiet) { banner({ t: 0, name: '敵将「' + c.name + '」', skill: c.skill, side: 1, sub: c.desc, portrait: 'e:' + ev.sk }); B.shake = Math.max(B.shake, 8); SND.play('ecast'); if (ev.sk === 'thunder') SND.play('missile'); }
+      if (!quiet) { banner({ t: 0, name: '敵将「' + c.name + '」', skill: c.skill, side: 1, sub: ev.jam ? '妨害で効果は半分!' : c.desc, portrait: 'e:' + ev.sk }); B.shake = Math.max(B.shake, 8); SND.play('ecast'); if (ev.sk === 'thunder') SND.play('missile'); }
       if (ev.sk === 'ghost') {
         (ev.revive || []).forEach(function (r0) {
           var u = B.units[r0.d]; if (!u) return;
@@ -1853,6 +1865,9 @@
       if (b.y === undefined) {
         var sbEl = $('skillBar'), cvr = cv.getBoundingClientRect(), sbr = sbEl && !sbEl.classList.contains('hidden') ? sbEl.getBoundingClientRect() : null;
         b.y = Math.min(H - h - 12, sbr && sbr.height ? sbr.top - cvr.top - h - 8 : H);
+        // 手動のとき右下に出る特殊ユニットのボタンにも重ならないように
+        var spEl = $('supBar'), spr = spEl && !spEl.classList.contains('hidden') ? spEl.getBoundingClientRect() : null;
+        if (spr && spr.height) b.y = Math.min(b.y, spr.top - cvr.top - h - 6);
       }
       var y = b.y;
       var e = 1 - Math.pow(1 - Math.min(1, b.t / tin), 3), off = (1 - e) * W * (ally ? -1 : 1);
@@ -2051,18 +2066,23 @@
       B.skCache = {};
     }
     function updateSkillBar() {
+      var ji = !B.auto && !B.ending && B.phase === 'fight' && B.eng.jamInfo ? B.eng.jamInfo(B.clock) : null;
+      B.jamOpen = !!(ji && ji.open && ji.by.length);
       B.units.forEach(function (u) {
         if (u.side !== 0 || !u.hero) return;
         var el = $('skb' + u.id);
         if (!el) return;
         var eu = B.eng.U[u.id], p = skillProg(u.id), dead = !eu.alive;
         var ready = !dead && p >= 1 && !B.auto && !B.ending;
-        var st = dead ? '戦闘不能' : B.auto ? (p >= 1 ? '発動!' : '自動') : ready ? 'タップ!' : '充填中';
+        // 妨害: 敵将の発動まで残りわずかで、このスキルを取っておいてあった
+        var jam = ready && ji && ji.open && ji.by.indexOf(u.id) >= 0;
+        var st = dead ? '戦闘不能' : B.auto ? (p >= 1 ? '発動!' : '自動') : jam ? '妨害!' : ready ? 'タップ!' : '充填中';
         var key = Math.round(p * 50) + st + ready;
         if (B.skCache[u.id] === key) return;
         B.skCache[u.id] = key;
         el.style.setProperty('--p', p.toFixed(2));
         el.classList.toggle('ready', ready);
+        el.classList.toggle('jam', !!jam);
         el.classList.toggle('dead', dead);
         $('skst' + u.id).textContent = st;
       });
@@ -2558,13 +2578,21 @@
       var pim = portraitImg('e:' + w0.sk), tx = x + 10;
       if (pim) { cx.drawImage(pim, x + 3, y + 3, bh - 9, bh - 9); tx = x + bh + 1; }
       cx.textBaseline = 'middle'; cx.textAlign = 'left';
-      cx.font = '700 10px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = '#ffb3a8'; cx.fillText('敵将「' + c.name + '」がスキルを準備中 ・ 倒せば止められる', tx, y + 11, bw - (tx - x) - 62);
+      // 1行目: おまかせなら止め方、手動なら妨害の案内(取っておく → 残り3秒で光るボタン)
+      var ji = !B.auto && B.eng.jamInfo ? B.eng.jamInfo(B.clock) : null, l1 = '敵将「' + c.name + '」が準備中 ・ 倒せば止められる', c1 = '#ffb3a8';
+      if (w0.jammed) { l1 = '妨害成功 ・ 効果は半分になる'; c1 = '#7df0ff'; }
+      else if (ji && ji.open && ji.by.length) { l1 = '今だ! 光っているスキルで妨害'; c1 = ph > 0.5 ? '#fff' : '#7df0ff'; }
+      else if (ji && ji.open) { l1 = '取っておいたスキルがない(妨害できない)'; }
+      else if (ji) { l1 = 'スキルを1つ取っておこう → 残り' + TF.K.jamT + '秒で妨害'; c1 = '#ffe08a'; }
+      cx.font = '700 10px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = c1; cx.fillText(l1, tx, y + 11, bw - (tx - x) - 62);
       cx.font = '900 15px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = '#fff'; cx.fillText('〈' + c.skill + '〉', tx - 4, y + 27, bw - (tx - x) - 62);
       cx.textAlign = 'right';
       cx.font = '700 9px -apple-system,"Hiragino Sans",sans-serif'; cx.fillStyle = '#ffb3a8'; cx.fillText('発動まで', x + bw - 9, y + 10);
       cx.font = '900 21px "SF Mono",ui-monospace,Menlo,monospace'; cx.fillStyle = ph > 0.5 ? '#ff6a5a' : '#ffd9d2'; cx.fillText(left.toFixed(1), x + bw - 9, y + 27);
       cx.fillStyle = 'rgba(255,255,255,.14)'; cx.fillRect(x, y + bh - 4, bw, 4);
-      cx.fillStyle = '#ff4d4d'; cx.shadowColor = '#ff4d4d'; cx.shadowBlur = 6; cx.fillRect(x, y + bh - 4, bw * k, 4); cx.shadowBlur = 0;
+      cx.fillStyle = w0.jammed ? '#38c8e0' : '#ff4d4d'; cx.shadowColor = cx.fillStyle; cx.shadowBlur = 6; cx.fillRect(x, y + bh - 4, bw * k, 4); cx.shadowBlur = 0;
+      // 妨害できる時間(残り jamT 秒)の目盛り
+      if (!B.auto && !w0.jammed) { cx.fillStyle = '#7df0ff'; cx.fillRect(x + bw * Math.min(1, TF.K.jamT / c.warn) - 1, y + bh - 7, 2, 7); }
       // 敵将が画面の外(または上の表示の裏)にいるとき: その方向の端に矢印
       var p = proj(u.wx, u.wy), y0 = y + bh + 20, y1 = H - 190;
       if (p.x < 14 || p.x > W - 14 || p.y < y0 - 8 || p.y > y1 + 8) {
@@ -2602,7 +2630,7 @@
     return { play: play, setSpeed: setSpeed, skip: skip, toggleAuto: toggleAuto, castSkill: castSkill, camReset: camReset, deployCard: deployCard, launchSupport: launchSupport, deployGo: deployGo, deployAuto: deployAuto, active: function () { return !!B; },
       debug: function () {
         if (!B) return null;
-        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, hint: B.hint ? B.hint.msg : '', banner: B.banner ? { side: B.banner.side, skill: B.banner.skill, t: B.banner.t } : null, card: !!B.card, fin: B.fin > 0, estop: B.estop || 0, rank: B.res ? TF.rankOf(B.res) : null, ewarn: B.ewarn ? { s: B.ewarn.s, sk: B.ewarn.sk } : null, ealert: B.ealertT !== undefined && B.clock - B.ealertT < 0.5, ecast: B.ecast || 0, jam: B.jamUntil > B.clock, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
+        return { auto: B.auto, phase: B.phase, clock: B.clock, ending: B.ending, jams: B.jam || 0, jamOpen: !!B.jamOpen, jamInfo: B.eng.jamInfo ? B.eng.jamInfo(B.clock) : null, hint: B.hint ? B.hint.msg : '', banner: B.banner ? { side: B.banner.side, skill: B.banner.skill, sub: B.banner.sub, t: B.banner.t } : null, card: !!B.card, fin: B.fin > 0, estop: B.estop || 0, rank: B.res ? TF.rankOf(B.res) : null, ewarn: B.ewarn ? { s: B.ewarn.s, sk: B.ewarn.sk, jammed: !!B.ewarn.jammed } : null, ealert: B.ealertT !== undefined && B.clock - B.ealertT < 0.5, ecast: B.ecast || 0, jam: B.jamUntil > B.clock, drag: B.drag ? { id: B.drag.u.id, moved: !!B.drag.moved } : null, pan: !!B.pan, bgDraws: B.bgDraws || 0, cam: { x: CAM.x, y: CAM.y, z: CAM.z, user: B.userCam }, posts: B.posts.map(function (p) { return p.owner; }),
           captured: B.blds.filter(function (b) { return b.home === 1 && b.owner === 0; }).length,
           walls: B.walls.filter(function (w) { return w.ok; }).length, wallsTotal: B.walls.length,
           ruins: B.blds.filter(function (b) { return b.ruin; }).length,

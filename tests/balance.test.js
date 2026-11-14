@@ -1018,6 +1018,67 @@ check('勲章: 記録が届くと、段ごとに1回ずつ受け取れる(段が
   assert(st.stats.manual === 1 && st.stats.estop === 1 && st.stats.flawless === 1);
 });
 
+check('妨害: 手動で、発動まで残り3秒になる前からたまっていたスキルを、残り3秒以内に使うと成立。敵将スキルの効果が半分になる(1回の予告につき1回)。すぐ使うだけでは成立せず、おまかせでは起きない', () => {
+  assert(K.jamT >= 2 && K.jamT <= 4 && K.jamMul === 0.5);
+  // 指揮官スキルが最初にたまるのは、敵将の「残り3秒」より前のことが多い(取っておけば間に合う)
+  assert(TF.SKILL.charge.first + 1 <= TF.ECMD.thunder.first - K.jamT, '取っておいても間に合わない');
+  const T = TF.flatTerrain();
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 2000, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  const own = () => [mk('inf', 3, { maxHp: 100000, atk: 1, adv: 0.3, hero: 'oni' }), mk('tank', 2, { maxHp: 100000, atk: 1, adv: 0.3, hero: 'tetsu' }), mk('at', 4, { maxHp: 100000, atk: 1, adv: 0.3, hero: 'taka' })];
+  const cmd = k => mk('at', 3, { maxHp: 1e9, atk: 1, adv: 0, hold: true, ecmd: k });
+  const start = (k, auto) => { const b = TF.createBattle(own(), [cmd(k)], 3, { record: true, terrain: T, auto: auto }); b.step(7); const w = b.ev.find(e => e.k === 'eskWarn'); assert(w, '予告がない'); return { b, at: w.at }; };
+  // 1) 残り3秒より前に使う → 妨害にならない
+  let x = start('thunder', false);
+  assert(x.b.cast(0, x.at - K.jamT - 0.5), 'スキルが使えない');
+  assert(!x.b.ev.some(e => e.k === 'jam') && !x.b.jamInfo(x.at - K.jamT - 0.4).done, '早すぎるのに妨害になった');
+  // 2) 取っておいたスキル(鬼塚の突撃: 6〜7秒でたまる)を、残り3秒以内に使う → 妨害
+  x = start('thunder', false);
+  assert(!x.b.jamInfo(x.at - K.jamT - 0.2).open, '残り3秒より前に妨害できる');
+  const ji = x.b.jamInfo(x.at - 1);
+  assert(ji && ji.open && ji.by.indexOf(0) >= 0, '取っておいたスキルが妨害の候補にならない ' + JSON.stringify(ji));
+  assert(x.b.cast(0, x.at - 1));
+  let j = x.b.ev.filter(e => e.k === 'jam');
+  assert(j.length === 1 && j[0].s === 0 && j[0].sk === 'thunder', '妨害にならない');
+  assert(x.b.ev.some(e => e.k === 'skill' && e.sk === 'charge'), '妨害に使ったスキル自体の効果が出ない');
+  // 3) 2回目は成立しない(1回の予告につき1回)
+  assert(x.b.cast(1, x.at - 0.5), '装甲が使えない');
+  assert.strictEqual(x.b.ev.filter(e => e.k === 'jam').length, 1, '同じ予告で2回妨害できた');
+  x.b.step(x.at + 1);
+  let c = x.b.ev.find(e => e.k === 'eskCast');
+  assert(c && c.jam === 1 && Math.abs(c.t - x.at) < 1e-6, '発動の時刻が変わった');
+  // ミサイルのダメージは半分(装甲も効いている: 兵力の50% × 0.5 × 装甲0.4)
+  c.hits.forEach(h => assert(Math.abs(h.dmg - Math.round(100000 * TF.ECMD.thunder.dmg * K.jamMul * TF.SKILL.armor.mul)) <= 1, 'ミサイルが半分になっていない ' + h.dmg));
+  assert.strictEqual(x.b.result().jam, 1);
+  // 4) たまったばかりのスキル(残り3秒を切ってからたまった)では成立しない
+  x = start('reaper', false);
+  x.b.step(x.at - 1);
+  x.b.U[0].skNext = x.at - 1.5; // 残り1.5秒でたまった
+  assert(x.b.cast(0, x.at - 1) && !x.b.ev.some(e => e.k === 'jam'), 'たまったばかりのスキルで妨害になった');
+  // 5) 効果は半分: 要塞と電子妨害の長さ、斬首のダメージ、よみがえりの兵力
+  const half = (k, f) => {
+    const a = start(k, false), b2 = start(k, false);
+    b2.b.cast(0, b2.at - 1);
+    a.b.step(a.at + 0.5); b2.b.step(b2.at + 0.5);
+    const ca = a.b.ev.find(e => e.k === 'eskCast'), cb = b2.b.ev.find(e => e.k === 'eskCast');
+    assert(ca && cb && !ca.jam && cb.jam === 1, k);
+    f(ca, cb);
+  };
+  half('wall', (ca, cb) => assert(Math.abs(cb.dur - ca.dur * K.jamMul) < 1e-9, '要塞の長さ'));
+  half('viper', (ca, cb) => assert(Math.abs(cb.dur - ca.dur * K.jamMul) < 1e-9, '電子妨害の長さ'));
+  half('reaper', (ca, cb) => { assert(ca.hits.length === 3 && cb.hits.length === 3); ca.hits.forEach((h, i) => assert(Math.abs(cb.hits[i].dmg - h.dmg * K.jamMul) <= 1, '斬首のダメージ')); });
+  // 6) おまかせ(AUTO)では起きない: たまったらすぐ使うので、敵将の発動直前に重なっても妨害にはならない
+  const y = start('thunder', true);
+  y.b.step(40);
+  assert(!y.b.ev.some(e => e.k === 'jam') && y.b.result().jam === 0, 'おまかせで妨害が起きた');
+  const cy = y.b.ev.find(e => e.k === 'eskCast');
+  assert(cy && !cy.jam);
+  // 記録
+  const st = TF.newState(0);
+  TF.applyResult(st, 14, true, st.form, 0.5, { rank: 'A', jam: 2 });
+  assert.strictEqual(st.stats.jam, 2);
+  assert(TF.medalList(st).some(m => m.id === 'jammer' && m.can), '妨害章が受け取れない');
+});
+
 // ---------------------------------------------------------------
 // 2. 自動プレイによるバランス確認
 // ---------------------------------------------------------------

@@ -140,6 +140,8 @@
       ewarn: { min: 0.5, f: function (t) { for (var i = 0; i < 3; i++) { tone(740, t + i * 0.26, { type: 'square', vol: 0.085, d: 0.12, lp: 2400 }); tone(587, t + i * 0.26 + 0.12, { type: 'square', vol: 0.085, d: 0.12, lp: 2400 }); } tone(55, t, { type: 'sawtooth', vol: 0.16, d: 0.9, lp: 300 }); } },
       etick: { min: 0.2, f: function (t, v, p) { tone(p <= 3 ? 1180 : 880, t, { type: 'square', vol: 0.06, d: 0.07, lp: 3000 }); } },
       ecast: { min: 0.5, f: function (t) { ['D2', 'G#2', 'D3'].forEach(function (n) { tone(hz(n), t, { type: 'sawtooth', vol: 0.15, a: 0.02, d: 1.3, hold: 0.5, lp: 900, lpTo: 200 }); }); noise(t, { vol: 0.22, a: 0.01, d: 0.9, f: 1800, to: 120 }); tone(48, t, { vol: 0.35, d: 0.6, to: 28 }); } },
+      // 妨害: 電子音が下がって、はじける
+      jam: { min: 0.3, f: function (t) { tone(1900, t, { type: 'square', vol: 0.07, d: 0.22, to: 420, lp: 3200 }); tone(2850, t, { type: 'sawtooth', vol: 0.05, d: 0.18, to: 600, lp: 4000 }); noise(t + 0.16, { vol: 0.2, d: 0.14, type: 'highpass', f: 2600 }); tone(hz('E5'), t + 0.2, { type: 'triangle', vol: 0.12, d: 0.3 }); tone(hz('B5'), t + 0.27, { type: 'triangle', vol: 0.12, d: 0.4 }); } },
       estop: { min: 0.5, f: function (t) { noise(t, { vol: 0.2, d: 0.1, type: 'highpass', f: 2500 }); brass('A4', t, 0.12, 0.1); brass('D5', t + 0.1, 0.12, 0.1); brass('F#5', t + 0.2, 0.5, 0.12); } },
       // タイトル: 低い打撃と、金管の短い主題
       title: { min: 1, f: function (t) { kick(t, 0.3); noise(t, { vol: 0.12, d: 0.5, f: 2400, to: 200 }); [['D4', 0.05, 0.3], ['A4', 0.3, 0.3], ['D5', 0.55, 0.3], ['F5', 0.8, 0.9]].forEach(function (x) { brass(x[0], t + x[1], x[2] + 0.1, 0.1); }); brass('A4', t + 0.8, 1.0, 0.07); brass('D4', t + 0.8, 1.0, 0.07); noise(t + 0.8, { vol: 0.05, d: 0.8, type: 'highpass', f: 5000 }); } },

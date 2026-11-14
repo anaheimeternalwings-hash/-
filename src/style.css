@@ -774,3 +774,12 @@ textarea{border-radius:0;background:#060a0c;border:1px solid var(--line2)}
   .res svg{width:18px;height:18px}
   .res b{font-size:13px;letter-spacing:-.04em}
 }
+
+/* ---- 妨害: 敵将の発動直前に、取っておいたスキルのボタンが光る ---- */
+/* ボタン自体は動かさない(押しやすさのため)。光り方だけ変える */
+.skb.jam{border-color:#7df0ff;background:#0f3a44;animation:jamGlow .4s ease-in-out infinite alternate;z-index:2}
+.skb.jam .st{color:#7df0ff;font-weight:900}
+.skb.jam .nm{color:#fff}
+@keyframes jamGlow{from{box-shadow:0 0 0 2px #7df0ff,0 0 6px rgba(125,240,255,.5)}to{box-shadow:0 0 0 3px #c8f8ff,0 0 22px rgba(125,240,255,1)}}
+.jamtip{color:#9fe9f5;margin-top:4px}
+.jamtip b{color:#7df0ff}
