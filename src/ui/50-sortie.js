@@ -29,7 +29,9 @@
     var html = '<div class="mapwrap"><canvas id="mapcv"></canvas><div class="maptip">なぞって移動・マスをタップで選択</div></div>';
     html += '<div class="stagebar"><button class="nav" data-act="stage" data-d="-1"' + (s <= 1 ? ' disabled' : '') + ' aria-label="前のステージ">◀</button>' +
       '<div class="mid"><div class="sn">ステージ ' + s + '</div><div class="sp">' + esc(info.place) + ' ・ ' + esc(info.theme) + (cleared ? ' ・ <span style="color:var(--good)">クリア済</span>' : ' ・ <span style="color:var(--gold)">未踏</span>') + '</div>' +
-      (info.terrain && info.terrain.layout ? '<div class="sp" id="mapType">マップ: ' + esc(TF.LAYOUTS[info.terrain.layout]) + '</div>' : '') + '</div>' +
+      (info.terrain && info.terrain.layout ? '<div class="sp" id="mapType">マップ: ' + esc(TF.LAYOUTS[info.terrain.layout]) + '</div>' : '') +
+      '<div class="sp opline" id="opLine"><span class="optag">作戦' + ('0' + TF.opInfo(s).n).slice(-2) + '「' + esc(TF.opInfo(s).name) + '」</span>' +
+      (cleared ? '<span class="rkchip r-' + (TF.bestRank(st, s) || 'N') + '">最高評価 ' + (TF.bestRank(st, s) || '—') + '</span>' : '') + '</div>' + '</div>' +
       '<button class="nav" data-act="stage" data-d="1"' + (s >= st.cleared + 1 ? ' disabled' : '') + ' aria-label="次のステージ">▶</button></div>';
     if (s < st.cleared + 1) html += '<div style="text-align:center;margin-top:6px"><button class="pill" data-act="stage-latest" style="font-size:12px;padding:5px 12px">最新のステージ ' + (st.cleared + 1) + ' へ ▶▶</button></div>';
     // 敵
@@ -69,7 +71,9 @@
       '<div class="grow rewards"><div class="small">予想勝率(自動戦闘で100回模擬戦)</div><div style="font-weight:800">勝利報酬' + (first ? ' <span class="pill gold">初回×' + TF.K.firstMul + '</span>' : '') + '</div>' +
       '<div class="row"><span class="cost">' + icoMoney() + fmt(rw.m * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoSteel() + fmt(rw.s * (first ? TF.K.firstMul : 1)) + '</span><span class="cost">' + icoBp() + fmt(rw.bp * (first ? TF.K.firstMul : 1)) + '</span></div>' +
       (TF.partGrade(s) ? '<div class="row"><span class="cost partc">' + icoPart() + TF.partName(TF.partGrade(s)) + (first ? ' ×' + TF.K.partFirst : '') + '</span></div>' : '') +
-      '<div class="small">指揮官EXP +' + fmt(rw.exp) + '(敗北時は半分)</div></div></div>';
+      '<div class="small">指揮官EXP +' + fmt(rw.exp) + '(敗北時は半分)</div>' +
+      (TF.bestRank(st, s) !== 'S' ? '<div class="small sbonus" id="sBonusHint">S評価(被害3割以下)の初回ボーナス: ' + rewardHtml(TF.rankBonus(s)) + '</div>' : '') +
+      (first && info.boss ? '<div class="small sbonus">作戦の制圧報酬: ' + rewardHtml(TF.opReward(s / 10)) + '</div>' : '') + '</div></div>';
     var auto = st.auto !== false;
     html += '<div class="modesel"><span class="lbl">戦闘</span><div class="seg"><button data-act="mode" data-m="auto" class="' + (auto ? 'on' : '') + '">自動</button><button data-act="mode" data-m="manual" class="' + (auto ? '' : 'on') + '">手動(指示・スキル)</button></div></div>';
     if (!auto) html += '<div class="small" style="margin-top:6px">手動: 戦闘中に自軍の部隊から敵へドラッグすると集中攻撃。指揮官スキルは下のボタンで自分で発動します(押さないと発動しません)。予想勝率は自動戦闘の場合です。</div>';
@@ -126,6 +130,7 @@
   // ====== タブ切替 ======
   function show(tab) {
     curTab = tab; st.tab = tab;
+    if (!Battle.active()) SND.bgm('menu');
     ['base', 'army', 'arms', 'sortie'].forEach(function (k) { $('scr-' + k).classList.toggle('hidden', k !== tab); });
     Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
     render();
@@ -133,6 +138,7 @@
   }
   function render() {
     renderTop();
+    setTimeout(Guide.update, 0);
     if (curTab === 'base') renderBase();
     else if (curTab === 'army') renderArmy();
     else if (curTab === 'arms') renderArms();
@@ -348,6 +354,13 @@
   // ====== 出撃と結果 ======
   function startSortie() {
     var s = st.sel;
+    if (st.flags.depTip === 0 && st.cleared >= 5 && st.flags.skipDeploy) {
+      openModal('<div class="result"><div class="sub" style="color:var(--gold);font-weight:800;letter-spacing:.2em">新しい戦い方</div><h2 class="win" style="font-size:26px">部隊の配置</h2>' +
+        '<div class="card small" style="line-height:1.75;margin-top:10px">戦闘の前に、部隊を<b>好きな場所</b>へ置けます。<br>・森や市街地は歩兵が守りやすい<br>・丘は攻撃が上がる(砲兵は特に)<br>・前に置くほど早く敵に出会う<br>' +
+        '<span style="color:var(--sub)">あとから出撃画面の「配置」でいつでも切り替えられます。</span></div>' +
+        '<div class="btns"><button class="btn wide big" data-act="dep-yes">配置してから戦う</button><button class="btn sub wide" data-act="dep-no">おまかせのまま</button></div></div>');
+      return;
+    }
     // 列の配置は戦場ごと: まずおまかせ配置にして、配置画面で変えられる
     var prep = TF.prepareBattle(st, st.form.map(function (f) { return { type: f.type, hero: f.hero, lane: null }; }), s);
     var seed = (Math.random() * 2147483647) | 0;
@@ -358,7 +371,8 @@
     var rw = prep.info.reward, firstWin = s > st.cleared;
     Battle.play(prep, seed, st.speed, st.auto !== false, function (res) {
       if (!st.pending) return;
-      st.pending.win = res.win; st.pending.timeout = res.timeout;
+      st.pending.win = res.win; st.pending.timeout = res.timeout; st.pending.pHp = res.pHp; st.pending.time = res.time;
+      st.pending.kills = res.kills; st.pending.manual = res.manual; st.pending.estop = res.estop;
       finishBattle();
     }, {
       deploy: !(st.flags && st.flags.skipDeploy),
@@ -372,10 +386,13 @@
     if (p.win === undefined) {
       var prep = TF.prepareBattle(st, p.form, p.s);
       var r = TF.simulate(prep.p, prep.e, p.seed | 0, false, { reserves: prep.reserves, posts: prep.posts, terrain: prep.terrain });
-      p.win = r.win; p.timeout = r.timeout; p.resumed = true;
+      p.win = r.win; p.timeout = r.timeout; p.pHp = r.pHp; p.time = r.time; p.kills = r.kills; p.estop = r.estop; p.resumed = true;
     }
     var wasCleared = st.cleared;
-    var sum = TF.applyResult(st, p.s, p.win, p.form, partRoll(p.seed));
+    TF.msState(st, dayNum());
+    var canBefore = TF.msClaimable(st);
+    var sum = TF.applyResult(st, p.s, p.win, p.form, partRoll(p.seed), { rank: TF.rankOf({ win: p.win, pHp: p.pHp || 0 }), kills: p.kills || 0, manual: !!p.manual, estop: p.estop || 0, pHp: p.pHp || 0 });
+    sum.msNew = TF.msClaimable(st) - canBefore;
     st.pending = null;
     if (sum.part) st.flags.itemNew = 1; // 新しいアイテム: かばんのボタンに印
     if (sum.first) { st.sel = st.cleared + 1; st.flags.conq = p.s; }
@@ -386,12 +403,19 @@
   function showResult(p, sum, wasCleared) {
     var html = '<div class="result">';
     if (p.win) {
-      html += '<h2 class="win">勝利!</h2><div class="sub">ステージ' + p.s + ' ' + (sum.first ? '初クリア!' : 'クリア') + '</div>';
-      html += '<div class="rlist"><div class="rline">' + icoMoney() + '<span class="grow">資金</span><b class="num">+' + fmt(sum.m) + '</b></div>' +
-        '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num">+' + fmt(sum.s) + '</b></div>' +
-        '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num">+' + fmt(sum.bp) + '</b></div>' +
+      var rank = sum.rank || 'B';
+      html += '<div class="rhead"><div class="rankbadge r-' + rank + '" id="resRank" data-rank="' + rank + '"><small>評価</small><b>' + rank + '</b></div><div class="grow"><h2 class="win">勝利!</h2>' +
+        '<div class="sub">ステージ' + p.s + ' ' + (sum.first ? '初クリア!' : 'クリア') + '</div>' +
+        (p.pHp !== undefined ? '<div class="rstat"><span>被害 <b class="num">' + Math.round((1 - p.pHp) * 100) + '%</b></span><span>時間 <b class="num">' + Math.round(p.time || 0) + '秒</b></span></div>' : '') + '</div></div>';
+      html += '<div class="rlist"><div class="rline">' + icoMoney() + '<span class="grow">資金</span><b class="num" data-count="' + sum.m + '">+' + fmt(sum.m) + '</b></div>' +
+        '<div class="rline">' + icoSteel() + '<span class="grow">鋼材</span><b class="num" data-count="' + sum.s + '">+' + fmt(sum.s) + '</b></div>' +
+        '<div class="rline">' + icoBp() + '<span class="grow">設計図 <span class="small">(兵器の開発に使う)</span></span><b class="num" data-count="' + sum.bp + '">+' + fmt(sum.bp) + '</b></div>' +
         (sum.part ? '<div class="rline rare">' + icoPart() + '<span class="grow"><b>' + TF.partName(sum.part.g) + '</b></span><b class="num">+' + sum.part.n + '</b></div>' : '') +
-        (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') + '</div>';
+        (sum.sBonus ? '<div class="rline rare" id="resSBonus"><span class="rk">S</span><span class="grow"><b>S評価 初回ボーナス</b></span><span class="rwmini">' + rewardHtml(sum.sBonus) + '</span></div>' : '') +
+        (sum.op ? '<div class="rline rare" id="resOp"><span class="rk op">作</span><span class="grow"><b>作戦「' + esc(sum.op.name) + '」制圧!</b></span><span class="rwmini">' + rewardHtml(sum.op) + '</span></div>' : '') +
+        (sum.first ? '<div class="small" style="text-align:center">初回クリアボーナスで報酬' + TF.K.firstMul + '倍!</div>' : '') +
+        (!sum.sBonus && rank !== 'S' && sum.best !== 'S' ? '<div class="small" style="text-align:center;color:var(--khaki)">被害を3割以下に抑えると S評価(初回ボーナスあり)</div>' : '') +
+        (sum.msNew > 0 ? '<div class="small" id="resMs" style="text-align:center;color:var(--good)">任務を達成! 基地の「司令室」で報酬を受け取れます</div>' : '') + '</div>';
     } else {
       html += '<h2 class="lose">' + (p.timeout ? '時間切れ' : '敗北…') + '</h2><div class="sub">兵は失われていません。強化して再挑戦しよう。</div>';
     }
@@ -416,12 +440,29 @@
         bt.innerHTML = '<button class="btn wide" data-act="r-farm" data-s="' + farm.s + '">ステージ' + farm.s + 'で稼ぐ</button>';
       }, 60);
     } else {
-      html += '<div class="btns">' + (sum.first ? '<button class="btn wide big" data-act="r-next">次のステージへ</button>' : '<button class="btn wide big" data-act="r-retry">もう一度出撃</button>') +
+      if (Guide.active() && st.cleared === 1 && !TF.lv(st, 'supply')) html += '<div class="btns"><button class="btn wide big" data-act="r-base">報酬で基地を育てる</button></div>';
+      else html += '<div class="btns">' + (sum.first ? '<button class="btn wide big" data-act="r-next">次のステージへ</button>' : '<button class="btn wide big" data-act="r-retry">もう一度出撃</button>') +
         '<div class="row"><button class="btn sub" data-act="r-form">出撃画面へ</button><button class="btn sub" data-act="r-base">基地へ</button></div></div>';
     }
     html += '</div>';
     openModal(html);
+    countUp($('modal'));
+    if (sum.heroExp.some(function (x) { return x.after > x.before; })) setTimeout(function () { SND.play('levelup'); }, 900);
     pendingHeroes = pendingHeroes.concat(sum.newHeroes);
+  }
+  // 報酬の数字を 0 から数え上げる(data-count の付いた要素)
+  function countUp(root) {
+    var els = Array.prototype.slice.call(root.querySelectorAll('[data-count]')), t0 = null, DUR = 650, lastTick = 0;
+    if (!els.length) return;
+    els.forEach(function (el) { el.textContent = '+0'; });
+    function fr(ts) {
+      if (t0 === null) t0 = ts;
+      var k = Math.min(1, (ts - t0) / DUR), e = 1 - Math.pow(1 - k, 3);
+      els.forEach(function (el) { if (el.isConnected) el.textContent = '+' + fmt(Math.round(+el.dataset.count * e)); });
+      if (ts - lastTick > 70 && k < 1) { lastTick = ts; SND.play('tick'); }
+      if (k < 1) requestAnimationFrame(fr); else SND.play('coin');
+    }
+    requestAnimationFrame(fr);
   }
   var pendingHeroes = [];
   function showHeroJoin() {
@@ -444,6 +485,7 @@
       (st.cleared > hd.unlock ? '<div class="small" style="margin-top:8px;color:var(--khaki)">ステージ' + hd.unlock + 'はクリア済みなので、すぐに着任しました。</div>' : '') +
       '<div class="small" style="margin-top:8px">' + (st.form.some(function (f) { return f.hero === id; }) ? '空いていた部隊に配属しました。' : '出撃画面で部隊に配属しよう。') + '得意兵種を率いると大きく強くなります。</div>' +
       '<div class="btns"><button class="btn wide" data-act="hero-ok">了解!</button></div></div>');
+    SND.play('join');
     return true;
   }
   // 稼ぎにおすすめのステージ:

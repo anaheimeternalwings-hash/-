@@ -61,6 +61,20 @@
     s.parts = parts;
     s.auto = o.auto !== false;
     s.lastSeen = +o.lastSeen || now();
+    // 評価の記録(ステージ → 1:B 2:A 3:S)・勲章(受け取った段の数)・今日の任務
+    var rank = {};
+    if (o.rank && typeof o.rank === 'object') Object.keys(o.rank).forEach(function (k) { var v = o.rank[k] | 0; if (+k >= 1 && +k <= s.cleared && v >= 1 && v <= 3) rank[+k] = v; });
+    s.rank = rank;
+    var medals = {};
+    if (o.medals && typeof o.medals === 'object') TF.MEDALS.forEach(function (m) { var v = o.medals[m.id] | 0; if (v > 0) medals[m.id] = Math.min(m.t.length, v); });
+    s.medals = medals;
+    var ms = o.ms;
+    if (ms && typeof ms === 'object' && typeof ms.day === 'number' && Array.isArray(ms.list)) {
+      var prog = {};
+      if (ms.prog && typeof ms.prog === 'object') Object.keys(ms.prog).forEach(function (k) { var v = +ms.prog[k]; if (v > 0 && isFinite(v)) prog[k] = v; });
+      s.ms = { day: ms.day, list: ms.list.filter(function (q) { return q && TF.MISSIONS[q.id] && q.n > 0; }).slice(0, 3).map(function (q) { return { id: q.id, n: q.n | 0, got: !!q.got }; }), prog: prog, all: !!ms.all };
+    } else s.ms = null;
+    Object.keys(s.stats).forEach(function (k) { s.stats[k] = Math.max(0, +s.stats[k] || 0); });
     return s;
   }
   var saveFailed = false;
@@ -86,7 +100,7 @@
     var anyUp = TF.BLD_ORDER.concat(['hq']).some(function (id) { return TF.lv(st, id) > 0 && TF.canUpgrade(st, id).ok; });
     var info = TF.storedInfo(st, now());
     var full = (info.supply && info.supply.full) || (info.steel && info.steel.full);
-    $('dotBase').classList.toggle('on', !!(anyUp || full) && curTab !== 'base');
+    $('dotBase').classList.toggle('on', !!(anyUp || full || goalsDot()) && curTab !== 'base');
     $('dotArms').classList.toggle('on', (anyArm() || !!st.flags.armNew) && curTab !== 'arms');
     $('dotItems').classList.toggle('on', !!st.flags.itemNew);
   }

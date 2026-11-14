@@ -18,7 +18,8 @@
     var loaded = load();
     var fresh = !loaded;
     st = loaded || TF.newState(now());
-    if (fresh) { st.flags = {}; st.lastSeen = now(); }
+    if (fresh) { st.flags = { v2: 1 }; st.lastSeen = now(); }
+    TF.msState(st, dayNum());
     var away = now() - (st.lastSeen || now());
     TF.settle(st, now());
     // 着任のステージをクリア済みの指揮官(あとから追加された指揮官など)は、ここで着任
@@ -29,23 +30,28 @@
     setInterval(save, 15000);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) save();
-      else { var a = now() - (st.lastSeen || now()); TF.settle(st, now()); render(); if (a > 10 * 60000 && !Battle.active() && $('modalWrap').classList.contains('hidden')) welcomeBack(a); }
+      else { var a = now() - (st.lastSeen || now()); TF.settle(st, now()); render(); if (a > 10 * 60000 && !Battle.active() && !Title.active() && $('modalWrap').classList.contains('hidden')) welcomeBack(a); }
     });
     window.addEventListener('pagehide', save);
     makeTouchIcon();
     if (navigator.storage && navigator.storage.persist) { try { navigator.storage.persist(); } catch (e) { } }
-    if (st.pending) {
-      // 戦闘の途中で閉じた場合は、結果をそのまま反映する
-      finishBattle();
-    } else if (fresh) {
-      intro();
-    } else if (away > 10 * 60000 && TF.storedInfo(st, now()) && hasStored()) {
-      welcomeBack(away); // 回収のあとに着任の画面
-    } else {
-      showHeroJoin();
-    }
+    Title.show(function () {
+      if (st.pending) {
+        // 戦闘の途中で閉じた場合は、結果をそのまま反映する
+        finishBattle();
+      } else if (fresh) {
+        intro();
+      } else if (v2Notice()) {
+        // 新しい版のお知らせ(1回だけ)
+      } else if (away > 10 * 60000 && TF.storedInfo(st, now()) && hasStored()) {
+        welcomeBack(away); // 回収のあとに着任の画面
+      } else {
+        showHeroJoin();
+      }
+      save();
+    });
     save();
   }
   function hasStored() { var info = TF.storedInfo(st, now()); return ((info.supply ? info.supply.stored : 0) + (info.steel ? info.steel.stored : 0)) > 0; }
-  window.__game = { get state() { return st; }, TF: TF, save: save, render: render, baseView: BaseView, battle: Battle, map: MapView, heroSvg: heroSvg, ecmdSvg: ecmdSvg, bestFarm: function () { farmCache = null; return bestFarm(); } };
+  window.__game = { get state() { return st; }, TF: TF, snd: SND, title: Title, guide: Guide, save: save, render: render, baseView: BaseView, battle: Battle, map: MapView, heroSvg: heroSvg, ecmdSvg: ecmdSvg, bestFarm: function () { farmCache = null; return bestFarm(); } };
   boot();

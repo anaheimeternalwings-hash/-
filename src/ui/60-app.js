@@ -13,6 +13,12 @@
   function openMenu() {
     var html = '<div class="grab"></div><button class="close" data-act="sheet-close" aria-label="閉じる">✕</button><h3>メニュー</h3>';
     html += '<div class="card small" style="margin-top:10px;line-height:1.7">戦闘回数 ' + st.stats.battles + '(勝利 ' + st.stats.wins + ')<br>進行状況は自動で保存され、次に開いたときは続きから再開します。<br>ホーム画面に追加すると、全画面で遊べます。</div>';
+    var sc = SND.cfg();
+    html += '<h2 class="sec">音</h2><div class="card sndcfg">' +
+      '<label><span>音楽</span><input type="range" min="0" max="100" step="5" value="' + Math.round(sc.bgm * 100) + '" data-snd="bgm" aria-label="音楽の音量"><b class="num" id="sndv-bgm">' + Math.round(sc.bgm * 100) + '</b></label>' +
+      '<label><span>効果音</span><input type="range" min="0" max="100" step="5" value="' + Math.round(sc.se * 100) + '" data-snd="se" aria-label="効果音の音量"><b class="num" id="sndv-se">' + Math.round(sc.se * 100) + '</b></label>' +
+      '<button class="btn sub wide' + (sc.mute ? ' on' : '') + '" data-act="snd-mute" id="sndMute">' + (sc.mute ? '消音中(タップで音を出す)' : '消音にする') + '</button>' +
+      '<div class="small" style="margin-top:6px">iPhone 本体の消音スイッチが入っていると、音は出ません。</div></div>';
     html += '<h2 class="sec">引き継ぎ(バックアップ)</h2><div class="small">下のコードを保存しておけば、データが消えても復元できます。</div>' +
       '<textarea id="exportBox" readonly>' + esc(exportCode()) + '</textarea><div class="row" style="margin-top:8px"><button class="btn sub grow" data-act="copy-export">コードをコピー</button></div>' +
       '<textarea id="importBox" placeholder="ここに引き継ぎコードを貼り付け" style="margin-top:10px;height:70px"></textarea><div class="row" style="margin-top:8px"><button class="btn sub grow" data-act="import">コードから復元</button></div>';
@@ -67,7 +73,8 @@
     'arm-up': function (el) {
       var t = el.dataset.t, k = el.dataset.k;
       var r = TF.doArm(st, t, k);
-      if (!r.ok) { toast(r.reason); return; }
+      if (!r.ok) { SND.play('err'); toast(r.reason); return; }
+      SND.play(r.dev ? 'dev' : 'upgrade');
       save(); render(); bump('resM'); bump('resS');
       var card = $('arm-' + t + '-' + k);
       if (card) {
@@ -85,7 +92,8 @@
     build: function (el) {
       var id = el.dataset.id;
       var r = TF.doUpgrade(st, id, now(), +el.dataset.slot);
-      if (!r.ok) { toast(r.reason); return; }
+      if (!r.ok) { SND.play('err'); toast(r.reason); return; }
+      SND.play('build');
       toast(TF.BLD[id].name + 'を建設しました!');
       if (TF.BLD[id].unit) toast(TF.UNIT[TF.BLD[id].unit].name + 'が使えるようになりました');
       save(); closeSheet(); render(); bump('resM'); bump('resS');
@@ -94,7 +102,8 @@
       var id = el.dataset.id;
       var beforeSlots = TF.slots(st);
       var r = TF.doUpgrade(st, id, now());
-      if (!r.ok) { toast(r.reason); return; }
+      if (!r.ok) { SND.play('err'); toast(r.reason); return; }
+      SND.play('upgrade');
       if (id === 'hq') {
         st.form = TF.normalizeForm(st, st.form);
         if (TF.slots(st) > beforeSlots) toast('部隊の枠が ' + TF.slots(st) + ' に増えました!');
@@ -107,6 +116,7 @@
     collect: function (el) {
       var g = TF.collect(st, now());
       if (g.m + g.s > 0) {
+        SND.play('collect');
         toast('資金+' + fmt(g.m) + ' 鋼材+' + fmt(g.s) + 'を回収');
         var from = el && el.getBoundingClientRect ? el.getBoundingClientRect() : null;
         if (g.m > 0) coinFly(from, 'resM', 'i-money', 10);
@@ -186,6 +196,25 @@
       if (!showHeroJoin()) { st.form = TF.normalizeForm(st, st.form); show('sortie'); }
     },
     menu: function () { openMenu(); },
+    goals: function (el) { openGoals(el.dataset.tab); },
+    'ms-claim': function (el) {
+      var r = TF.msClaim(st, +el.dataset.i);
+      if (!r) { SND.play('err'); return; }
+      SND.play(r.all ? 'medal' : 'collect'); claimFx(el, r);
+      if (r.all) toast('今日の任務をすべて達成! 追加の報酬を受け取りました');
+      save(); render(); openGoals('ms');
+    },
+    'medal-claim': function (el) {
+      var r = TF.medalClaim(st, el.dataset.id);
+      if (!r) { SND.play('err'); return; }
+      SND.play('medal'); claimFx(el, r);
+      toast(r.name + '(' + r.tier + ')を授与されました');
+      save(); render(); openGoals('medal');
+    },
+    'v2-ok': function () { closeModal(); if (TF.medalClaimable(st)) openGoals('medal'); else showHeroJoin(); },
+    'title-start': function () { Title.start(); },
+    'title-snd': function () { Title.toggleSnd(); },
+    'snd-mute': function () { var m = !SND.cfg().mute; SND.set({ mute: m }); if (!m) SND.play('ok'); openMenu(); },
     'copy-export': function () {
       var box = $('exportBox');
       var done = function () { toast('コピーしました'); };
@@ -203,28 +232,47 @@
     reset: function () {
       if (!confirm('本当に最初からやり直しますか?(元に戻せません)')) return;
       if (!confirm('すべての施設・指揮官・進行状況が消えます。よろしいですか?')) return;
-      st = TF.newState(now()); st.flags = {}; st.lastSeen = now();
+      st = TF.newState(now()); st.flags = { v2: 1 }; st.lastSeen = now(); TF.msState(st, dayNum());
       save(); closeSheet(); show('base'); intro();
     },
-    'intro-ok': function () { closeModal(); st.flags.intro = 1; save(); }
+    'intro-ok': function () { closeModal(); st.flags.intro = 1; save(); },
+    // 案内つきで始める: そのまま最初の戦闘へ(配置はおまかせ)
+    'intro-go': function () {
+      closeModal(); st.flags.intro = 1; st.flags.skipDeploy = 1; st.flags.depTip = 0; st.auto = true; st.sel = 1;
+      Guide.begin(); show('sortie'); startSortie();
+    },
+    'guide-skip': function () { Guide.skip(); },
+    // 配置の案内(ステージ6)
+    'dep-yes': function () { closeModal(); st.flags.depTip = 1; st.flags.skipDeploy = 0; save(); startSortie(); },
+    'dep-no': function () { closeModal(); st.flags.depTip = 1; save(); startSortie(); }
   };
+  // ボタンの音: ふつうは小さなタップ音。自分で音を鳴らす操作(強化・回収など)は null
+  var ACT_SND = { tab: 'tab', 'sheet-close': 'close', 'modal-close': 'close', menu: 'open', items: 'open', tile: 'open', slot: 'open', sortie: 'ok', 'deploy-go': null,
+    upgrade: null, build: null, 'arm-up': null, collect: null, 'ms-claim': null, 'medal-claim': null, goals: 'open', 'v2-ok': 'ok', 'welcome-collect': null, skill: null, 'sup-launch': null, 'r-next': 'ok', 'r-retry': 'ok', 'intro-go': 'ok', 'dep-yes': 'ok', 'hero-ok': 'ok', 'intro-ok': 'ok', 'title-start': null, 'snd-mute': null };
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
     if (el.dataset.act === 'tile' && BaseView.blocked()) return; // 基地を拡大・移動した指を離しただけ
     var fn = actions[el.dataset.act];
-    if (fn) { e.preventDefault(); fn(el); }
+    if (fn) { e.preventDefault(); var sn = ACT_SND[el.dataset.act]; if (sn !== null) SND.play(sn || 'tap'); fn(el); Guide.update(); }
+  });
+  // 音量のつまみ(メニュー)
+  document.addEventListener('input', function (e) {
+    var el = e.target;
+    if (!el || !el.dataset || el.dataset.snd === undefined) return;
+    var o = {}; o[el.dataset.snd] = +el.value / 100; SND.set(o);
+    var lab = $('sndv-' + el.dataset.snd); if (lab) lab.textContent = el.value;
+    if (el.dataset.snd === 'se') SND.play('coin');
   });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   document.addEventListener('touchstart', function () { }, { passive: true }); // iOS Safari で :active を効かせる
 
   function intro() {
     if (st.flags.intro) return;
-    openModal('<div class="result"><div style="display:grid;place-items:center"><div class="portrait" style="width:96px;height:96px;border-radius:20px">' + heroSvg('oni') + '</div></div>' +
+    openModal('<div class="result"><div style="display:grid;place-items:center"><div class="portrait" style="width:112px;height:112px;border-radius:20px">' + heroSvg('oni') + '</div></div>' +
       '<h2 class="win" style="font-size:24px;margin-top:8px">着任ご苦労であります!</h2>' +
-      '<div class="card small" style="line-height:1.75;margin-top:10px">司令官、ここが我々の前線基地です。<br>' +
-      '① <b>基地</b>で施設を建てて強化し、資金と鋼材を集める<br>② <b>出撃</b>で敵の編成を見て、相性の良い兵種で部隊を組む<br>③ 勝てば報酬と経験値。負けても兵は失いません<br>' +
-      '進行は自動保存されます。のんびりいきましょう!<div style="text-align:right;color:var(--khaki)">― 軍曹 鬼塚 剛</div></div>' +
-      '<div class="btns"><button class="btn wide big" data-act="intro-ok">了解!</button></div></div>');
+      '<div class="card small" style="line-height:1.75;margin-top:10px">司令官、敵の前哨が目の前です。<br>まずは一戦、手並みを拝見!<br><span style="color:var(--sub)">負けても兵は失いません。進行は自動で保存されます。</span>' +
+      '<div style="text-align:right;color:var(--khaki)">― 軍曹 鬼塚 剛</div></div>' +
+      '<div class="btns"><button class="btn wide big" data-act="intro-go">出撃する!</button><button class="btn sub wide" data-act="intro-ok" style="min-height:44px;font-size:13px">案内なしで、自分で進める</button></div></div>');
   }
 

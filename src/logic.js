@@ -75,17 +75,32 @@ var TF = (function () {
 
   // 固有スキル(指揮官ごとに1つ。手動ではボタンで、AUTOでは充填されると発動)
   var SKILL = {
-    charge:  { name: '突撃',     first: 3, cd: 12, dur: 6, mul: 1.5,  short: '味方全体 攻撃力+50%',     desc: '味方全体の攻撃力を6秒間 +50%' },
-    armor:   { name: '装甲',     first: 4, cd: 12, dur: 6, mul: 0.4,  short: '味方全体 被ダメージ6割減', desc: '味方全体の被ダメージを6秒間 6割減らす' },
-    snipe:   { name: '一撃必中', first: 5, cd: 9,  mul: 4.0,          short: '必中の一撃',             desc: '見えている敵のうち相性の良い1体に、攻撃力400%の必中ダメージ' },
-    barrage: { name: '一斉射撃', first: 6, cd: 13, mul: 0.9,          short: '敵全体へ砲撃',           desc: '見えている敵全体に、攻撃力90%の砲撃ダメージ' },
-    heal:    { name: '応急手当', first: 5, cd: 11, mul: 0.27, n: 3,   short: '味方3部隊の兵力を回復',   desc: '傷の深い味方3部隊の兵力を最大の27%回復(全滅した部隊は戻らない)' },
-    blitz:   { name: '電撃戦',   first: 3, cd: 12, dur: 5, mul: 0.66, short: '味方全体 連射',           desc: '味方全体の攻撃の間隔を5秒間 0.66倍に(すばやく連射)' },
-    smoke:   { name: '煙幕',     first: 4, cd: 12, dur: 5, mul: 0.35, short: '敵の攻撃が外れやすい',     desc: '敵全体の攻撃が5秒間 35%多く外れる' },
-    reflect: { name: '鉄壁反撃', first: 4, cd: 13, dur: 6, mul: 0.4,  short: '受けたダメージを撃ち返す', desc: '6秒間、味方が撃たれると、受けたダメージの40%を撃った敵に返す' },
-    air:     { name: '爆撃要請', first: 6, cd: 13, mul: 3.4, w: 1.2,  short: '敵の密集地を爆撃',         desc: '見えている敵がいちばん集まっている場所(左右1.2列)を爆撃。攻撃力340%' },
-    mark:    { name: '弱点看破', first: 3, cd: 13, dur: 6, mul: 0.25, short: '敵の位置と弱点を暴く',     desc: '6秒間、隠れている敵もすべて見え、敵全体が受けるダメージ+25%' }
+    charge:  { name: '突撃',     first: 6,  cd: 24, dur: 12, mul: 1.5,  short: '味方全体 攻撃力+50%' },
+    armor:   { name: '装甲',     first: 8,  cd: 24, dur: 12, mul: 0.4,  short: '味方全体 被ダメージ6割減' },
+    snipe:   { name: '一撃必中', first: 8,  cd: 15, mul: 4.0,           short: '必中の一撃' },
+    barrage: { name: '一斉射撃', first: 9,  cd: 21, mul: 0.9,           short: '敵全体へ砲撃' },
+    heal:    { name: '応急手当', first: 9,  cd: 18, mul: 0.27, n: 3,    short: '味方3部隊の兵力を回復' },
+    blitz:   { name: '電撃戦',   first: 6,  cd: 24, dur: 10, mul: 0.66, short: '味方全体 連射' },
+    smoke:   { name: '煙幕',     first: 8,  cd: 24, dur: 10, mul: 0.35, short: '敵の攻撃が外れやすい' },
+    reflect: { name: '鉄壁反撃', first: 8,  cd: 24, dur: 12, mul: 0.45, short: '受けたダメージを撃ち返す' },
+    air:     { name: '爆撃要請', first: 9,  cd: 21, mul: 3.4, w: 1.2,   short: '敵の密集地を爆撃' },
+    mark:    { name: '弱点看破', first: 6,  cd: 26, dur: 12, mul: 0.25, short: '敵の位置と弱点を暴く' }
   };
+  // 説明文は数値から作る(調整しても文と中身がずれないように)
+  (function () {
+    function pc(x) { return Math.round(x * 100); }
+    var S = SKILL;
+    S.charge.desc = '味方全体の攻撃力を' + S.charge.dur + '秒間 +' + pc(S.charge.mul - 1) + '%';
+    S.armor.desc = '味方全体の被ダメージを' + S.armor.dur + '秒間 ' + Math.round((1 - S.armor.mul) * 10) + '割減らす';
+    S.snipe.desc = '見えている敵のうち相性の良い1体に、攻撃力' + pc(S.snipe.mul) + '%の必中ダメージ';
+    S.barrage.desc = '見えている敵全体に、攻撃力' + pc(S.barrage.mul) + '%の砲撃ダメージ';
+    S.heal.desc = '傷の深い味方' + S.heal.n + '部隊の兵力を最大の' + pc(S.heal.mul) + '%回復(全滅した部隊は戻らない)';
+    S.blitz.desc = '味方全体の攻撃の間隔を' + S.blitz.dur + '秒間 ' + S.blitz.mul + '倍に(すばやく連射)';
+    S.smoke.desc = '敵全体の攻撃が' + S.smoke.dur + '秒間 ' + pc(S.smoke.mul) + '%多く外れる';
+    S.reflect.desc = S.reflect.dur + '秒間、味方が撃たれると、受けたダメージの' + pc(S.reflect.mul) + '%を撃った敵に返す';
+    S.air.desc = '見えている敵がいちばん集まっている場所(左右' + S.air.w + '列)を爆撃。攻撃力' + pc(S.air.mul) + '%';
+    S.mark.desc = S.mark.dur + '秒間、隠れている敵もすべて見え、敵全体が受けるダメージ+' + pc(S.mark.mul) + '%';
+  })();
   // 敵を狙うスキル(見えている敵だけが対象。見える敵がいなければ待つ)
   var SKILL_AIM = { snipe: 1, barrage: 1, air: 1 };
   // 指揮官の特徴(画面の説明用)
@@ -241,6 +256,8 @@ var TF = (function () {
     unitPerLv: 0.12, labPerLv: 0.08, heroBase: 1.05, heroPerLv: 0.03, favMul: 1.25,
     miss: 0.06, crit: 0.10, critMul: 1.5,
     maxT: 180, // 戦闘は最大3分
+    // 戦闘の長さ: 全部隊の耐久をこの倍率で底上げする(両軍同じ)。互角の戦いが30秒前後になるように
+    hpScale: 2,
     startMoney: 500, startSteel: 300,
     // 戦場は7列(レーン)。部隊はおもに同じ列の敵を狙い、離れた列への攻撃は弱まる(砲兵はどの列にも届く)
     laneN: 7, laneAim: [1, 0.35, 0.12, 0.05, 0.03, 0.02, 0.01], laneDmg: [1, 0.85, 0.72, 0.62, 0.55, 0.5, 0.45], laneAimArt: [1, 0.8, 0.65, 0.55, 0.5, 0.45, 0.4],
@@ -262,16 +279,19 @@ var TF = (function () {
     det: { inf: 1.3, at: 1.0, tank: 0.9, art: 0.6 }, sig: { inf: 0.8, at: 0.6, tank: 1.25, art: 1.1 }, detY: 1.75, fireT: 2.5, idleT: 0.3,
     // 拠点: 敵部隊を撃破すると前線が進んで拠点を占領。占領した拠点は前線基地になり(増援+1・ポイント回復が速く)、
     // 特殊ユニットを1回発進できる(攻撃ヘリ・対地攻撃機・自爆ドローン)。味方がやられると拠点を奪われる
-    postRate: 0.3, postRes: 1, supDelay: 1.2, supGap: 1.5, supMul: 0.6, supHeli: 0.9, supHeliTank: 1.5, supHeliN: 4, supAir: 0.8, supDrone: 3.0,
+    postRate: 0.15, postRes: 1, supDelay: 2.5, supGap: 3, supMul: 0.6, supHeli: 0.9, supHeliTank: 1.5, supHeliN: 4, supAir: 0.8, supDrone: 3.0,
     // 増援: 戦闘中に指揮ポイントがたまり、コストを払うと予備の部隊を投入できる
-    resRate: 1, resCost: 5, resStart: 2, resMax: 10, resMul: 0.6,
+    resRate: 0.5, resCost: 5, resStart: 2, resMax: 10, resMul: 0.6,
     // 配置: 前進(与/被ダメージ↑・狙われやすい)、後退(与/被ダメージ↓・狙われにくい。砲兵は与ダメージが下がらない)
     stDeal: { '1': 1.25, '-1': 0.75 }, stTake: { '1': 1.25, '-1': 0.6 }, stAim: { '1': 1.6, '-1': 0.5 },
-    ecmdRate: 0.3, ecmdFocus: 6, ecmdJit: 1, ecmdHp: 3.5, ecmdAdv: 0.04, artSpot: 2.0,
+    ecmdRate: 0.3, ecmdFocus: 6, ecmdJit: 2, ecmdHp: 3.5, ecmdAdv: 0.04, artSpot: 2.0,
     // 兵種ごとに編成できる部隊の数の上限(ほかに置ける兵種がないときだけ超えてよい)
     typeCap: { inf: 4, at: 3, tank: 3, art: 2 },
+    rankS: 0.7, rankA: 0.45, flawless: 0.95,
+    // 目標の報酬(いまの最前線のステージの報酬に対する倍率): 任務1つ・任務を全部こなした日・勲章(段ごとに増える)・S評価の初回・作戦の制圧
+    msRw: 0.6, msAllRw: 1.5, medalRw: 0.5, medalRwStep: 0.25, sRw: 0.5, opRw: 1,
     // 敵の連携: 集中攻撃(同じ目標を狙いやすい倍率・目標を選び直す間隔)
-    focusW: 5, focusT: 4,
+    focusW: 5, focusT: 6,
     normW: 1, lossExp: 0.5, firstMul: 2, bossMul: 2, bossHp: 3.1, bossAtk: 1.4, bossTotal: 1.08, normMin: 0.6, normMax: 1.6,
     typeAdj: { inf: 1.04, at: 0.95, tank: 0.97, art: 1.05 },
     baseCapH: 2, depotCapH: 1, depotMaxLv: 22,
@@ -366,6 +386,7 @@ var TF = (function () {
     if (st.bld.supply) { gm = Math.floor(st.bld.supply.stored); st.bld.supply.stored -= gm; }
     if (st.bld.steel) { gs = Math.floor(st.bld.steel.stored); st.bld.steel.stored -= gs; }
     st.money += gm; st.steel += gs;
+    if (gm + gs > 0) note(st, 'collect', 1);
     return { m: gm, s: gs };
   }
 
@@ -382,6 +403,7 @@ var TF = (function () {
     } else {
       st.bld[id].lv++;
     }
+    note(st, 'upgrade', 1);
     return { ok: true, cost: chk.cost };
   }
 
@@ -400,11 +422,12 @@ var TF = (function () {
     if (heroId && st.heroes[heroId]) { var h = HERO[heroId]; m *= heroMult(st.heroes[heroId].lv, h.fav === t, heroId) * Math.sqrt(h.atk * h.hp); }
     return m;
   }
-  function powerOf(hp, atk, cd) { return Math.round(Math.sqrt(hp * atk / cd) * 2.645); }
+  // 戦力の表示は、耐久の底上げ(K.hpScale)を除いた値(底上げは両軍同じなので、強さの比は変わらない)
+  function powerOf(hp, atk, cd) { return Math.round(Math.sqrt(hp / K.hpScale * atk / cd) * 2.645); }
   function makeSquad(t, mult, opt) {
     opt = opt || {};
     var u = UNIT[t];
-    var hp = Math.max(1, Math.round(u.hp * mult * (opt.hpMul || 1)));
+    var hp = Math.max(1, Math.round(u.hp * K.hpScale * mult * (opt.hpMul || 1)));
     var atk = u.atk * mult * (opt.atkMul || 1);
     var q = { type: t, maxHp: hp, atk: atk, cd: u.cd, hero: opt.hero || null, boss: !!opt.boss, power: powerOf(hp, atk, u.cd) };
     if (opt.vs) q.vs = opt.vs;
@@ -479,6 +502,8 @@ var TF = (function () {
     if (!st.arms[t]) st.arms[t] = {};
     var l = armLv(st, t, k) + 1;
     st.arms[t][k] = l;
+    note(st, 'arm', 1);
+    if (chk.dev) note(st, 'dev', 1);
     return { ok: true, cost: chk.cost, dev: chk.dev, lv: l, name: armName(t, k, l) };
   }
   // 部隊に載せる武装の効果
@@ -510,13 +535,23 @@ var TF = (function () {
   // ボス戦と一部のステージに出てくる。1人で戦況をひっくり返すほどのスキルを持つ。
   // 発動の warn 秒前に予告があり、その間は位置が見える。予告中に倒せば発動しない
   var ECMD = {
-    ghost:   { name: '亡霊',   skill: '亡者の行進', unlock: 12, first: 5.5, cd: 40, warn: 4, desc: '倒された敵の部隊をすべて兵力50%でよみがえらせる' },
-    wall:    { name: '鉄壁',   skill: '不落要塞',   unlock: 12, first: 5, cd: 35, warn: 4, dur: 12, mul: 0.2, heal: 0.25, desc: '12秒間、敵全体の被ダメージを5分の1にし、兵力を25%回復する' },
-    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 5, cd: 35, warn: 4, r: 1.6, dmg: 0.5, desc: '自軍がいちばん集まった場所(半径1.6列)の部隊すべてに、兵力の50%のダメージ' },
-    viper:   { name: '毒蛇',   skill: '電子妨害',   unlock: 40, first: 5, cd: 35, warn: 4, dur: 12, desc: '12秒間、自軍の索敵がすべて使えなくなる(敵がまったく見えず、撃てない)' },
-    witch:   { name: '魔女',   skill: '寝返り工作', unlock: 55, first: 5, cd: 45, warn: 4, desc: '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする' },
-    reaper:  { name: '死神',   skill: '斬首作戦',   unlock: 70, first: 5, cd: 40, warn: 4, dmg: 0.6, desc: '指揮官のいる自軍の部隊すべてに、兵力の60%のダメージ' }
+    ghost:   { name: '亡霊',   skill: '亡者の行進',   unlock: 12, first: 11, cd: 70, warn: 7, hp: 0.5 },
+    wall:    { name: '鉄壁',   skill: '不落要塞',     unlock: 12, first: 10, cd: 60, warn: 7, dur: 20, mul: 0.2, heal: 0.25 },
+    thunder: { name: '雷帝',   skill: '戦術ミサイル', unlock: 25, first: 10, cd: 60, warn: 7, r: 1.6, dmg: 0.5 },
+    viper:   { name: '毒蛇',   skill: '電子妨害',     unlock: 40, first: 10, cd: 60, warn: 7, dur: 20 },
+    witch:   { name: '魔女',   skill: '寝返り工作',   unlock: 55, first: 10, cd: 80, warn: 7 },
+    reaper:  { name: '死神',   skill: '斬首作戦',     unlock: 70, first: 10, cd: 70, warn: 7, dmg: 0.6 }
   };
+  (function () {
+    function pc(x) { return Math.round(x * 100); }
+    var E = ECMD;
+    E.ghost.desc = '倒された敵の部隊をすべて兵力' + pc(E.ghost.hp) + '%でよみがえらせる';
+    E.wall.desc = E.wall.dur + '秒間、敵全体の被ダメージを' + Math.round(1 / E.wall.mul) + '分の1にし、兵力を' + pc(E.wall.heal) + '%回復する';
+    E.thunder.desc = '自軍がいちばん集まった場所(半径' + E.thunder.r + '列)の部隊すべてに、兵力の' + pc(E.thunder.dmg) + '%のダメージ';
+    E.viper.desc = E.viper.dur + '秒間、自軍の索敵がすべて使えなくなる(敵がまったく見えず、撃てない)';
+    E.witch.desc = '自軍のいちばん強い部隊(指揮官のいない部隊)を寝返らせ、敵にする';
+    E.reaper.desc = '指揮官のいる自軍の部隊すべてに、兵力の' + pc(E.reaper.dmg) + '%のダメージ';
+  })();
   var ECMD_KEYS = Object.keys(ECMD);
   // ステージの敵将: ボス戦はかならず、ふつうのステージは12から3割ほど。出てくる敵将はステージが進むと増える
   function stageCmd(s) {
@@ -999,7 +1034,7 @@ var TF = (function () {
         if (bp) { u.x = bp.x; u.y = bp.y; } else { u.x = u.lx; u.y = side === 0 ? K.mapY[0] : K.mapY[1]; }
         u.lx = u.x;
       } else { u.x = u.lx; u.y = advY(side, u.adv); }
-      if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd() * 0.5; }
+      if (q.hero) { u.sk = HERO[q.hero].skill; u.skNext = SKILL[u.sk].first + rnd(); }
       // 敵将のスキル(予告 → 発動)
       if (q.ecmd && ECMD[q.ecmd] && !at) { u.esk = q.ecmd; u.eskNext = ECMD[q.ecmd].first + rnd() * K.ecmdJit; u.eskWarn = false; }
       U.push(u); live[side].push(u);
@@ -1014,7 +1049,7 @@ var TF = (function () {
     var fortUntil = [-1, -1], jamUntil = [-1, -1]; // 敵将のスキル: 不落要塞・電子妨害
     var focus = [-1, -1], focusT = [-1, -1]; // 集中攻撃の目標(敵の側だけが使う)
     var ev = opt.record ? [] : null;
-    var t = 0, winner = -1, done = false, maxT = K.maxT;
+    var t = 0, winner = -1, done = false, maxT = K.maxT, stops = 0;
     var auto = opt.auto !== false; // false: 自軍のスキル・増援・配置は手動
     function laneDist(a, b) { return distAt(a, b, t); }
     // ---- 索敵(地形マップのある戦闘だけ) ----
@@ -1202,6 +1237,7 @@ var TF = (function () {
     function damage(f, dmg, bySide) {
       f.hp -= dmg;
       if (f.hp <= 0) {
+        if (f.eskWarn) stops++; // 予告中の敵将を倒した: スキルを阻止
         f.hp = 0; f.alive = false; f.eskWarn = false;
         var arr = live[f.side];
         arr.splice(arr.indexOf(f), 1);
@@ -1374,7 +1410,7 @@ var TF = (function () {
         var rv = [], bp = posAt(u, t);
         U.forEach(function (x) {
           if (x.side !== u.side || x.alive || x.reserveOnly) return;
-          x.alive = true; x.hp = Math.max(1, Math.round(x.maxHp * 0.5)); x.order = null; x.goal = null; x.mv = null;
+          x.alive = true; x.hp = Math.max(1, Math.round(x.maxHp * c.hp)); x.order = null; x.goal = null; x.mv = null;
           if (hasPos(x) && hasPos(u)) { var a = rnd() * 6.283; x.x = Math.max(K.mapX[0], Math.min(K.mapX[1], bp.x + Math.cos(a) * 0.5)); x.y = Math.max(K.mapY[0], Math.min(K.mapY[1], bp.y + Math.sin(a) * 0.25)); x.lx = x.x; }
           x.next = t + 0.6; live[x.side].push(x); rv.push({ d: x.id, hp: x.hp });
         });
@@ -1452,7 +1488,9 @@ var TF = (function () {
     function result() {
       var hpP = 0, mxP = 0, hpE = 0, mxE = 0;
       for (i = 0; i < U.length; i++) { var x = U[i]; if (x.side === 0) { hpP += x.hp; mxP += x.maxHp; } else { hpE += x.hp; mxE += x.maxHp; } }
-      return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, ev: ev };
+      var kills = 0;
+      for (i = 0; i < U.length; i++) if (U[i].side === 1 && !U[i].alive) kills++;
+      return { win: winner === 0, timeout: winner === -1, time: t, pHp: hpP / mxP, eHp: hpE / mxE, kills: kills, estop: stops, ev: ev };
     }
     return {
       U: U, ev: ev, step: step, result: result,
@@ -1567,6 +1605,8 @@ var TF = (function () {
     return { p: { count: reserveCount(lv(st, 'hq')), defs: defs }, e: { list: list } };
   }
   function scoreOf(r) { return r.win ? 1 + r.pHp : -r.eHp; }
+  // 評価: 勝ったときの被害の少なさ(残った兵力の割合)。S = 7割以上、A = 4割5分以上、B = それ未満。負けは評価なし
+  function rankOf(r) { return !r || !r.win ? null : r.pHp >= K.rankS ? 'S' : r.pHp >= K.rankA ? 'A' : 'B'; }
   function evalForm(st, form, s, n, seed0) {
     var info0 = stageInfo(s), p = formSquads(st, autoLanes(st, form, s)), e = info0.enemies, res = { reserves: battleReserves(st, s), posts: true, terrain: info0.terrain };
     var wins = 0, sc = 0;
@@ -1629,7 +1669,8 @@ var TF = (function () {
     var info = stageInfo(s);
     return { form: form, p: p, e: info.enemies, info: info, reserves: battleReserves(st, s), posts: true, terrain: info.terrain };
   }
-  function applyResult(st, s, win, form, roll) {
+  // ext = { rank: 'S'|'A'|'B', kills: 撃破した敵部隊の数, manual: 手動で戦った, estop: 敵将のスキルを阻止した数, pHp: 残った兵力の割合 }
+  function applyResult(st, s, win, form, roll, ext) {
     var info = stageInfo(s);
     form = form || st.form || [];
     var first = win && s > st.cleared;
@@ -1665,7 +1706,31 @@ var TF = (function () {
     }
     st.stats.battles++;
     if (win) st.stats.wins++;
-    return { win: win, first: first, m: gm, s: gs, bp: gb, part: part, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
+    var out = { win: win, first: first, m: gm, s: gs, bp: gb, part: part, exp: exp, heroExp: heroExp, newHeroes: newHeroes };
+    ext = ext || {};
+    if (ext.kills > 0) note(st, 'kill', ext.kills);
+    if (ext.estop > 0) note(st, 'estop', ext.estop);
+    if (win) {
+      var rk = RANK_N[ext.rank] || 1, prev = st.rank && st.rank[s] || 0;
+      out.rank = RANK_L[rk]; out.best = RANK_L[Math.max(rk, prev)];
+      note(st, 'win', 1);
+      if (rk >= 2) note(st, 'rankA', 1);
+      if (rk >= 3) note(st, 'rankS', 1);
+      if (info.boss) note(st, 'boss', 1);
+      if (info.ecmd) note(st, 'ecmd', 1);
+      if (ext.manual) note(st, 'manual', 1);
+      if (first) note(st, 'first', 1);
+      if (ext.pHp >= K.flawless) note(st, 'flawless', 1);
+      if (rk > prev) {
+        if (!st.rank) st.rank = {};
+        st.rank[s] = rk;
+        // S評価をはじめて取ったステージ: 1回だけの報酬
+        if (rk === 3) { var sb = rankBonus(s); st.money += sb.m; st.steel += sb.s; st.bp += sb.bp; out.sBonus = sb; }
+      }
+      // 作戦(10ステージ)の最後のボスをはじめて倒した: 制圧報酬
+      if (first && info.boss) { var ob = opReward(s / 10), oi = opInfo(s); st.money += ob.m; st.steel += ob.s; st.bp += ob.bp; out.op = { n: oi.n, name: oi.name, m: ob.m, s: ob.s, bp: ob.bp }; }
+    }
+    return out;
   }
 
   // 着任のステージをクリア済みなのに、まだいない指揮官を着任させる(戻り値: 着任した指揮官)。
@@ -1682,6 +1747,122 @@ var TF = (function () {
     });
     return out;
   }
+  // ====== 目標と報酬(作戦・評価・任務・勲章) ======
+  var RANK_N = { B: 1, A: 2, S: 3 }, RANK_L = [null, 'B', 'A', 'S'];
+  // 作戦: 10ステージで1つ。最後のボスを倒すと制圧
+  var OPS = ['夜明けの槌', '鉄の雨', '霧の回廊', '赤い稜線', '沈黙の港', '黒い森', '砂の嵐', '凍てつく刃', '雷鳴の峠', '灰色の狼', '鋼の潮', '燃える地平',
+    '影の行軍', '白い沈黙', '蒼い稲妻', '最後の橋', '鉄の環', '暁の門', '嵐の目', '静かな海', '緋色の空', '深い霧', '遠い砲声', '夜の果て'];
+  function opInfo(s) {
+    var n = Math.max(1, Math.ceil(s / 10)), c = Math.floor((n - 1) / OPS.length);
+    return { n: n, name: OPS[(n - 1) % OPS.length] + (c ? ' ' + (ROMAN[c + 1] || c + 1) : ''), first: (n - 1) * 10 + 1, last: n * 10 };
+  }
+  function round5(x) { return Math.max(5, Math.round(x / 5) * 5); }
+  function opReward(n) { var rw = stageReward(n * 10); return { m: round5(rw.m * K.opRw), s: round5(rw.s * K.opRw), bp: rw.bp }; }
+  function rankBonus(s) { var rw = stageReward(s); return { m: round5(rw.m * K.sRw), s: round5(rw.s * K.sRw), bp: 1 }; }
+  function bestRank(st, s) { return RANK_L[st.rank && st.rank[s] || 0]; }
+  // 任務・勲章の報酬の基準: いまの最前線(ボス戦は報酬が2倍なので、1つ手前で測る)
+  function goalBase(st) { var c = Math.max(1, st.cleared); return stageReward(c % 10 === 0 && c > 1 ? c - 1 : c); }
+  // 記録(勲章)と、今日の任務の進み具合を数える
+  function note(st, ev, n) {
+    if (!st.stats) st.stats = { battles: 0, wins: 0 };
+    st.stats[ev] = (st.stats[ev] || 0) + n;
+    if (st.ms && st.ms.prog) st.ms.prog[ev] = (st.ms.prog[ev] || 0) + n;
+  }
+  // ---- 任務: 1日に3つ(端末の日付で入れ替わる)。全部こなすと追加の報酬 ----
+  var MISSIONS = {
+    win:     { name: '戦闘に{n}回勝利する', n: [3, 4, 5] },
+    kill:    { name: '敵の部隊を{n}撃破する', n: [10, 15, 20] },
+    rankA:   { name: 'A評価以上で{n}回勝利する', n: [2, 3], grp: 'rank' },
+    rankS:   { name: 'S評価で{n}回勝利する', n: [1, 2], grp: 'rank' },
+    boss:    { name: 'ボス戦に勝利する', n: [1], min: 10 },
+    ecmd:    { name: '敵将のいる戦闘に勝利する', n: [1], min: 13 },
+    manual:  { name: '手動(AUTO OFF)で勝利する', n: [1], min: 3 },
+    first:   { name: '新しいステージを{n}つ制圧する', n: [1, 2] },
+    upgrade: { name: '施設を{n}回強化する', n: [2, 3, 4] },
+    arm:     { name: '兵器を{n}回強化する', n: [2, 3], need: 'lab' },
+    collect: { name: '基地で資源を回収する', n: [1], need: 'supply' }
+  };
+  var MS_KEYS = Object.keys(MISSIONS);
+  function msPick(st, day) {
+    var r = rngFrom(hashInt(day * 131 + ((st.created || 0) % 100000))), ok = MS_KEYS.filter(function (k) {
+      var m = MISSIONS[k];
+      return !(m.min && st.cleared < m.min) && !(m.need && !lv(st, m.need));
+    }), out = [], grp = {};
+    for (var i = ok.length - 1; i > 0; i--) { var j = Math.floor(r() * (i + 1)), x = ok[i]; ok[i] = ok[j]; ok[j] = x; }
+    for (i = 0; i < ok.length && out.length < 3; i++) {
+      var m = MISSIONS[ok[i]];
+      if (m.grp) { if (grp[m.grp]) continue; grp[m.grp] = 1; }
+      out.push({ id: ok[i], n: m.n[Math.floor(r() * m.n.length)], got: false });
+    }
+    return out;
+  }
+  // 今日の任務(日付が変わっていたら入れ替える)。day = 日付の通し番号
+  function msState(st, day) {
+    if (!st.ms || st.ms.day !== day || !st.ms.list) st.ms = { day: day, list: msPick(st, day), prog: {}, all: false };
+    return st.ms.list.map(function (q, i) {
+      var m = MISSIONS[q.id], p = Math.min(q.n, st.ms.prog[q.id] || 0);
+      return { i: i, id: q.id, name: m.name.replace('{n}', q.n), n: q.n, p: p, done: p >= q.n, got: !!q.got };
+    });
+  }
+  function msReward(st, all) {
+    var b = goalBase(st), k = all ? K.msAllRw : K.msRw;
+    return { m: round5(b.m * k), s: round5(b.s * k), bp: all ? 2 : 1 };
+  }
+  function msClaim(st, i) {
+    var q = st.ms && st.ms.list && st.ms.list[i];
+    if (!q || q.got || (st.ms.prog[q.id] || 0) < q.n) return null;
+    var rw = msReward(st, false), out = { m: rw.m, s: rw.s, bp: rw.bp, all: null };
+    q.got = true;
+    if (!st.ms.all && st.ms.list.every(function (x) { return x.got; })) { st.ms.all = true; out.all = msReward(st, true); out.m += out.all.m; out.s += out.all.s; out.bp += out.all.bp; }
+    st.money += out.m; st.steel += out.s; st.bp = (st.bp || 0) + out.bp;
+    note(st, 'missions', 1);
+    return out;
+  }
+  function msClaimable(st) { return st.ms && st.ms.list ? st.ms.list.filter(function (q) { return !q.got && (st.ms.prog[q.id] || 0) >= q.n; }).length : 0; }
+  // ---- 勲章: 記録が一定の数に届くと、段ごとに1回ずつ報酬 ----
+  function stat(st, k) { return st.stats && st.stats[k] || 0; }
+  var MEDALS = [
+    { id: 'advance', name: '進撃章', desc: 'ステージを制圧する', unit: 'ステージ', t: [10, 30, 60, 100, 150, 200], v: function (st) { return st.cleared; } },
+    { id: 'veteran', name: '歴戦章', desc: '戦闘に勝利する', unit: '勝', t: [10, 50, 200, 500, 1000], v: function (st) { return stat(st, 'wins'); } },
+    { id: 'hunter', name: '撃破章', desc: '敵の部隊を撃破する', unit: '部隊', t: [50, 300, 1000, 3000, 10000], v: function (st) { return stat(st, 'kill'); } },
+    { id: 'perfect', name: '完勝章', desc: 'S評価を取ったステージの数', unit: 'ステージ', t: [5, 20, 50, 100], v: function (st) { var n = 0; if (st.rank) for (var k in st.rank) if (st.rank[k] >= 3) n++; return n; } },
+    { id: 'operation', name: '作戦章', desc: '作戦を制圧する(10ステージごとのボスを撃破)', unit: '作戦', t: [1, 3, 6, 10, 15], v: function (st) { return Math.floor(st.cleared / 10); } },
+    { id: 'tactician', name: '采配章', desc: '手動(AUTO OFF)で勝利する', unit: '勝', t: [1, 10, 50], v: function (st) { return stat(st, 'manual'); } },
+    { id: 'breaker', name: '阻止章', desc: '予告中の敵将を倒して、スキルを阻止する', unit: '回', t: [1, 5, 20], v: function (st) { return stat(st, 'estop'); } },
+    { id: 'duelist', name: '将星章', desc: '敵将のいる戦闘に勝利する', unit: '勝', t: [1, 10, 40], v: function (st) { return stat(st, 'ecmd'); } },
+    { id: 'flawless', name: '無傷章', desc: '被害5%以下で勝利する', unit: '勝', t: [1, 10, 50], v: function (st) { return stat(st, 'flawless'); } },
+    { id: 'builder', name: '築城章', desc: '施設を建設・強化する', unit: '回', t: [10, 50, 150, 300], v: function (st) { return stat(st, 'upgrade'); } },
+    { id: 'engineer', name: '技術章', desc: '兵器を強化する', unit: '回', t: [10, 50, 150, 300], v: function (st) { return stat(st, 'arm'); } },
+    { id: 'inventor', name: '開発章', desc: '新型の兵器を開発する', unit: '種', t: [4, 12, 24, 40], v: function (st) { var n = 0; TYPES.forEach(function (t) { ARM_KINDS.forEach(function (k) { n += armTier(armLv(st, t, k)); }); }); return n; } },
+    { id: 'leader', name: '人望章', desc: '指揮官を集める', unit: '人', t: [3, 6, 10], v: function (st) { return Object.keys(st.heroes).length; } },
+    { id: 'mentor', name: '練達章', desc: '指揮官の最高レベル', unit: 'Lv', t: [10, 30, 60, 100], v: function (st) { var m = 0; Object.keys(st.heroes).forEach(function (h) { m = Math.max(m, st.heroes[h].lv); }); return m; } },
+    { id: 'supply', name: '補給章', desc: '基地で資源を回収する', unit: '回', t: [5, 30, 100], v: function (st) { return stat(st, 'collect'); } },
+    { id: 'duty', name: '精勤章', desc: '任務を達成する', unit: '件', t: [3, 15, 50, 150], v: function (st) { return stat(st, 'missions'); } }
+  ];
+  var MEDAL = {};
+  MEDALS.forEach(function (m) { MEDAL[m.id] = m; });
+  var MEDAL_TIER = ['銅', '銀', '金', '白金', '金剛', '極'];
+  function medalReward(st, tier) { var b = goalBase(st), k = K.medalRw + K.medalRwStep * tier; return { m: round5(b.m * k), s: round5(b.s * k), bp: 1 + tier }; }
+  // 勲章の一覧: got = 受け取った段の数、can = いま受け取れる(次の段に届いている)
+  function medalList(st) {
+    return MEDALS.map(function (m) {
+      var got = Math.min(m.t.length, st.medals && st.medals[m.id] || 0), v = m.v(st), next = got < m.t.length ? m.t[got] : null;
+      return { id: m.id, name: m.name, desc: m.desc, unit: m.unit, v: v, got: got, max: m.t.length, next: next, can: next !== null && v >= next, tier: got > 0 ? MEDAL_TIER[got - 1] : null, nextTier: next !== null ? MEDAL_TIER[got] : null };
+    });
+  }
+  function medalClaim(st, id) {
+    var m = MEDAL[id];
+    if (!m) return null;
+    var got = st.medals && st.medals[id] || 0;
+    if (got >= m.t.length || m.v(st) < m.t[got]) return null;
+    var rw = medalReward(st, got);
+    if (!st.medals) st.medals = {};
+    st.medals[id] = got + 1;
+    st.money += rw.m; st.steel += rw.s; st.bp = (st.bp || 0) + rw.bp;
+    return { id: id, name: m.name, tier: MEDAL_TIER[got], m: rw.m, s: rw.s, bp: rw.bp };
+  }
+  function medalClaimable(st) { return medalList(st).filter(function (x) { return x.can; }).length; }
+
   function newState(now) {
     return {
       v: 1, money: K.startMoney, steel: K.startSteel,
@@ -1690,7 +1871,8 @@ var TF = (function () {
       cleared: 0, sel: 1, arms: {}, bp: 0, parts: {},
       form: [{ type: 'inf', hero: 'oni' }, { type: 'inf', hero: null }],
       pending: null, tab: 'base', speed: 1,
-      stats: { battles: 0, wins: 0 }, created: now
+      stats: { battles: 0, wins: 0 }, created: now,
+      rank: {}, ms: null, medals: {}
     };
   }
 
@@ -1712,6 +1894,9 @@ var TF = (function () {
     ARMS: ARMS, ARM_KINDS: ARM_KINDS, ARM_KIND: ARM_KIND, armLv: armLv, armTier: armTier, armName: armName, armMax: armMax, armIsDev: armIsDev,
     armCost: armCost, armEffect: armEffect, armXMax: armXMax,
     partGrade: partGrade, partStages: partStages, partName: partName, partCount: partCount, partDrop: partDrop, canArm: canArm, doArm: doArm, armOpt: armOpt, armRef: armRef,
+    rankOf: rankOf, RANK_N: RANK_N, opInfo: opInfo, opReward: opReward, rankBonus: rankBonus, bestRank: bestRank, goalBase: goalBase, note: note,
+    MISSIONS: MISSIONS, msState: msState, msClaim: msClaim, msReward: msReward, msClaimable: msClaimable,
+    MEDALS: MEDALS, medalList: medalList, medalClaim: medalClaim, medalReward: medalReward, medalClaimable: medalClaimable,
     clearCache: function () { stageCache = {}; }
   };
 })();

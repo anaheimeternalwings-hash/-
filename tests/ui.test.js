@@ -5,11 +5,17 @@ const path = require('path');
 const assert = require('assert');
 const { chromium, devices } = require('playwright');
 
-const URL = 'file://' + path.resolve(__dirname, '..', 'index.html');
+const URL = 'file://' + path.resolve(process.env.HTML || path.join(__dirname, '..', 'index.html'));
 const KEY = 'zensen-commander-save-v1';
 let failures = 0;
 
-async function withPage(device, fn, initState) {
+// ゲームを開く: タイトル画面をタップして始める
+async function openGame(page) {
+  await page.goto(URL);
+  await page.click('#title .tstart');
+  await page.waitForFunction(() => !window.__game.title.active());
+}
+async function withPage(device, fn, initState, opt) {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ ...devices[device] });
   const external = [], errors = [];
@@ -27,7 +33,8 @@ async function withPage(device, fn, initState) {
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   try {
-    await page.goto(URL);
+    // 起動するとタイトル画面。タップして始める(タイトルそのものを試すテストは opt.title)
+    if (opt && opt.title) await page.goto(URL); else await openGame(page);
     await fn(page);
     assert.deepStrictEqual(external, [], '外部への通信: ' + external.join(', '));
     assert.deepStrictEqual(errors, [], 'エラー: ' + errors.join(' / '));
@@ -58,7 +65,7 @@ function midState(over) {
     bld: { hq: { lv: 6, slot: 4 }, barracks: { lv: 10, slot: 1 }, supply: { lv: 8, slot: 0, stored: 0, t: now }, steel: { lv: 8, slot: 2, stored: 0, t: now },
       atpost: { lv: 9, slot: 3 }, factory: { lv: 9, slot: 5 }, depot: { lv: 4, slot: 6 }, artpost: { lv: 6, slot: 7 }, lab: { lv: 5, slot: 8 } },
     heroes: { oni: { lv: 15, exp: 0 }, tetsu: { lv: 14, exp: 0 }, taka: { lv: 12, exp: 0 } },
-    cleared: 14, sel: 15, form: [], pending: null, tab: 'base', speed: 1, stats: { battles: 40, wins: 30 }, created: now, flags: { intro: 1, skipDeploy: 1 }, lastSeen: now
+    cleared: 14, sel: 15, form: [], pending: null, tab: 'base', speed: 1, stats: { battles: 40, wins: 30 }, created: now, flags: { intro: 1, skipDeploy: 1, v2: 1 }, lastSeen: now
   }, over || {});
   // いまの版のセーブと同じく、クリア済みのステージで着任する指揮官はそろえておく(古いセーブを試すときは oldSave)
   if (!(over && over.oldSave)) {
@@ -96,7 +103,7 @@ function midState(over) {
     const browser = await chromium.launch();
     const ctx = await browser.newContext({ ...devices['iPhone 13'] });
     let page = await ctx.newPage();
-    await page.goto(URL);
+    await openGame(page);
     await page.click('[data-act="intro-ok"]');
     await page.click('[data-act="tab"][data-tab="sortie"]');
     await page.click('[data-act="sortie"]');
@@ -105,7 +112,7 @@ function midState(over) {
     const before = await state(page);
     await page.close();
     page = await ctx.newPage();
-    await page.goto(URL);
+    await openGame(page);
     await page.waitForSelector('#scr-sortie:not(.hidden)');
     assert(await page.isHidden('[data-act="intro-ok"]'), 'イントロが再表示された');
     const after = await state(page);
@@ -120,7 +127,7 @@ function midState(over) {
     const browser = await chromium.launch();
     const ctx = await browser.newContext({ ...devices['iPhone 13'] });
     let page = await ctx.newPage();
-    await page.goto(URL);
+    await openGame(page);
     await page.click('[data-act="intro-ok"]');
     await page.click('[data-act="tab"][data-tab="sortie"]');
     const m0 = (await state(page)).money;
@@ -130,7 +137,7 @@ function midState(over) {
     assert(pend && pend.s === 1 && typeof pend.seed === 'number');
     await page.close();
     page = await ctx.newPage();
-    await page.goto(URL);
+    await openGame(page);
     await page.waitForSelector('#modalWrap:not(.hidden) .result');
     const st = await state(page);
     assert.strictEqual(st.pending, null);
@@ -139,7 +146,7 @@ function midState(over) {
     if (st.cleared === 1) assert(st.money > m0);
     await page.close();
     page = await ctx.newPage();
-    await page.goto(URL);
+    await openGame(page);
     await page.waitForTimeout(300);
     const st2 = await state(page);
     assert.strictEqual(st2.stats.battles, 1, '結果が二重に反映された');
@@ -468,7 +475,7 @@ function midState(over) {
     assert.strictEqual(pend[i1].lx, f1.lx, '自由配置の位置が保存されない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
-  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 }, form: ['tank', 'inf', 'at', 'tank', 'inf', 'art', 'at', 'tank'].map((t, i) => ({ type: t, hero: ['oni', 'tetsu', 'taka', 'rai'][i] || null })), 
+  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1, v2: 1 }, form: ['tank', 'inf', 'at', 'tank', 'inf', 'art', 'at', 'tank'].map((t, i) => ({ type: t, hero: ['oni', 'tetsu', 'taka', 'rai'][i] || null })), 
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 }, taka: { lv: 24, exp: 0 }, rai: { lv: 22, exp: 0 } } })));
 
@@ -536,7 +543,7 @@ function midState(over) {
     assert(z <= 0.16, '十分に引けない ' + z);
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
-  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1 }, form: ['tank', 'inf', 'at', 'tank', 'inf', 'art', 'at', 'tank'].map((t, i) => ({ type: t, hero: ['oni', 'tetsu', 'taka', 'rai'][i] || null })), 
+  }, midState({ cleared: 40, sel: 41, auto: false, flags: { intro: 1, v2: 1 }, form: ['tank', 'inf', 'at', 'tank', 'inf', 'art', 'at', 'tank'].map((t, i) => ({ type: t, hero: ['oni', 'tetsu', 'taka', 'rai'][i] || null })), 
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } },
     heroes: { oni: { lv: 30, exp: 0 }, tetsu: { lv: 28, exp: 0 } } })));
 
@@ -568,7 +575,7 @@ function midState(over) {
     assert(await page.isVisible('#deployBar'), '戻しても配置画面が出ない');
     await page.click('[data-act="skip"]');
     await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 15000 });
-  }, midState({ cleared: 2, sel: 3, flags: { intro: 1 } })));
+  }, midState({ cleared: 2, sel: 3, flags: { intro: 1, v2: 1 } })));
 
   await test('勝っても戦場にコインを集める演出は出ず、すぐに結果になる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
@@ -843,7 +850,7 @@ function midState(over) {
   }, midState({ cleared: 40, sel: 41, form: ['tank', 'tank', 'tank', 'inf', 'inf', 'at'].map(t => ({ type: t, hero: null })),
     bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 18, slot: 1 }, atpost: { lv: 16, slot: 3 }, factory: { lv: 18, slot: 5 }, artpost: { lv: 14, slot: 7 }, lab: { lv: 12, slot: 8 } } })));
 
-  await test('敵将: 敵将のいるステージは出撃画面にスキルが出て、戦闘には「将」の部隊がいる。開始すぐにスキルの予告が始まり、画面の上に発動までの秒数が出る。結果画面で敵の作戦が明かされる', () => withPage('iPhone 13', async page => {
+  await test('敵将: 敵将のいるステージは出撃画面にスキルが出て、戦闘には「将」の部隊がいる。開始6秒以内にスキルの予告が始まり、画面の上に発動までの秒数が出る。結果画面で敵の作戦が明かされる', () => withPage('iPhone 13', async page => {
     await page.click('[data-act="tab"][data-tab="sortie"]');
     const tx = await page.textContent('#ecmdInfo');
     assert(tx.includes('敵将「') && tx.includes('予告'), '敵将の説明が出ない ' + tx);
@@ -852,10 +859,11 @@ function midState(over) {
     await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight'; }, null, { timeout: 15000 });
     const d = await page.evaluate(() => window.__game.battle.debug());
     assert(d.units.some(u => u.side === 1 && u.ecmd), '敵将の部隊がいない');
-    // 戦闘が始まってすぐ(5秒以内)に予告が始まり、画面の上に発動までの秒数が出る
-    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && (x.ewarn || x.clock > 6 || x.ending); }, null, { timeout: 20000 });
+    // 戦闘が始まって6秒以内に予告が始まり、画面の上に発動までの秒数が出る(警報の音も鳴る)
+    await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x && (x.ewarn || x.clock > 7 || x.ending); }, null, { timeout: 30000 });
     const dw = await page.evaluate(() => window.__game.battle.debug());
-    assert(dw.ewarn && dw.clock < 5, 'スキルの予告が始まらない ' + JSON.stringify({ clock: dw.clock, ewarn: dw.ewarn }));
+    assert(dw.ewarn && dw.clock < 6.5, 'スキルの予告が始まらない ' + JSON.stringify({ clock: dw.clock, ewarn: dw.ewarn }));
+    assert.strictEqual((await page.evaluate(() => window.__game.snd.debug())).played.ewarn, 1, '警報の音が鳴らない');
     await page.waitForFunction(() => { const x = window.__game.battle.debug(); return x.ealert || !x.ewarn; }, null, { timeout: 5000 });
     assert((await page.evaluate(() => window.__game.battle.debug().ealert)), '発動までの秒数が画面に出ない');
     await page.click('[data-act="skip"]');
@@ -1039,6 +1047,364 @@ function midState(over) {
     assert.strictEqual(after.bld.barracks.lv, before.bld.barracks.lv + 1);
     assert(after.money < before.money && after.steel < before.steel);
   }, midState()));
+
+  // ---------------- Ver.2: タイトル・音・見せ場・目標 ----------------
+  const strong = over => midState(Object.assign({ money: 5e6, steel: 5e6,
+    bld: { hq: { lv: 12, slot: 4 }, barracks: { lv: 24, slot: 1 }, supply: { lv: 8, slot: 0, stored: 0, t: Date.now() }, steel: { lv: 8, slot: 2, stored: 0, t: Date.now() }, atpost: { lv: 24, slot: 3 }, factory: { lv: 24, slot: 5 }, depot: { lv: 4, slot: 6 }, artpost: { lv: 24, slot: 7 }, lab: { lv: 20, slot: 8 } },
+    heroes: { oni: { lv: 40, exp: 0 }, tetsu: { lv: 40, exp: 0 }, taka: { lv: 40, exp: 0 } } }, over || {}));
+
+  await test('タイトル画面: 起動するとタイトルが出て、タップで始まる。その操作で音が有効になり、音楽が鳴りだす', () => withPage('iPhone 13', async page => {
+    await page.waitForSelector('#title:not(.hidden)');
+    assert(await page.evaluate(() => window.__game.title.active()));
+    assert((await page.textContent('#title')).includes('コマンダー'));
+    assert((await page.textContent('#titleSub')).includes('ステージ15'), '続きのステージが出ない');
+    assert.strictEqual(await page.locator('#titleKv .tpanel').count(), 3, '顔の絵が3枚ない');
+    // タイトルが全面を覆っていて、下の画面は押せない
+    assert(await page.evaluate(() => !!document.elementFromPoint(innerWidth / 2, innerHeight / 2).closest('#title')));
+    assert.strictEqual((await page.evaluate(() => window.__game.snd.debug())).steps, 0, 'タップの前に音楽が鳴っている');
+    await page.click('#title .tstart');
+    await page.waitForFunction(() => !window.__game.title.active());
+    await page.waitForSelector('#title', { state: 'hidden' });
+    const d = await page.evaluate(() => window.__game.snd.debug());
+    assert.strictEqual(d.state, 'running', '音が有効になっていない');
+    assert.strictEqual(d.played.title, 1, 'タイトルの音が鳴らない');
+    await page.waitForFunction(() => window.__game.snd.debug().steps > 8);
+    assert.strictEqual((await page.evaluate(() => window.__game.snd.debug())).theme, 'menu');
+    await noHorizontalScroll(page);
+  }, midState(), { title: true }));
+
+  await test('タイトル画面は iPhone SE でも収まる。音の ON/OFF をタイトルで切り替えられ、開き直しても覚えている', async () => {
+    const browser = await chromium.launch();
+    const ctx = await browser.newContext({ ...devices['iPhone SE'] });
+    try {
+      let page = await ctx.newPage();
+      await page.goto(URL);
+      await page.waitForSelector('#title:not(.hidden)');
+      const box = await page.evaluate(() => { const r = s => { const b = document.querySelector(s).getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height }; }; return { logo: r('#title .tlogo'), start: r('#title .tstart'), snd: r('#titleSnd'), w: innerWidth, h: innerHeight, sw: document.documentElement.scrollWidth }; });
+      assert(box.logo.t > 0 && box.start.b < box.snd.t + 1 && box.snd.b <= box.h && box.logo.l >= 0 && box.logo.r <= box.w, 'タイトルがはみ出す ' + JSON.stringify(box));
+      assert(box.snd.h >= 44, '音のボタンが小さい');
+      assert(box.sw <= box.w);
+      assert((await page.textContent('#titleSnd')).includes('ON'));
+      await page.click('#titleSnd');
+      assert((await page.textContent('#titleSnd')).includes('OFF'));
+      assert(await page.evaluate(() => window.__game.title.active()), '音のボタンでゲームが始まった');
+      await page.close();
+      page = await ctx.newPage();
+      await page.goto(URL);
+      assert((await page.textContent('#titleSnd')).includes('OFF'), '消音を覚えていない');
+      await page.click('#title .tstart');
+      await page.waitForFunction(() => !window.__game.title.active());
+      assert.strictEqual((await page.evaluate(() => window.__game.snd.cfg())).mute, true);
+    } finally { await browser.close(); }
+  });
+
+  await test('音: ボタン・強化・戦闘で効果音が鳴り、戦闘中は戦闘の曲、終わると基地の曲に戻る。音は割れない', () => withPage('iPhone 13', async page => {
+    const dbg = () => page.evaluate(() => window.__game.snd.debug());
+    await page.click('[data-act="tab"][data-tab="army"]');
+    await page.click('[data-act="tab"][data-tab="base"]');
+    assert((await dbg()).played.tab >= 2, 'タブの音');
+    await page.click('[data-act="tile"][data-slot="1"]');
+    await page.click('[data-act="upgrade"][data-id="barracks"]');
+    assert.strictEqual((await dbg()).played.upgrade, 1, '強化の音');
+    await page.click('.sheet .close');
+    await page.evaluate(() => { window.__pk = 0; window.__mt = setInterval(() => { window.__pk = Math.max(window.__pk, window.__game.snd.meter().peak); }, 40); });
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'fight' && d.clock > 6; }, null, { timeout: 60000 });
+    let d = await dbg();
+    assert.strictEqual(d.theme, 'battle', '戦闘の曲になっていない');
+    assert(d.played.go === 1 || d.played.boss === 1, '開戦の音');
+    assert(['shot.inf', 'shot.at', 'shot.tank', 'shot.art'].some(k => d.played[k] > 0), '発砲の音 ' + JSON.stringify(d.played));
+    await page.click('[data-act="skip"]');
+    await page.waitForSelector('#modalWrap:not(.hidden) .result');
+    d = await dbg();
+    assert((d.played.win || 0) + (d.played.lose || 0) === 1, '勝敗の音');
+    const pk = await page.evaluate(() => { clearInterval(window.__mt); return window.__pk; });
+    assert(pk > 0.02 && pk < 1, '音の大きさ(最大) ' + pk);
+    await page.click('[data-act="r-form"]');
+    await page.waitForFunction(() => window.__game.snd.debug().theme === 'menu');
+  }, midState({ money: 1e6, steel: 1e6 })));
+
+  await test('音量: メニューのつまみと消音が効き、開き直しても覚えている', async () => {
+    const browser = await chromium.launch();
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    try {
+      let page = await ctx.newPage();
+      await openGame(page);
+      await page.click('[data-act="intro-ok"]');
+      await page.click('[data-act="menu"]');
+      const cfg = () => page.evaluate(() => window.__game.snd.cfg());
+      assert.deepStrictEqual(await cfg(), { se: 0.8, bgm: 0.6, mute: false });
+      await page.evaluate(() => { const e = document.querySelector('input[data-snd="bgm"]'); e.value = 20; e.dispatchEvent(new Event('input', { bubbles: true })); });
+      await page.evaluate(() => { const e = document.querySelector('input[data-snd="se"]'); e.value = 45; e.dispatchEvent(new Event('input', { bubbles: true })); });
+      assert.deepStrictEqual(await cfg(), { se: 0.45, bgm: 0.2, mute: false });
+      assert.strictEqual(await page.textContent('#sndv-bgm'), '20');
+      const rb = await page.evaluate(() => { const b = document.querySelector('input[data-snd="bgm"]').getBoundingClientRect(); return b.height; });
+      assert(rb >= 44, 'つまみが小さい ' + rb);
+      await page.click('[data-act="snd-mute"]');
+      assert.strictEqual((await cfg()).mute, true);
+      assert((await page.textContent('#sndMute')).includes('消音中'));
+      await page.close();
+      page = await ctx.newPage();
+      await openGame(page);
+      assert.deepStrictEqual(await cfg(), { se: 0.45, bgm: 0.2, mute: true });
+    } finally { await browser.close(); }
+  });
+
+  await test('戦闘の見せ場: 開戦カード → 指揮官のカットイン → 決着で評価。結果画面の評価と報酬(数え上げのあと)が正しい', () => withPage('iPhone 13', async page => {
+    const before = await state(page);
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="sortie"]');
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.card; }, null, { timeout: 30000 });
+    await page.evaluate(() => window.__game.battle.setSpeed(4));
+    // 指揮官のスキルは、顔つきのカットインで出る(味方は side 0)
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.banner && d.banner.side === 0; }, null, { timeout: 60000, polling: 30 });
+    await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.ending; }, null, { timeout: 120000, polling: 30 });
+    const rank = (await page.evaluate(() => window.__game.battle.debug())).rank;
+    assert(['S', 'A', 'B'].includes(rank), '評価がない ' + rank);
+    await page.waitForSelector('#modalWrap:not(.hidden) .result', { timeout: 20000 });
+    assert.strictEqual(await page.getAttribute('#resRank', 'data-rank'), rank);
+    const after = await state(page);
+    assert.strictEqual(after.rank[15], { B: 1, A: 2, S: 3 }[rank], '評価が記録されていない');
+    // 数え上げが終わると、もらった分と同じ数字になる
+    await page.waitForTimeout(900);
+    const shown = await page.evaluate(() => Array.from(document.querySelectorAll('#modal [data-count]')).map(e => [e.textContent, +e.dataset.count]));
+    assert.strictEqual(shown.length, 3);
+    shown.forEach(x => assert.strictEqual(x[0].replace(/[+,]/g, ''), String(x[1]), '数え上げの結果 ' + x));
+    const bonus = after.rank[15] === 3 ? 1 : 0; // S評価の初回ボーナスは別の行
+    assert(after.money - before.money >= shown[0][1] && (bonus || after.money - before.money === shown[0][1]), '資金 ' + (after.money - before.money) + ' / ' + shown[0][1]);
+    assert((await page.textContent('#modal .rstat')).includes('被害'));
+  }, strong()));
+
+  await test('評価と作戦: S評価の初回ボーナスは1回だけ。作戦の最後のボスを倒すと制圧報酬(1回だけ)', () => withPage('iPhone 13', async page => {
+    const T = await page.evaluate(() => ({ op: window.__game.TF.opReward(1), sb: window.__game.TF.rankBonus(10), rw: window.__game.TF.stageReward(10), name: window.__game.TF.opInfo(10).name, firstMul: window.__game.TF.K.firstMul }));
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    assert((await page.textContent('#opLine')).includes(T.name), '作戦の名前が出ない');
+    assert(await page.isVisible('#sBonusHint'));
+    const s0 = await state(page);
+    await page.click('[data-act="sortie"]');
+    await finishBattle(page);
+    const s1 = await state(page);
+    assert.strictEqual(s1.cleared, 10);
+    assert.strictEqual(s1.rank[10], 3, '圧勝なのにS評価でない ' + s1.rank[10]);
+    assert(await page.isVisible('#resOp') && await page.isVisible('#resSBonus'), '制圧・S評価の行がない');
+    assert((await page.textContent('#resOp')).includes(T.name));
+    assert.strictEqual(s1.money - s0.money, T.rw.m * T.firstMul + T.op.m + T.sb.m, '資金の合計');
+    assert.strictEqual(s1.steel - s0.steel, T.rw.s * T.firstMul + T.op.s + T.sb.s, '鋼材の合計');
+    // もう一度勝っても、制圧報酬とS評価の初回ボーナスは出ない
+    await page.click('[data-act="r-form"]');
+    await page.click('[data-act="stage"][data-d="-1"]');
+    assert((await page.textContent('#opLine')).includes('最高評価 S'));
+    assert(await page.isHidden('#sBonusHint'));
+    await page.click('[data-act="sortie"]');
+    await finishBattle(page);
+    const s2 = await state(page);
+    assert(await page.isHidden('#resOp') && await page.isHidden('#resSBonus'));
+    assert.strictEqual(s2.money - s1.money, T.rw.m);
+    // 基地の司令室は、次の作戦に進んでいる
+    await page.click('[data-act="r-base"]');
+    assert((await page.textContent('#opsPanel')).includes('OPERATION 02'));
+    assert.strictEqual(await page.locator('#opsPanel .opbar i.on').count(), 0);
+  }, strong({ cleared: 9, sel: 10, stats: { battles: 20, wins: 15 } })));
+
+  await test('司令室: 今日の任務が3つ出て、達成すると受け取れる(全部で追加の報酬)。勲章は記録に応じて受け取れる。図鑑が見られる', () => withPage('iPhone 13', async page => {
+    assert((await page.textContent('#opsPanel')).includes('OPERATION 02'));
+    assert.strictEqual(await page.locator('#opsPanel .opbar i').count(), 10);
+    assert.strictEqual(await page.locator('#opsPanel .opbar i.on').count(), 4);
+    await page.click('#opsPanel [data-act="goals"][data-tab="ms"]');
+    assert.strictEqual(await page.locator('#sheet .gitem').count(), 3, '任務が3つない');
+    assert.strictEqual(await page.locator('#sheet [data-act="ms-claim"]:not([disabled])').count(), 0, '最初から受け取れる');
+    // 任務を2つ達成した状態にする(戦闘や強化で進む数を、じかに入れる)
+    const ids = await page.evaluate(() => { const g = window.__game, st = g.state; st.ms.list.slice(0, 2).forEach(q => { st.ms.prog[q.id] = q.n; }); g.save(); g.render(); return st.ms.list.map(q => q.id); });
+    await page.click('.sheet .close');
+    assert((await page.textContent('#opsPanel')).includes('受取 2'), '基地に受け取れる印が出ない');
+    await page.click('#opsPanel [data-act="goals"][data-tab="ms"]');
+    const s0 = await state(page), rw = await page.evaluate(() => ({ one: window.__game.TF.msReward(window.__game.state, false), all: window.__game.TF.msReward(window.__game.state, true) }));
+    await page.click('#ms-0 [data-act="ms-claim"]');
+    let s1 = await state(page);
+    assert.strictEqual(s1.money - s0.money, rw.one.m);
+    assert.strictEqual(s1.bp - s0.bp, rw.one.bp);
+    assert.strictEqual(await page.locator('#ms-0 [data-act="ms-claim"]').count(), 0, '受け取ったのにボタンが残る');
+    await page.click('#ms-1 [data-act="ms-claim"]');
+    // 3つ目も達成 → 受け取ると、全部達成の追加報酬も入る
+    await page.evaluate(() => { const g = window.__game, st = g.state, q = st.ms.list[2]; st.ms.prog[q.id] = q.n; g.save(); });
+    await page.click('#sheet [data-act="goals"][data-tab="ms"]');
+    const s2 = await state(page);
+    await page.click('#ms-2 [data-act="ms-claim"]');
+    const s3 = await state(page);
+    assert.strictEqual(s3.money - s2.money, rw.one.m + rw.all.m, '全部達成の追加報酬');
+    assert.strictEqual(s3.ms.all, true);
+    assert.strictEqual(s3.stats.missions, 3);
+    // 勲章: ステージ14まで進んでいるので、進撃章(10ステージ)は受け取れる
+    await page.click('#sheet [data-act="goals"][data-tab="medal"]');
+    assert(await page.locator('#sheet .gitem').count() >= 15);
+    const mr = await page.evaluate(() => window.__game.TF.medalReward(window.__game.state, 0));
+    await page.click('#medal-advance [data-act="medal-claim"]');
+    const s4 = await state(page);
+    assert.strictEqual(s4.medals.advance, 1);
+    assert.strictEqual(s4.money - s3.money, mr.m);
+    assert(await page.isDisabled('#medal-advance [data-act="medal-claim"]'), '次の段(30ステージ)にまだ届いていないのに受け取れる');
+    // 図鑑: まだいない指揮官は「???」
+    await page.click('#sheet [data-act="goals"][data-tab="book"]');
+    const book = await page.textContent('#sheet');
+    assert(book.includes('鬼塚') && book.includes('???') && book.includes('戦績'));
+    await noHorizontalScroll(page);
+    // 押す所は十分な大きさ
+    await page.click('#sheet [data-act="goals"][data-tab="ms"]');
+    const hs = await page.evaluate(() => Array.from(document.querySelectorAll('#sheet .gtabs button, #opsPanel .gbtn')).map(e => e.getBoundingClientRect().height));
+    assert(hs.every(h => h >= 40), 'ボタンが小さい ' + hs);
+  }, midState({ stats: { battles: 40, wins: 30 } })));
+
+  await test('任務は実際の操作で進む: 施設の強化・戦闘の勝利が数えられ、日付が変わると入れ替わる', () => withPage('iPhone 13', async page => {
+    // 任務を「施設を2回強化」「戦闘に3回勝利」にそろえる
+    await page.evaluate(() => { const g = window.__game, st = g.state; st.ms.list = [{ id: 'upgrade', n: 2, got: false }, { id: 'win', n: 1, got: false }, { id: 'kill', n: 1, got: false }]; st.ms.prog = {}; g.save(); g.render(); });
+    await page.click('[data-act="tile"][data-slot="8"]');
+    await page.click('[data-act="upgrade"][data-id="lab"]');
+    await page.click('[data-act="upgrade"][data-id="lab"]');
+    await page.click('.sheet .close');
+    let st = await state(page);
+    assert.strictEqual(st.ms.prog.upgrade, 2);
+    assert((await page.textContent('#opsPanel')).includes('受取 1'));
+    await page.evaluate(() => { const g = window.__game; g.state.sel = 5; g.save(); });
+    await page.click('[data-act="tab"][data-tab="sortie"]');
+    await page.click('[data-act="sortie"]');
+    await finishBattle(page);
+    st = await state(page);
+    assert.strictEqual(st.ms.prog.win, 1);
+    assert(st.ms.prog.kill >= 1, '撃破が数えられていない');
+    assert(await page.isVisible('#resMs'), '結果画面に任務達成の案内がない');
+    // 日付が変わると、新しい任務になる(受け取っていない分は消える)
+    const day = st.ms.day;
+    const next = await page.evaluate(d => { const g = window.__game; return g.TF.msState(g.state, d + 1).map(x => x.p); }, day);
+    assert.deepStrictEqual(next, [0, 0, 0]);
+  }, strong({ money: 1e7, steel: 1e7 })));
+
+  await test('前の版のセーブで開くと、新しい版のお知らせが1回だけ出る。データはそのままで、勲章の画面へ案内される', async () => {
+    const browser = await chromium.launch();
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    try {
+      const old = midState({ cleared: 34, sel: 35 });
+      delete old.flags.v2;
+      // 保存データは最初の1回だけ入れる(開き直したときは、ゲームが保存した続きを使う)
+      await ctx.addInitScript(([k, s]) => { if (!localStorage.getItem('__inj')) { localStorage.setItem(k, s); localStorage.setItem('__inj', '1'); } }, [KEY, JSON.stringify(old)]);
+      let page = await ctx.newPage();
+      await openGame(page);
+      await page.waitForSelector('[data-act="v2-ok"]');
+      assert((await page.textContent('#modal')).includes('Ver.2'));
+      let st = await state(page);
+      assert.strictEqual(st.cleared, 34);
+      assert.strictEqual(st.money, old.money);
+      assert.deepStrictEqual(st.rank, {});
+      await page.click('[data-act="v2-ok"]');
+      await page.waitForSelector('#sheet .gitem');
+      assert(await page.locator('#sheet [data-act="medal-claim"]:not([disabled])').count() >= 2, 'これまでの戦績の勲章が受け取れない');
+      await page.close();
+      page = await ctx.newPage();
+      await openGame(page);
+      await page.waitForTimeout(400);
+      assert(await page.isHidden('[data-act="v2-ok"]'), 'お知らせが2回出た');
+    } finally { await browser.close(); }
+  });
+
+  await test('最初の案内: あいさつからそのまま最初の戦闘へ。勝ったら基地で、押す場所が光る輪と吹き出しで示される(補給所 → 兵舎の強化 → 出撃)', async () => {
+    const browser = await chromium.launch();
+    const ctx = await browser.newContext({ ...devices['iPhone SE'] });
+    try {
+      const page = await ctx.newPage();
+      const errors = []; page.on('pageerror', e => errors.push(e.message));
+      await openGame(page);
+      await page.waitForSelector('[data-act="intro-go"]');
+      await page.click('[data-act="intro-go"]');
+      // 配置の画面を出さずに、そのまま戦闘が始まる(はじめての人には「見守ろう」のひとこと)
+      await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase !== 'deploy'; });
+      assert((await page.evaluate(() => window.__game.battle.debug().hint || '')).includes('見守ろう'), '最初の戦闘のひとことが出ない');
+      await finishBattle(page);
+      assert.strictEqual((await state(page)).cleared, 1, '最初の戦闘に勝てない');
+      // 結果のボタンは「報酬で基地を育てる」だけ
+      assert.strictEqual(await page.locator('#modal .btns .btn').count(), 1);
+      await page.click('[data-act="r-base"]');
+      const guide = () => page.evaluate(() => window.__game.guide.debug());
+      const want = async (sel, word) => {
+        await page.waitForFunction(([s, w]) => { const g = window.__game.guide.debug(); return g.shown && g.step && g.step.sel === s && g.text.includes(w); }, [sel, word], { timeout: 8000 }).catch(async () => { throw new Error('案内が出ない: ' + sel + ' / いま ' + JSON.stringify(await guide())); });
+        // 光る輪が、押す場所を囲んでいる。吹き出しは画面の中
+        const r = await page.evaluate(s => { const t = document.querySelector(s).getBoundingClientRect(), q = document.getElementById('coachRing').getBoundingClientRect(), b = document.getElementById('coach').getBoundingClientRect(); return { t: [t.left, t.top, t.right, t.bottom], q: [q.left, q.top, q.right, q.bottom], b: [b.left, b.top, b.right, b.bottom], w: innerWidth, h: innerHeight }; }, sel);
+        assert(r.q[0] <= r.t[0] + 1 && r.q[1] <= r.t[1] + 1 && r.q[2] >= r.t[2] - 1 && r.q[3] >= r.t[3] - 1, '輪がずれている ' + JSON.stringify(r));
+        assert(r.b[0] >= 0 && r.b[2] <= r.w + 0.5 && r.b[1] >= 0 && r.b[3] <= r.h + 0.5, '吹き出しがはみ出す ' + JSON.stringify(r));
+      };
+      await want('.tile.empty', '区画');
+      await page.click('.tile.empty >> nth=0');
+      await want('[data-act="build"][data-id="supply"]', '補給所');
+      await page.click('[data-act="build"][data-id="supply"]');
+      await want('.tile[data-slot="1"]', '兵舎');
+      await page.click('.tile[data-slot="1"]');
+      await want('[data-act="upgrade"][data-id="barracks"]', '強化');
+      await page.click('[data-act="upgrade"][data-id="barracks"]');
+      await want('.sheet .close', '出撃');
+      await page.click('.sheet .close');
+      await want('#tabs [data-tab="sortie"]', 'ステージ2');
+      await page.click('#tabs [data-tab="sortie"]');
+      await want('[data-act="sortie"]', '出撃');
+      const st = await state(page);
+      assert(st.bld.supply && st.bld.barracks.lv === 2);
+      await page.click('[data-act="sortie"]');
+      await finishBattle(page);
+      await page.click('[data-act="r-next"]');
+      // ステージ2まで進むと、案内は終わり
+      await page.waitForFunction(() => window.__game.state.flags.tut === 9);
+      assert.strictEqual((await guide()).shown, false);
+      assert.deepStrictEqual(errors, []);
+    } finally { await browser.close(); }
+  });
+
+  await test('最初の案内は ✕ でやめられる。あいさつで「案内なし」を選ぶと出ない。ステージ5のあとに「配置」の紹介が1回出る', async () => {
+    const browser = await chromium.launch();
+    try {
+      let ctx = await browser.newContext({ ...devices['iPhone 13'] });
+      let page = await ctx.newPage();
+      await openGame(page);
+      await page.click('[data-act="intro-go"]');
+      await finishBattle(page);
+      await page.click('[data-act="r-base"]');
+      await page.waitForFunction(() => window.__game.guide.debug().shown);
+      const bh = await page.evaluate(() => document.querySelector('#coach button').getBoundingClientRect().height);
+      assert(bh >= 34, '✕ が小さい ' + bh);
+      await page.click('#coach button');
+      assert.strictEqual((await state(page)).flags.tut, 9);
+      assert(await page.isHidden('#coach'));
+      await page.click('.tile.empty >> nth=0');
+      await page.waitForTimeout(500);
+      assert(await page.isHidden('#coach'), 'やめたのに案内が出た');
+      await ctx.close();
+      // 案内なし
+      ctx = await browser.newContext({ ...devices['iPhone 13'] });
+      page = await ctx.newPage();
+      await openGame(page);
+      await page.click('[data-act="intro-ok"]');
+      await page.waitForTimeout(500);
+      assert.strictEqual((await page.evaluate(() => window.__game.guide.debug())).shown, false);
+      assert(!(await state(page)).flags.tut);
+      await ctx.close();
+      // 配置の紹介: 案内つきで始めた人が、ステージ5までクリアして出撃するとき
+      ctx = await browser.newContext({ ...devices['iPhone 13'] });
+      await ctx.addInitScript(([k, s]) => { if (!localStorage.getItem('__inj')) { localStorage.setItem(k, s); localStorage.setItem('__inj', '1'); } },
+        [KEY, JSON.stringify(midState({ cleared: 5, sel: 6, tab: 'sortie', flags: { intro: 1, v2: 1, tut: 9, tutB: 1, skipDeploy: 1, depTip: 0 } }))]);
+      page = await ctx.newPage();
+      await openGame(page);
+      await page.click('[data-act="sortie"]');
+      await page.waitForSelector('[data-act="dep-yes"]');
+      assert((await page.textContent('#modal')).includes('配置'));
+      await page.click('[data-act="dep-yes"]');
+      await page.waitForFunction(() => { const d = window.__game.battle.debug(); return d && d.phase === 'deploy'; });
+      let st = await state(page);
+      assert(st.flags.depTip === 1 && st.flags.skipDeploy === 0);
+      await page.click('[data-act="deploy-go"]');
+      await finishBattle(page);
+      await page.click('[data-act="r-form"]');
+      await page.click('[data-act="sortie"]');
+      await page.waitForSelector('#battle:not(.hidden)');
+      assert(await page.isHidden('[data-act="dep-yes"]'), '配置の紹介が2回出た');
+    } finally { await browser.close(); }
+  });
 
   if (failures) { console.log(`\n${failures}件の失敗`); process.exit(1); }
   console.log('\nすべて合格');

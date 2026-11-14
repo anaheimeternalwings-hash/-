@@ -3,7 +3,7 @@
     var t = now();
     var info = TF.storedInfo(st, t);
     var gm = info.supply ? info.supply.stored : 0, gs = info.steel ? info.steel.stored : 0;
-    var html = '<div class="hint"><span class="tag">指令</span><span>' + esc(nextGoal()) + '</span></div>';
+    var html = opsPanel();
     html += '<div class="collect card"><div class="info">貯まっている資源<br><b class="num">' + icoMoneyInline() + '<span id="cM">' + fmt(gm) + '</span></b>  <b class="num">' + icoSteelInline() + '<span id="cS">' + fmt(gs) + '</span></b>' +
       '<br>放置上限 ' + TF.capHours(st) + '時間</div><button class="btn green" id="btnCollect" data-act="collect"' + (gm + gs > 0 ? '' : ' disabled') + '>回収</button></div>';
     var bySlot = {};
@@ -217,10 +217,11 @@
     $('sheet').innerHTML = html;
     $('sheetWrap').classList.remove('hidden');
     $('sheet').scrollTop = keepScroll ? y : 0;
+    setTimeout(Guide.update, 0);
   }
-  function closeSheet() { $('sheetWrap').classList.add('hidden'); $('sheet').innerHTML = ''; sheetCtx = null; }
+  function closeSheet() { $('sheetWrap').classList.add('hidden'); $('sheet').innerHTML = ''; sheetCtx = null; setTimeout(Guide.update, 0); }
   var sheetCtx = null;
 
-  function openModal(html) { $('modal').innerHTML = html; $('modalWrap').classList.remove('hidden'); $('modal').scrollTop = 0; }
-  function closeModal() { $('modalWrap').classList.add('hidden'); $('modal').innerHTML = ''; }
+  function openModal(html) { $('modal').innerHTML = html; $('modalWrap').classList.remove('hidden'); $('modal').scrollTop = 0; setTimeout(Guide.update, 0); }
+  function closeModal() { $('modalWrap').classList.add('hidden'); $('modal').innerHTML = ''; setTimeout(Guide.update, 0); }
 

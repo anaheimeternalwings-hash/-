@@ -3,6 +3,7 @@
 //   STAGES=200 node tests/balance.test.js … より長く
 //   JOBS=1 node tests/balance.test.js   … 通しプレイを1つずつ動かす(ふだんは CPU の数まで並列)
 //   RULES=0 node tests/balance.test.js  … ルールの確認を飛ばして、通しプレイだけ
+//   PLAY=0 node tests/balance.test.js   … ルールの確認だけ(通しプレイを飛ばす。数分)
 //
 // index.html の <script id="logic"> をそのまま取り出して動かすので、
 // ゲーム本体と同じ計算でテストされます。
@@ -271,11 +272,12 @@ check('増援: 自動ではポイントがたまると両軍とも途中参戦�
   b.step(0.5);
   const ty = Object.keys(res.p.defs)[0];
   assert.strictEqual(b.deploy(ty, 0.5), null, 'ポイント不足なのに出せた');
-  b.step(TF.K.resCost);
+  const tFull = (TF.K.resCost - TF.K.resStart) / TF.K.resRate + 0.5; // ポイントがたまる時刻
+  b.step(tFull);
   assert(!b.ev.some(x => x.k === 'spawn' && x.side === 0), '手動なのに勝手に出た');
-  const id = b.deploy(ty, TF.K.resCost);
+  const id = b.deploy(ty, tFull);
   assert(id !== null, 'たまったのに出せない');
-  const info = b.reserveInfo(TF.K.resCost);
+  const info = b.reserveInfo(tFull);
   assert.strictEqual(info.used, 1);
   assert(info.pts < info.cost);
   assert.strictEqual(b.U[id].side, 0);
@@ -306,7 +308,7 @@ check('拠点: 敵部隊を撃破すると前線が進んで拠点を占領し�
   const res = TF.battleReserves(st, 50);
   const mk = (t, hp, atk) => ({ type: t, maxHp: hp, atk: atk, cd: 1, hero: null, boss: false, power: 1 });
   // 自軍が強い: 撃破のたびに敵側の拠点を手前から占領
-  const strong = [mk('tank', 5000, 400), mk('tank', 5000, 400), mk('tank', 5000, 400)], weak = [1, 2, 3, 4].map(() => mk('inf', 900, 5));
+  const strong = [mk('tank', 5000, 400), mk('tank', 5000, 400), mk('tank', 5000, 400)], weak = [1, 2, 3, 4, 5].map(() => mk('inf', 4000, 5));
   const a = TF.createBattle(strong, weak, 3, { record: true, reserves: res, posts: true });
   a.step(Infinity);
   const posts = a.ev.filter(x => x.k === 'post');
@@ -538,8 +540,8 @@ check('敵将: ボス戦(ステージ12以降)と一部のステージに敵将�
   assert(wn && first && first.t >= wn.t, '予告の前から見えていた');
   assert(!b.U[1].alive && !castOf(b), '予告中に倒しても発動した');
 });
-check('敵将はスキルを使える: 後方の本陣で動かずに構える耐久の高い親衛隊が率い、開始2.5秒以内に予告して6.5秒までに最初のスキルを使う。互角の戦いではほぼ必ず、自軍がかなり強い(1.5倍)戦いでも8割以上で発動する。ボスの耐久はふつうの部隊の3倍以上', () => {
-  Object.keys(TF.ECMD).forEach(k => { const c = TF.ECMD[k]; assert(c.first - c.warn + K.ecmdJit <= 2.5 + 1e-9 && c.first + K.ecmdJit <= 6.5 + 1e-9, '最初の発動が遅い ' + k); });
+check('敵将はスキルを使える: 後方の本陣で動かずに構える耐久の高い親衛隊が率い、開始6秒以内に予告して13秒までに最初のスキルを使う。互角の戦いではほぼ必ず、自軍がかなり強い(1.5倍)戦いでも8割以上で発動する。ボスの耐久はふつうの部隊の3倍以上', () => {
+  Object.keys(TF.ECMD).forEach(k => { const c = TF.ECMD[k]; assert(c.first - c.warn + K.ecmdJit <= 6 + 1e-9 && c.first + K.ecmdJit <= 13 + 1e-9, '最初の発動が遅い ' + k); assert(c.warn >= 5, '予告が短い ' + k); });
   assert(K.bossHp >= 3, 'ボスの耐久 ' + K.bossHp);
   const stages = [];
   for (let s = 12; stages.length < 12; s++) if (TF.stageInfo(s).ecmd) stages.push(s);
@@ -886,6 +888,136 @@ check('最初のステージは初期状態で勝てる', () => {
   assert(TF.predict(st, st.form, 1, 100).winRate >= 0.95);
 });
 
+check('戦闘の長さ: 互角の戦い(指揮官なし・6部隊どうし)は平均25〜45秒。耐久の底上げは両軍同じで、戦力の表示は変わらない', () => {
+  assert(K.hpScale >= 1.8 && K.hpScale <= 2.4, 'hpScale ' + K.hpScale);
+  const q = TF.makeSquad('inf', 1), u = TF.UNIT.inf;
+  assert.strictEqual(q.maxHp, Math.round(u.hp * K.hpScale));
+  assert.strictEqual(q.power, Math.round(Math.sqrt(u.hp * u.atk / u.cd) * 2.645), '戦力の表示が変わった');
+  const types = ['inf', 'inf', 'at', 'tank', 'tank', 'art'];
+  let tsum = 0, n = 0;
+  for (const s of [33, 47, 58, 71]) {
+    const info = TF.stageInfo(s), bl = TF.blindPlace(types, info.terrain), pl = TF.enemyPlace(types, info.terrain, s);
+    const p = types.map((ty, j) => Object.assign(TF.makeSquad(ty, 1), { lane: bl[j].lane, lx: bl[j].lx, adv: bl[j].adv }));
+    const e = types.map((ty, j) => Object.assign(TF.makeSquad(ty, 1.05), { lane: pl[j].lane, lx: pl[j].lx, adv: pl[j].adv, hold: pl[j].hold, role: pl[j].role }));
+    for (let i = 0; i < 10; i++) { tsum += TF.simulate(p, e, 9000 + i * 7919 + s, false, { terrain: info.terrain }).time; n++; }
+  }
+  const avg = tsum / n;
+  assert(avg >= 25 && avg <= 45, '平均 ' + avg.toFixed(1) + '秒');
+});
+check('スキルの間合い: 指揮官の最初の発動は開始6〜10秒、次は15秒以上あと(1戦に1〜2回の見せ場)。説明文の秒数は数値と一致', () => {
+  TF.HEROES.forEach(h => { const k = TF.SKILL[h.skill]; assert(k.first >= 6 && k.first <= 10 && k.cd >= 15, h.skill); if (k.dur) assert(k.desc.includes(k.dur + '秒'), h.skill + ' ' + k.desc); });
+  Object.keys(TF.ECMD).forEach(k => { const c = TF.ECMD[k]; if (c.dur) assert(c.desc.includes(c.dur + '秒'), k + ' ' + c.desc); });
+});
+check('評価: 被害が少ないほど S・A・B(負けは評価なし)。結果には撃破数と、予告中の敵将を倒してスキルを阻止した数が入る', () => {
+  assert.strictEqual(TF.rankOf({ win: true, pHp: 0.9 }), 'S');
+  assert.strictEqual(TF.rankOf({ win: true, pHp: K.rankS }), 'S');
+  assert.strictEqual(TF.rankOf({ win: true, pHp: 0.5 }), 'A');
+  assert.strictEqual(TF.rankOf({ win: true, pHp: 0.2 }), 'B');
+  assert.strictEqual(TF.rankOf({ win: false, pHp: 0.9 }), null);
+  const T = TF.flatTerrain();
+  const mk = (t, lane, o) => Object.assign({ type: t, maxHp: 2000, atk: 100, cd: 1, hero: null, boss: false, power: 1, lane: lane }, o || {});
+  // 耐久の低い敵将: 予告で位置がわかってから、発動の前に倒せる → 阻止1回、スキルは出ない
+  let b = TF.createBattle([mk('tank', 3, { maxHp: 1e9, atk: 400, adv: 0.95 })], [mk('at', 3, { maxHp: 800, atk: 1, adv: 0, hold: true, ecmd: 'thunder' })], 3, { record: true, terrain: T });
+  b.step(Infinity);
+  let r = b.result();
+  assert(r.win && r.kills === 1, '撃破数 ' + r.kills);
+  assert.strictEqual(r.estop, 1, '阻止が数えられていない');
+  assert(b.ev.some(e => e.k === 'eskWarn') && !b.ev.some(e => e.k === 'eskCast'), '阻止したのに発動した');
+  // 倒せなければ発動し、阻止は0
+  b = TF.createBattle([mk('tank', 3, { maxHp: 1e9, atk: 1, adv: 0.95 })], [mk('at', 3, { maxHp: 1e9, atk: 1, adv: 0, hold: true, ecmd: 'thunder' })], 3, { record: true, terrain: T });
+  b.step(30);
+  assert(b.ev.some(e => e.k === 'eskCast') && b.result().estop === 0);
+});
+check('作戦: 10ステージで1つ(名前つき)。最後のボスをはじめて倒すと制圧報酬(1回だけ)。S評価をはじめて取ったステージにも1回だけ報酬。評価の記録は下がらない', () => {
+  assert.strictEqual(TF.opInfo(1).n, 1); assert.strictEqual(TF.opInfo(10).n, 1); assert.strictEqual(TF.opInfo(11).n, 2);
+  const names = new Set(); for (let n = 1; n <= 30; n++) names.add(TF.opInfo(n * 10).name);
+  assert.strictEqual(names.size, 30, '作戦の名前が重なる');
+  const st = TF.newState(0); st.cleared = 9;
+  const m0 = st.money, s0 = st.steel, bp0 = st.bp, rw = TF.stageReward(10), op = TF.opReward(1), sb = TF.rankBonus(10);
+  const r = TF.applyResult(st, 10, true, st.form, 0.5, { rank: 'S', kills: 3, pHp: 0.8 });
+  assert(r.op && r.op.n === 1 && r.op.name === TF.opInfo(10).name && r.sBonus, JSON.stringify(r));
+  assert.strictEqual(r.rank, 'S');
+  assert.strictEqual(st.money - m0, rw.m * K.firstMul + op.m + sb.m);
+  assert.strictEqual(st.steel - s0, rw.s * K.firstMul + op.s + sb.s);
+  assert.strictEqual(st.bp - bp0, rw.bp * K.firstMul + op.bp + sb.bp);
+  assert.strictEqual(st.rank[10], 3); assert.strictEqual(TF.bestRank(st, 10), 'S');
+  const m1 = st.money;
+  const r2 = TF.applyResult(st, 10, true, st.form, 0.5, { rank: 'S' });
+  assert(!r2.op && !r2.sBonus && st.money - m1 === rw.m, '2回目にも報酬が出た');
+  const r3 = TF.applyResult(st, 10, true, st.form, 0.5, { rank: 'B' });
+  assert.strictEqual(r3.rank, 'B'); assert.strictEqual(r3.best, 'S'); assert.strictEqual(st.rank[10], 3, '評価が下がった');
+  // A評価 → あとでS評価: そのときに1回だけ
+  const a = TF.applyResult(st, 5, true, st.form, 0.5, { rank: 'A' });
+  assert(!a.sBonus && st.rank[5] === 2);
+  assert(TF.applyResult(st, 5, true, st.form, 0.5, { rank: 'S' }).sBonus);
+  assert(!TF.applyResult(st, 5, true, st.form, 0.5, { rank: 'S' }).sBonus);
+  // 負けは記録しない。評価を渡さない勝ち(前の版の途中データ)はB
+  assert(!TF.applyResult(st, 7, false, st.form, 0.5, { rank: null }).rank && !st.rank[7]);
+  assert.strictEqual(TF.applyResult(st, 7, true, st.form, 0.5).rank, 'B');
+  // 制圧報酬とS評価の報酬は、そのステージの報酬より大きすぎない
+  assert(op.m <= rw.m * K.firstMul && sb.m <= rw.m, '目標の報酬が大きすぎる');
+});
+check('任務: 1日に3つ(同じ日は同じ顔ぶれ)。戦闘・強化などで進み、達成すると受け取れる。3つ全部で追加の報酬。日付が変わると入れ替わる。まだできない任務は出ない', () => {
+  const st = TF.newState(0);
+  const a = TF.msState(st, 100);
+  assert.strictEqual(a.length, 3);
+  assert.strictEqual(new Set(a.map(x => x.id)).size, 3, '同じ任務が重なる');
+  assert.deepStrictEqual(TF.msState(st, 100).map(x => x.id + x.n), a.map(x => x.id + x.n), '同じ日なのに変わった');
+  // はじめたばかりの人には、ボス戦・敵将・兵器・回収・手動の任務は出ない。評価の任務は1つまで
+  for (let d = 0; d < 80; d++) {
+    const f = TF.newState(d * 977), l = TF.msState(f, d).map(x => x.id);
+    assert(l.length === 3 && !l.some(x => ['boss', 'ecmd', 'arm', 'collect', 'manual'].includes(x)), 'できない任務が出た ' + l);
+    assert(l.filter(x => x === 'rankA' || x === 'rankS').length <= 1, l);
+  }
+  // 進む: 勝利・撃破・施設の強化
+  st.ms.list = [{ id: 'win', n: 2, got: false }, { id: 'kill', n: 3, got: false }, { id: 'upgrade', n: 1, got: false }]; st.ms.prog = {};
+  assert.strictEqual(TF.msClaim(st, 0), null, '達成していないのに受け取れた');
+  TF.applyResult(st, 1, true, st.form, 0.5, { rank: 'A', kills: 2 });
+  assert.strictEqual(TF.msClaimable(st), 0);
+  TF.applyResult(st, 1, true, st.form, 0.5, { rank: 'A', kills: 2 });
+  TF.applyResult(st, 1, false, st.form, 0.5, { kills: 1 });
+  st.money = 1e6; st.steel = 1e6;
+  assert(TF.doUpgrade(st, 'barracks', 0).ok);
+  assert.deepStrictEqual(TF.msState(st, 100).map(x => x.p), [2, 3, 1]);
+  assert.strictEqual(TF.msClaimable(st), 3);
+  const one = TF.msReward(st, false), all = TF.msReward(st, true);
+  let m = st.money;
+  const c0 = TF.msClaim(st, 0);
+  assert(c0 && !c0.all && st.money - m === one.m);
+  assert.strictEqual(TF.msClaim(st, 0), null, '2回受け取れた');
+  TF.msClaim(st, 1); m = st.money;
+  const c2 = TF.msClaim(st, 2);
+  assert(c2.all && st.money - m === one.m + all.m, '全部達成の追加報酬がない');
+  assert.strictEqual(st.stats.missions, 3);
+  // 日付が変わると入れ替わり、進み具合は0から
+  const b = TF.msState(st, 101);
+  assert(b.every(x => x.p === 0 && !x.got) && st.ms.day === 101 && !st.ms.all);
+  // 報酬は控えめ(いまの最前線の報酬より少ない)
+  const base = TF.goalBase(st);
+  assert(one.m < base.m && all.m <= base.m * 2);
+});
+check('勲章: 記録が届くと、段ごとに1回ずつ受け取れる(段が上がるほど報酬が増える)。届いていない段は受け取れない', () => {
+  const st = TF.newState(0);
+  assert.strictEqual(TF.medalClaimable(st), 0, '最初から受け取れる');
+  assert(TF.MEDALS.length >= 15 && TF.MEDALS.reduce((a, m) => a + m.t.length, 0) >= 50);
+  TF.MEDALS.forEach(m => { for (let i = 1; i < m.t.length; i++) assert(m.t[i] > m.t[i - 1], m.id); });
+  st.cleared = 35; st.stats.wins = 60;
+  const can = TF.medalList(st).filter(x => x.can).map(x => x.id).sort();
+  assert.deepStrictEqual(can, ['advance', 'operation', 'veteran']);
+  let m = st.money;
+  const r1 = TF.medalClaim(st, 'advance');
+  assert(r1 && r1.tier === '銅' && st.money - m === r1.m && st.medals.advance === 1);
+  const r2 = TF.medalClaim(st, 'advance');
+  assert(r2 && r2.tier === '銀' && r2.m > r1.m && r2.bp > r1.bp, '段が上がっても報酬が増えない');
+  assert.strictEqual(TF.medalClaim(st, 'advance'), null, '60ステージに届いていないのに受け取れた');
+  assert.strictEqual(TF.medalClaim(st, 'nothing'), null);
+  // 記録は実際の操作で増える
+  const k0 = st.stats.kill || 0;
+  TF.applyResult(st, 12, true, st.form, 0.5, { rank: 'S', kills: 4, manual: true, estop: 1, pHp: 0.97 });
+  assert.strictEqual(st.stats.kill - k0, 4);
+  assert(st.stats.manual === 1 && st.stats.estop === 1 && st.stats.flawless === 1);
+});
+
 // ---------------------------------------------------------------
 // 2. 自動プレイによるバランス確認
 // ---------------------------------------------------------------
@@ -906,6 +1038,16 @@ function playthrough(opt) {
   let partFarm = 0;
   let want = null, partWish = 0;
   const roll = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
+  // 目標(任務・勲章・S評価・作戦)の報酬も受け取る。1日 = 40戦(放置派は実際の時間も数える)
+  let goalInc = 0, allInc = 0;
+  const ranks = { S: 0, A: 0, B: 0 };
+  const val = x => x ? x.m + x.s * STEEL_PRICE : 0;
+  function claimGoals() {
+    if (opt.goals === false) return;
+    const day = Math.floor(now / 86400e3) + Math.floor(battles / (opt.dayBattles || 40));
+    TF.msState(st, day).forEach(x => { if (x.done && !x.got) { const c = TF.msClaim(st, x.i); goalInc += val(c); allInc += val(c); } });
+    TF.medalList(st).forEach(m => { let c; while ((c = TF.medalClaim(st, m.id))) { goalInc += val(c); allInc += val(c); } });
+  }
   function getForm(s) {
     const k = key(s);
     if (cache.has(k)) return cache.get(k);
@@ -1007,7 +1149,8 @@ function playthrough(opt) {
   }
 
   while (st.cleared < opt.target && battles < opt.maxBattles) {
-    TF.collect(st, now);
+    allInc += val(TF.collect(st, now));
+    claimGoals();
     spend();
     const next = st.cleared + 1;
     const g = getForm(next);
@@ -1032,7 +1175,9 @@ function playthrough(opt) {
     st.form = form;
     const b = TF.prepareBattle(st, form, stage);
     const res = TF.simulate(b.p, b.e, seed++, false, { reserves: b.reserves, posts: b.posts, terrain: b.terrain });
-    const sum = TF.applyResult(st, stage, res.win, b.form, roll());
+    const sum = TF.applyResult(st, stage, res.win, b.form, roll(), opt.goals === false ? undefined : { rank: TF.rankOf(res), kills: res.kills, estop: res.estop, pHp: res.pHp });
+    allInc += val(sum) + val(sum.sBonus) + val(sum.op); goalInc += val(sum.sBonus) + val(sum.op);
+    if (res.win) ranks[TF.rankOf(res)]++;
     battles++;
     timeSum += res.time; if (res.timeout) timeouts++;
     // 1戦 = 2倍速の戦闘時間 + 操作10秒 とみなす
@@ -1046,7 +1191,7 @@ function playthrough(opt) {
       lastClear = battles;
     }
   }
-  return { st, battles, perStage, stuckMax, stuckAt, hours: now / 3600e3, avgTime: timeSum / battles, timeouts, farmMin, armTrace, partFarm };
+  return { st, battles, perStage, stuckMax, stuckAt, hours: now / 3600e3, avgTime: timeSum / battles, timeouts, farmMin, armTrace, partFarm, goalShare: allInc ? goalInc / allInc : 0, ranks };
 }
 
 function segments(res, size) {
@@ -1063,6 +1208,7 @@ function report(label, res) {
   console.log(`    到達ステージ ${res.st.cleared} / 総戦闘 ${res.battles}回 / 想定プレイ時間 ${res.hours.toFixed(1)}時間`);
   console.log(`    最大の詰まり ${res.stuckMax}戦(ステージ${res.stuckAt}) / 平均戦闘時間 ${res.avgTime.toFixed(1)}秒 / 時間切れ ${res.timeouts}回 / 稼ぎ時の最低予想勝率 ${Math.round(res.farmMin * 100)}%`);
   console.log('    ' + segments(res, 20).map(g => `s${g.from}-${g.to}: 平均${g.avg.toFixed(1)} 最大${g.max}`).join('\n    '));
+  console.log(`    目標の報酬(任務・勲章・S評価・作戦)は収入の ${(res.goalShare * 100).toFixed(1)}% / 勝った戦闘の評価 S ${res.ranks.S}・A ${res.ranks.A}・B ${res.ranks.B} / 勲章 ${TF.medalList(res.st).reduce((a, m) => a + m.got, 0)}個・任務 ${res.st.stats.missions || 0}件`);
   const b = res.st.bld;
   console.log('    施設: ' + Object.keys(b).map(k => TF.BLD[k].name + b[k].lv).join(' '));
   console.log('    武装: ' + TF.TYPES.filter(t => TF.typeUnlocked(res.st, t)).map(t => TF.UNIT[t].name + ' ' + TF.ARM_KINDS.map(k => TF.armLv(res.st, t, k)).join('/')).join('  ') + ` (武器/防護/特殊のLv) 設計図の残り ${res.st.bp} / 部品集めのボス戦 ${res.partFarm}回 / 部品の残り ${JSON.stringify(res.st.parts)}`);
@@ -1082,6 +1228,10 @@ const PLAYS = [
 ];
 if (!isMainThread) {
   parentPort.postMessage(playthrough(workerData.opt));
+} else if (process.env.PLAY === '0') {
+  // ルールの確認だけ(数分)。通しプレイは省略
+  console.log(failures ? `\n${failures}件の失敗` : '\nルールの確認はすべて合格(通しプレイは省略)');
+  process.exit(failures ? 1 : 0);
 } else {
   runAll().catch(e => { console.error(e); process.exit(1); });
 }
@@ -1118,6 +1268,15 @@ check('どの方針でも目標ステージに到達する(永久に詰まらな
   [greedy].concat(randoms).forEach(r => assert.strictEqual(r.st.cleared, TARGET));
   assert.strictEqual(mono.st.cleared, Math.min(TARGET, 100));
   assert.strictEqual(idle.st.cleared, Math.min(TARGET, 80));
+});
+check('目標(任務・勲章・S評価・作戦)の報酬は、収入の3〜20%(楽しみにはなるが、これがないと進めないほどではない)', () => {
+  [greedy].concat(randoms, [mono, idle]).forEach(r => assert(r.goalShare >= 0.03 && r.goalShare <= 0.2, (r.goalShare * 100).toFixed(1) + '%'));
+});
+check('評価は S・A・B のどれも出る(勝てば必ずSにはならない)。平均の戦闘時間は15〜40秒', () => {
+  const tot = greedy.ranks.S + greedy.ranks.A + greedy.ranks.B;
+  assert(greedy.ranks.S / tot >= 0.1 && greedy.ranks.S / tot <= 0.8, 'S ' + greedy.ranks.S + '/' + tot);
+  assert(greedy.ranks.A > 0 && greedy.ranks.B > 0);
+  [greedy].concat(randoms).forEach(r => assert(r.avgTime >= 15 && r.avgTime <= 40, r.avgTime.toFixed(1) + '秒'));
 });
 check('序盤(ステージ1〜10)は合計30戦以内で進める', () => {
   let n = 0; for (let s = 1; s <= 10; s++) n += greedy.perStage[s];
