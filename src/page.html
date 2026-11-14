@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="前線基地">
+<meta name="theme-color" content="#080b0e">
+<meta name="format-detection" content="telephone=no">
+<title>前線基地コマンダー</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2333402a'/%3E%3Cpath d='M32 9l6.5 14.2 15.5 1.6-11.6 10.4 3.3 15.3L32 42.7 18.3 50.5l3.3-15.3L10 24.8l15.5-1.6z' fill='%23f1c453'/%3E%3C/svg%3E">
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top">
+    <div class="res" id="resM"><svg viewBox="0 0 24 24"><use href="#i-money"/></svg><b class="num" id="vM">0</b></div>
+    <div class="res" id="resS"><svg viewBox="0 0 24 24"><use href="#i-steel"/></svg><b class="num" id="vS">0</b></div>
+    <div class="stagepill" id="vStage">ST 1</div>
+    <button class="iconbtn" data-act="items" aria-label="アイテム" id="btnItems"><svg viewBox="0 0 24 24"><path fill="#d9c79a" fill-rule="evenodd" d="M9 3.5h6A2 2 0 0 1 17 5.5V7h2.5A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-10A1.5 1.5 0 0 1 4.5 7H7V5.5a2 2 0 0 1 2-2zM9 5.5V7h6V5.5zM3 11.5v1.6h7.5v1.4h3v-1.4H21v-1.6z"/></svg><i class="dot" id="dotItems"></i></button>
+    <button class="iconbtn" data-act="menu" aria-label="メニュー"><svg viewBox="0 0 24 24"><path fill="#b0b9a0" d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg></button>
+  </header>
+  <main id="main">
+    <section class="screen" id="scr-base"></section>
+    <section class="screen hidden" id="scr-army"></section>
+    <section class="screen hidden" id="scr-arms"></section>
+    <section class="screen hidden" id="scr-sortie"></section>
+  </main>
+  <nav id="tabs">
+    <button data-act="tab" data-tab="base"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>基地<i class="dot" id="dotBase"></i></button>
+    <button data-act="tab" data-tab="army"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2.5c-3.7 0-6.6 2.5-6.8 6H3.8v1.8h16.4V8.5h-1.4C18.6 5 15.7 2.5 12 2.5zM8.3 11.4c0 2.4 1.7 4.3 3.7 4.3s3.7-1.9 3.7-4.3zM4 21.6c.4-3.4 3.8-5.3 8-5.3s7.6 1.9 8 5.3z"/></svg>部隊<i class="dot" id="dotArmy"></i></button>
+    <button data-act="tab" data-tab="arms"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M14.7 2.6a5.3 5.3 0 0 0-5 7l-7 7a2.1 2.1 0 0 0 3 3l7-7a5.3 5.3 0 0 0 7-5l-3.1 3.1-2.9-.9-.9-2.9z"/></svg>兵器<i class="dot" id="dotArms"></i></button>
+    <button data-act="tab" data-tab="sortie"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 2 9 9H2l5.6 4.2L5.5 21 12 16.4 18.5 21l-2.1-7.8L22 9h-7z"/></svg>出撃<i class="dot" id="dotSortie"></i></button>
+  </nav>
+</div>
+
+<div id="sheetWrap" class="hidden"><div class="backdrop" data-act="sheet-close"></div><div class="sheet" id="sheet"></div></div>
+<div id="modalWrap" class="hidden"><div class="backdrop"></div><div class="modal" id="modal"></div></div>
+
+<div id="battle" class="hidden">
+  <div class="bsafe"></div>
+  <div class="bcanvas" id="bwrap"><canvas id="bbg"></canvas><canvas id="bcv"></canvas><button class="camreset hidden" id="camReset" data-act="cam-reset">⌖ 戦況を追う</button><div class="supbar hidden" id="supBar"></div><div class="deploybar hidden" id="deployBar"></div></div>
+  <div class="skillbar hidden" id="skillBar"></div>
+  <div class="cardbar hidden" id="cardBar"></div>
+  <div class="bctl">
+    <div class="speed" id="speedSel">
+      <button data-act="speed" data-sp="1">×1</button><button data-act="speed" data-sp="2">×2</button><button data-act="speed" data-sp="4">×4</button>
+    </div>
+    <button class="autobtn" id="btnAuto" data-act="auto-toggle"><span>AUTO</span><small id="autoState">ON</small></button>
+    <button class="btn sub" id="btnSkip" data-act="skip">スキップ</button>
+  </div>
+</div>
+<div id="toast"></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-money" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#c99a2e"/><circle cx="12" cy="12" r="8.2" fill="#f1c453"/><circle cx="12" cy="12" r="6.4" fill="none" stroke="#c99a2e" stroke-width="1"/><path d="M12 6.7l1.6 3.3 3.6.4-2.7 2.4.8 3.6-3.3-1.9-3.3 1.9.8-3.6-2.7-2.4 3.6-.4z" fill="#a8791c"/></symbol>
+    <symbol id="i-bp" viewBox="0 0 24 24"><path d="M4 2.5h11.5L20 7v14.5H4z" fill="#2f6fb2"/><path d="M15.5 2.5V7H20z" fill="#9cc8f2"/><g stroke="#d6ebff" stroke-width=".9" opacity=".75" fill="none"><path d="M6.5 9.5h11M6.5 13h11M6.5 16.5h11M9.5 7v12.5M14 7v12.5"/></g><path d="M7.5 18.5l3-3.5 2 2 3.5-4.5" stroke="#ffe08a" stroke-width="1.5" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-part" viewBox="0 0 24 24"><path d="M10.2 1.6h3.6l.6 2.8 2.2.9 2.4-1.6 2.6 2.6-1.6 2.4.9 2.2 2.8.6v3.6l-2.8.6-.9 2.2 1.6 2.4-2.6 2.6-2.4-1.6-2.2.9-.6 2.8h-3.6l-.6-2.8-2.2-.9-2.4 1.6-2.6-2.6 1.6-2.4-.9-2.2-2.8-.6v-3.6l2.8-.6.9-2.2-1.6-2.4 2.6-2.6 2.4 1.6 2.2-.9z" fill="#b48cff"/><circle cx="12" cy="12" r="5.6" fill="#2a1f45"/><rect x="9" y="9" width="6" height="6" rx="1" fill="#e2d2ff"/><path d="M10.5 9V7.6M13.5 9V7.6M10.5 16.4V15M13.5 16.4V15M9 10.5H7.6M9 13.5H7.6M16.4 10.5H15M16.4 13.5H15" stroke="#e2d2ff" stroke-width=".9"/></symbol>
+    <symbol id="i-steel" viewBox="0 0 24 24"><path d="M3 5h18v3h-6.5v8H21v3H3v-3h6.5V8H3z" fill="#7d95ab"/><path d="M3 5h18v1.4H3zM9.5 8h1.4v8H9.5zM3 16h6.5v1.3H3z" fill="#d3e3f1"/></symbol>
+  </defs>
+</svg>
+
+<script id="logic">
+/*__LOGIC__*/
+</script>
+<script id="ui">
+(function () {
+  'use strict';
+/*__UI__*/
+})();
+</script>
+</body>
+</html>
