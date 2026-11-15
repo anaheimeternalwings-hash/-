@@ -5,7 +5,7 @@ var FY = (function () {
   var K = {
     cmds: 3, maxCorps: 5, perSeason: 8, deadline: 96,          // 1手番に命令3つ、軍団は5つまで、8手番で1季節、96手番(3年)が期限
     accrueH: 3, maxStore: 8, firstTurns: 16,                   // 手番は3時間に1つたまる(最大8)。はじめは16
-    winterRange: 2, winterAtk: 0.75,                            // 冬: 補給が届く距離が2マス縮む、攻める側の強さ-2割
+    winterRange: 2, winterAtk: 0.75,                            // 冬: 補給が届く距離が2マス縮む、攻める側の強さ-25%
     starve: 2, isoTurns: 3,                                    // 補給が切れた軍団は毎手番 兵力-2、孤立したマスは3手番で相手のものに
     garBase: 6, garTown: 2, garStr: 2,                         // 守備隊の数(6+町×2)と、空いたマスの守り(2)
     income: 1, incTown: 1, incCap: 3, autumn: 1.5,             // 物資: 1 + 町 + 首都3(秋は1.5倍)
@@ -28,7 +28,7 @@ var FY = (function () {
     { name: '春', desc: 'ぬかるみ: 戦車は2マス進めない。川があふれて渡れない' },
     { name: '夏', desc: '攻めどき。特別なことは起きない' },
     { name: '秋', desc: '収穫: 物資が1.5倍。冬じたくの最後の機会' },
-    { name: '冬', desc: '補給の届く距離が2マス縮む。攻める側の強さ-2割。川が凍って渡れる(川の守りが消える)' }
+    { name: '冬', desc: '補給の届く距離が2マス縮む。攻める側の強さ-25%。川が凍って渡れる(川の守りが消える)' }
   ];
   var NATIONS = [
     { name: '自国' },
@@ -144,6 +144,7 @@ var FY = (function () {
     makeMap(S);
     // 自国の軍団3つ(指揮官つき)
     var pc = [CAPS[0]].concat(NB[CAPS[0]].filter(function (n) { return S.own[n] === 0; }));
+    for (var j = 0; j < NH && pc.length < 3; j++) if (S.own[j] === 0 && pc.indexOf(j) < 0 && hexDist(j, CAPS[0]) === 2) pc.push(j);
     [['inf', 7, 'oni'], ['tank', 7, 'tetsu'], ['art', 6, 'rai']].forEach(function (d, k) { if (pc[k] !== undefined) addUnit(S, 0, d[0], d[1], pc[k], d[2]); });
     // 敵国の軍団(2つずつ)
     for (var n = 1; n <= 3; n++) {
@@ -264,13 +265,19 @@ var FY = (function () {
 
   // ---- 実行 ----
   function log(S, s, msg, k, at) { S.log.push({ t: S.turn, s: s, msg: msg }); S.ev.push({ k: k || 'log', s: s, msg: msg, at: at, t: S.turn }); }
-  function capture(S, s, i) {
+  function capture(S, s, i, why) {
     var prev = S.own[i];
-    if (prev === 0 && s !== 0) S.st.lostHexes++;
+    if (prev === 0 && s !== 0) {
+      S.st.lostHexes++;
+      if (S.obj && S.obj.k === 'hold' && !S.obj.failed) { S.obj.failed = true; S.ev.push({ k: 'objfail', s: 0, at: i, t: S.turn, msg: '作戦目標「' + OBJS.hold.name + '」は失敗(マスを取られた)' }); }
+    }
     S.own[i] = s; S.iso[i] = 0; S.fort[i] = false;
     if (S.depot[i]) S.depot[i] = 0;
     if (s !== 0) S.rail[i] = false;
-    S.ev.push({ k: 'flip', at: i, s: s, from: prev, t: S.turn });
+    S.ev.push({ k: 'flip', at: i, s: s, from: prev, why: why || '', t: S.turn });
+  }
+  function retreats(S, d) {
+    return NB[d.at].filter(function (n) { return S.own[n] === d.s && !unitAt(S, n) && passable(S, n); });
   }
   function retreatHex(S, d, from) {
     var best = -1, bs = -1e9, sm = supplyMap(S, d.s);
@@ -283,7 +290,7 @@ var FY = (function () {
   }
   function kill(S, u, why) {
     S.units.splice(S.units.indexOf(u), 1);
-    S.ev.push({ k: 'die', at: u.at, s: u.s, why: why, id: u.id, t: S.turn });
+    S.ev.push({ k: 'die', at: u.at, s: u.s, why: why, id: u.id, type: u.type, t: S.turn });
     if (why === 'pocket' || why === 'starve') { if (u.s === 0) S.st.pocketsLost++; else S.st.pockets++; }
   }
   function moveOrAttack(S, u, to) {
@@ -305,55 +312,65 @@ var FY = (function () {
     var od = odds(S, u, to, sm), r = od.r * (0.9 + rnd(S) * 0.2), win = r >= K.win;
     var ss = season(S);
     S.st.attacks[ss][0]++; if (win) S.st.attacks[ss][1]++;
-    S.ev.push({ k: 'fight', id: u.id, from: u.at, to: to, s: s, r: r, res: win ? 'win' : r >= K.draw ? 'draw' : 'lose', t: S.turn });
+    var fe = { k: 'fight', id: u.id, aType: u.type, from: u.at, to: to, s: s, r: r, res: win ? 'win' : r >= K.draw ? 'draw' : 'lose', dOwn: o, dS: d ? d.s : o, dId: d ? d.id : 0, dType: d ? d.type : '', out: '', took: false, aDead: false, t: S.turn };
+    S.ev.push(fe);
     if (d) {
       if (win) {
         d.str -= Math.max(2, Math.ceil(1.5 + (r - 1) * 3));
         if (r < 1.6) u.str -= 1;
-        if (d.str <= 0) { kill(S, d, 'battle'); log(S, s, (s === 0 ? '敵の軍団を撃破' : '自軍の軍団が撃破された'), 'battle', to); }
+        if (d.str <= 0) { fe.out = 'kill'; kill(S, d, 'battle'); log(S, s, (s === 0 ? '敵の軍団を撃破' : '自軍の軍団が撃破された'), 'battle', to); }
         else {
           var back = retreatHex(S, d, u.at);
-          if (back < 0) { kill(S, d, 'pocket'); log(S, s, s === 0 ? '退路のない敵の軍団を包囲殲滅!' : '退路を断たれ、軍団が全滅…', 'pocket', to); }
-          else { S.ev.push({ k: 'move', id: d.id, from: d.at, to: back, s: d.s, t: S.turn }); d.at = back; }
+          if (back < 0) { fe.out = 'pocket'; kill(S, d, 'pocket'); log(S, s, s === 0 ? '退路のない敵の軍団を包囲殲滅!' : '退路を断たれ、軍団が全滅…', 'pocket', to); }
+          else { fe.out = 'push'; S.ev.push({ k: 'move', id: d.id, from: d.at, to: back, s: d.s, t: S.turn }); d.at = back; }
         }
-        if (u.str > 0) { S.ev.push({ k: 'move', id: u.id, from: u.at, to: to, s: s, t: S.turn }); u.at = to; capture(S, s, to); }
+        if (u.str > 0) { fe.took = true; S.ev.push({ k: 'move', id: u.id, from: u.at, to: to, s: s, t: S.turn }); u.at = to; capture(S, s, to); }
       } else if (r >= K.draw) { d.str -= 1; u.str -= r < 1 ? 2 : 1; }
       else { u.str -= 2; if (r > 0.7) d.str -= 1; }
-      if (d.str <= 0 && S.units.indexOf(d) >= 0) kill(S, d, 'battle');
+      if (d.str <= 0 && S.units.indexOf(d) >= 0) { fe.out = 'kill'; kill(S, d, 'battle'); }
     } else {
-      if (r >= 1) { if (r < 1.3) u.str -= 1; S.ev.push({ k: 'move', id: u.id, from: u.at, to: to, s: s, t: S.turn }); u.at = to; capture(S, s, to); }
+      if (r >= 1) { if (r < 1.3) u.str -= 1; fe.took = true; S.ev.push({ k: 'move', id: u.id, from: u.at, to: to, s: s, t: S.turn }); u.at = to; capture(S, s, to); }
       else u.str -= 1;
     }
-    if (u.str <= 0 && S.units.indexOf(u) >= 0) kill(S, u, 'battle');
+    if (u.str <= 0 && S.units.indexOf(u) >= 0) { fe.aDead = true; kill(S, u, 'battle'); }
   }
   function exec(S, s, o) {
     var u = o.unit ? S.units.filter(function (x) { return x.id === o.unit; })[0] : null;
     if (o.k === 'move') { if (u) moveOrAttack(S, u, o.to); return; }
-    if (o.k === 're') { if (u && S.money[s] >= K.costRe) { S.money[s] -= K.costRe; u.str = Math.min(K.maxStr, u.str + K.reAmt); S.ev.push({ k: 're', at: u.at, s: s, t: S.turn }); } return; }
-    if (o.k === 'raise') { if (S.money[s] >= K.costRaise && !unitAt(S, CAPS[s]) && unitsOf(S, s).length < K.maxCorps) { S.money[s] -= K.costRaise; var cm = CMDS.filter(function (c) { return !S.units.some(function (x) { return x.cmd === c; }); })[0]; addUnit(S, s, o.type || 'inf', K.raiseStr, CAPS[s], s === 0 ? cm : null); S.ev.push({ k: 'raise', at: CAPS[s], s: s, t: S.turn }); } return; }
+    if (o.k === 're') { if (u && S.money[s] >= K.costRe) { S.money[s] -= K.costRe; u.str = Math.min(K.maxStr, u.str + K.reAmt); S.ev.push({ k: 're', id: u.id, type: u.type, str: u.str, at: u.at, s: s, t: S.turn }); } return; }
+    if (o.k === 'raise') { if (S.money[s] >= K.costRaise && !unitAt(S, CAPS[s]) && unitsOf(S, s).length < K.maxCorps) { S.money[s] -= K.costRaise; var cm = CMDS.filter(function (c) { return !S.units.some(function (x) { return x.cmd === c; }); })[0]; addUnit(S, s, o.type || 'inf', K.raiseStr, CAPS[s], s === 0 ? cm : null); S.ev.push({ k: 'raise', at: CAPS[s], type: o.type || 'inf', s: s, t: S.turn }); } return; }
     if (o.k === 'rail') { if (S.own[o.at] === s && S.money[s] >= K.costRail && NB[o.at].some(function (n) { return S.rail[n]; })) { S.money[s] -= K.costRail; S.rail[o.at] = true; S.ev.push({ k: 'rail', at: o.at, s: s, t: S.turn }); } return; }
     if (o.k === 'depot') { if (S.own[o.at] === s && S.money[s] >= K.costDepot && !S.depot[o.at]) { S.money[s] -= K.costDepot; S.depot[o.at] = K.depotTurns; S.ev.push({ k: 'depot', at: o.at, s: s, t: S.turn }); } return; }
     if (o.k === 'fort') { if (S.own[o.at] === s && S.money[s] >= K.costFort) { S.money[s] -= K.costFort; S.fort[o.at] = true; S.ev.push({ k: 'fort', at: o.at, s: s, t: S.turn }); } return; }
     if (o.k === 'air') {
       if (!S.ops.air) return; S.ops.air = false;
       var t = unitAt(S, o.at);
-      if (t && t.s !== s) { t.str -= 2; S.ev.push({ k: 'air', at: o.at, s: s, t: S.turn }); if (t.str <= 0) kill(S, t, 'battle'); }
-      else if (S.depot[o.at] === -1) { S.depot[o.at] = 2; S.ev.push({ k: 'air', at: o.at, s: s, t: S.turn }); }
+      if (t && t.s !== s) { t.str -= 2; S.ev.push({ k: 'air', at: o.at, s: s, tType: t.type, tS: t.s, killed: t.str <= 0, t: S.turn }); if (t.str <= 0) kill(S, t, 'battle'); }
+      else if (S.depot[o.at] === -1) { S.depot[o.at] = 2; S.ev.push({ k: 'air', at: o.at, s: s, depot: true, t: S.turn }); }
       return;
     }
-    if (o.k === 'recon') { if (S.ops.recon) { S.ops.recon = false; S.recon = true; S.intents.forEach(function (x) { x.shown = x.target; x.cert = '高'; }); } return; }
-    if (o.k === 'lift') { if (S.ops.lift && u) { S.ops.lift = false; u.lift = 2; S.ev.push({ k: 'lift', at: u.at, s: s, t: S.turn }); } return; }
+    if (o.k === 'recon') { if (S.ops.recon) { S.ops.recon = false; S.recon = true; S.intents.forEach(function (x) { x.shown = x.target; x.cert = '高'; }); S.ev.push({ k: 'recon', s: s, t: S.turn }); } return; }
+    if (o.k === 'lift') { if (S.ops.lift && u) { S.ops.lift = false; u.lift = 2; S.ev.push({ k: 'lift', at: u.at, id: u.id, type: u.type, s: s, t: S.turn }); } return; }
   }
 
   // ---- 手番を進める ----
-  function advance(S) {
+  function snap(S) {
+    return { own: S.own.slice(), iso: S.iso.slice(), depot: S.depot.slice(), rail: S.rail.slice(), fort: S.fort.slice(), alive: S.alive.slice(), turn: S.turn,
+      units: S.units.map(function (u) { return { id: u.id, s: u.s, type: u.type, str: u.str, at: u.at, cmd: u.cmd, lift: u.lift }; }) };
+  }
+  function advance(S, rec) {
     if (S.done || (!S.trial && S.store <= 0)) return false;
     S.ev = [];
     var plans = enemyPlans(S);
     var mine = S.orders.slice(); S.orders = [];
-    mine.forEach(function (o) { exec(S, 0, o); });
-    plans.forEach(function (o) { exec(S, o.s, o); });
-    upkeep(S);
+    if (rec) rec.push({ who: 'start', ev: [], snap: snap(S) });
+    function step(who, k, o, fn) { var a = S.ev.length; fn(); if (rec) rec.push({ who: who, k: k, o: o, ev: S.ev.slice(a), snap: snap(S) }); }
+    mine.forEach(function (o, k) { step(0, k, o, function () { exec(S, 0, o); }); });
+    for (var n = 1; n <= 3; n++) {
+      var ps = plans.filter(function (p) { return p.s === n; });
+      if (ps.length) step(n, 0, null, function () { ps.forEach(function (o) { exec(S, o.s, o); }); });
+    }
+    step('end', 0, null, function () { upkeep(S); });
     if (!S.trial) S.store--;
     return true;
   }
@@ -362,10 +379,10 @@ var FY = (function () {
     // 首都が落ちた国は崩れる
     for (s = 1; s <= 3; s++) if (S.alive[s] && S.own[CAPS[s]] !== s) {
       S.alive[s] = false;
-      for (i = 0; i < NH; i++) if (S.own[i] === s) capture(S, S.own[CAPS[s]] === 0 ? 0 : -1, i);
+      for (i = 0; i < NH; i++) if (S.own[i] === s) capture(S, S.own[CAPS[s]] === 0 ? 0 : -1, i, 'fall');
       unitsOf(S, s).forEach(function (u) { kill(S, u, 'fall'); });
       S.st.falls.push(S.turn);
-      log(S, 0, NATIONS[s].name + 'が崩れた!(首都を落とした)', 'fall', CAPS[s]);
+      log(S, 0, NATIONS[s].name + 'が崩れた!(首都を落とした)', 'fall', CAPS[s]); S.ev[S.ev.length - 1].n = s;
     }
     if (S.own[CAPS[0]] !== 0) { finish(S, 1, 'capital'); return; }
     // 補給が切れた軍団は弱る
@@ -375,6 +392,7 @@ var FY = (function () {
       if (sms[u.s].d[u.at] !== Infinity) return;
       if (u.lift > 0) { u.lift--; return; }
       u.str -= K.starve;
+      S.ev.push({ k: 'starve', id: u.id, type: u.type, at: u.at, s: u.s, str: u.str, t: S.turn });
       if (u.str <= 0) { kill(S, u, 'starve'); log(S, u.s, u.s === 0 ? '補給が切れた軍団が力尽きた…' : '補給の切れた敵の軍団が力尽きた', 'starve', u.at); }
     });
     // 孤立したマスは、3手番で相手のものに
@@ -390,7 +408,7 @@ var FY = (function () {
         if (best < 0) continue;
         var u = unitAt(S, i);
         if (u) { kill(S, u, 'pocket'); log(S, best, best === 0 ? '孤立した敵の軍団が降伏した!' : '孤立した軍団が降伏した…', 'pocket', i); }
-        capture(S, best, i);
+        capture(S, best, i, 'iso');
       }
     }
     // 補給基地の完成
@@ -438,11 +456,14 @@ var FY = (function () {
     S.ops = { air: true, recon: true, lift: true };
     S.recon = false;
     S.intents = [];
+    var used = {}, shownUsed = {};
     for (var n = 1; n <= 3; n++) {
       if (!S.alive[n]) continue;
-      var st = NATIONS[n].style, t = intentTarget(S, n);
+      var st = NATIONS[n].style, t = intentTarget(S, n, used);
+      used[t] = 1;
       var cert = rnd(S) < 0.5 ? '中' : '低', truth = rnd(S) < (cert === '中' ? 0.8 : 0.55);
-      var shown = truth ? t : decoy(S, n, t);
+      var shown = truth ? t : decoy(S, n, t, shownUsed);
+      shownUsed[shown] = 1;
       S.intents.push({ n: n, target: t, shown: shown, cert: cert, kind: st });
       S.intent = S.intent || {}; S.intent[n] = t;
     }
@@ -459,11 +480,12 @@ var FY = (function () {
     if (!S.obj) return;
     var ok = OBJS[S.obj.k].test(S, S.obj.base);
     S.objDone.push({ k: S.obj.k, ok: ok, season: season(S) });
-    if (ok) { S.money[0] += 8; log(S, 0, '作戦目標「' + OBJS[S.obj.k].name + '」達成: 物資+8', 'obj'); }
+    if (ok) { S.money[0] += 8; log(S, 0, '作戦目標「' + OBJS[S.obj.k].name + '」達成: 物資+8', 'obj'); S.ev[S.ev.length - 1].ok = true; }
+    else if (!S.obj.failed) { log(S, 0, '作戦目標「' + OBJS[S.obj.k].name + '」は達成できなかった', 'obj'); S.ev[S.ev.length - 1].ok = false; }
     S.obj = null;
   }
   // 敵のねらい: 性格に合わせて、自国のマス(町・首都・前線の弱い所)を選ぶ
-  function intentTarget(S, n) {
+  function intentTarget(S, n, used) {
     var best = CAPS[0], bs = -1e9, sm = supplyMap(S, 0);
     for (var i = 0; i < NH; i++) {
       if (S.own[i] !== 0) continue;
@@ -471,12 +493,13 @@ var FY = (function () {
       var sc = -d * 2 + (S.town[i] ? 4 : 0) + (i === CAPS[0] ? 3 : 0);
       if (NATIONS[n].style === 'cut') sc += Math.min(6, sm.d[i] === Infinity ? 6 : sm.d[i]) * 1.5;
       if (NATIONS[n].style === 'attack') sc += unitAt(S, i) ? 0 : 2;
+      if (used && used[i]) sc -= 9;
       if (sc > bs) { bs = sc; best = i; }
     }
     return best;
   }
-  function decoy(S, n, t) {
-    var c = []; for (var i = 0; i < NH; i++) if (S.own[i] === 0 && i !== t) c.push(i);
+  function decoy(S, n, t, avoid) {
+    var c = []; for (var i = 0; i < NH; i++) if (S.own[i] === 0 && i !== t && !(avoid && avoid[i])) c.push(i);
     return c.length ? c[Math.floor(rnd(S) * c.length)] : t;
   }
   function intentText(S, it) {
@@ -488,7 +511,116 @@ var FY = (function () {
     var c = i % W, r = (i / W) | 0;
     var dir = (r <= 2 ? '北' : r >= 6 ? '南' : '中央') + (c <= 1 ? '西' : c >= 5 ? '東' : '');
     if (i === CAPS[0]) return '首都';
+    if (CAPS.indexOf(i) > 0) return NATIONS[CAPS.indexOf(i)].name + 'の首都';
     return dir + 'の' + (S.town[i] ? '町' : TERR[S.terr[i]].name);
+  }
+
+  // ---- 手番の知らせ: advance(S, rec) の記録から、区切りごとの「何が起きたか」を作る ----
+  // tone: good(よい)/ bad(わるい)/ info / big(大きな戦果)/ crit(大きな痛手)。ats は説明しているマス(取った・取られたマスはどれかの行に必ず入る)
+  function report(S, steps) {
+    var out = { steps: [], gained: [], lost: [], lines: 0 };
+    if (!steps || steps.length < 2) return out;
+    var first = steps[0].snap, last = steps[steps.length - 1].snap, i;
+    for (i = 0; i < NH; i++) {
+      if (first.own[i] !== 0 && last.own[i] === 0) out.gained.push(i);
+      if (first.own[i] === 0 && last.own[i] !== 0) out.lost.push(i);
+    }
+    function nm(n) { return n > 0 ? NATIONS[n].name : 'どこの国でもない土地'; }
+    function pl(i) { return place(S, i); }
+    function many(a) { return pl(a[0]) + (a.length > 1 ? 'など' + a.length + 'マス' : ''); }
+    var prev = first;
+    for (var k = 1; k < steps.length; k++) {
+      var st = steps[k], lines = [], U = {}, title;
+      prev.units.forEach(function (u) { U[u.id] = u; });
+      var L = function (t, at, tone, short, ats) { lines.push({ t: t, at: at === undefined ? -1 : at, ats: ats || (at >= 0 ? [at] : []), tone: tone, s: short || '' }); };
+      if (st.who === 0) {
+        var o = st.o, u = o.unit ? U[o.unit] : null, tn = u ? NAME[u.type] : '';
+        title = '命令' + (st.k + 1);
+        var fe = st.ev.filter(function (e) { return e.k === 'fight' && e.s === 0; })[0];
+        if (o.k === 'move') {
+          if (fe) {
+            var w = pl(fe.to), foe = fe.dType ? nm(fe.dS) + 'の' + NAME[fe.dType] : '';
+            if (fe.took) {
+              if (fe.out === 'pocket') L('包囲殲滅! ' + w + 'の' + foe + 'は退路がなく全滅', fe.to, 'big', '包囲殲滅');
+              else if (fe.out === 'kill') L(w + 'で' + foe + 'を撃破して取った(' + tn + ')', fe.to, 'big', '撃破');
+              else if (foe) L(w + 'を攻め取った(' + tn + '。' + foe + 'は退いた)', fe.to, 'good', '取った');
+              else L((CAPS.indexOf(fe.to) > 0 ? '' : nm(fe.dOwn) + 'の') + w + 'を攻め取った(' + tn + (fe.res === 'win' ? '' : '・きわどい勝ち') + ')', fe.to, 'good', '取った');
+            } else if (fe.res === 'win') {
+              if (fe.out === 'pocket') L('包囲殲滅! ' + w + 'の' + foe + 'は退路がなく全滅(' + tn + '軍団も力尽きた)', fe.to, 'big', '包囲殲滅');
+              else if (fe.out === 'kill') L(w + 'の' + foe + 'を撃破(' + tn + '軍団も力尽きた)', fe.to, 'big', '撃破');
+              else L(w + 'の' + foe + 'を押し下げたが、' + tn + '軍団は力尽きた', fe.to, 'bad', '相打ち');
+            } else if (fe.res === 'draw') L(w + 'への攻撃は押し切れなかった(互角)' + (fe.out === 'kill' ? '。' + foe + 'は倒れた' : ''), fe.to, fe.out === 'kill' ? 'good' : 'bad', '互角');
+            else L(w + 'への攻撃は失敗(不利)。' + tn + '軍団が傷ついた', fe.to, 'bad', '失敗');
+            if (fe.aDead && fe.took === false && fe.res !== 'win') L(tn + '軍団を失った', fe.from, 'crit', '全滅');
+          } else if (st.ev.some(function (e) { return e.k === 'log' && e.s === 0; })) L(tn + '軍団は補給が切れていて攻撃できなかった', u ? u.at : -1, 'bad', '補給切れ');
+          else {
+            var fl = st.ev.filter(function (e) { return e.k === 'flip' && e.s === 0; })[0], mv = st.ev.filter(function (e) { return e.k === 'move' && e.id === o.unit; })[0];
+            if (fl) L(pl(fl.at) + 'を取った(' + tn + ')', fl.at, 'good', '取った');
+            else if (mv) L(tn + '軍団を' + pl(mv.to) + 'へ動かした', mv.to, 'info', '');
+            else L(tn ? tn + '軍団は動けなかった(行き先がふさがった)' : '軍団がいなくなっていて動けなかった', u ? u.at : -1, 'bad', '');
+          }
+        } else {
+          var e0 = st.ev.filter(function (e) { return e.k === o.k; })[0];
+          if (o.k === 're') e0 ? L(tn + '軍団を補充(兵力' + e0.str + ')', e0.at, 'info', '補充') : L('補充できなかった', -1, 'bad');
+          else if (o.k === 'raise') e0 ? L('首都に新しい' + NAME[e0.type] + '軍団', e0.at, 'good', '新しい軍団') : L('新しい軍団を出せなかった(首都がふさがっていた)', CAPS[0], 'bad');
+          else if (o.k === 'rail') e0 ? L('鉄道を敷いた(' + pl(o.at) + ')', o.at, 'info', '鉄道') : L('鉄道を敷けなかった', o.at, 'bad');
+          else if (o.k === 'depot') e0 ? L('補給基地の建設を始めた(' + K.depotTurns + '手番で完成)', o.at, 'info', '建設') : L('補給基地を建てられなかった', o.at, 'bad');
+          else if (o.k === 'fort') e0 ? L('陣地を築いた(' + pl(o.at) + ')', o.at, 'info', '陣地') : L('陣地を築けなかった', o.at, 'bad');
+          else if (o.k === 'air') e0 ? (e0.depot ? L('空爆: 敵の補給基地を2手番止めた', o.at, 'good', '空爆') : L('空爆: ' + pl(o.at) + 'の' + nm(e0.tS) + 'の' + NAME[e0.tType] + (e0.killed ? 'を撃破' : ' 兵力-2'), o.at, e0.killed ? 'big' : 'good', '空爆')) : L('空爆の相手がいなくなっていた', o.at, 'info');
+          else if (o.k === 'recon') L('偵察: 敵のねらいが確かになった', -1, 'good');
+          else if (o.k === 'lift') e0 ? L('空輸: ' + tn + '軍団は2手番 兵力が減らない', e0.at, 'good', '空輸') : L('空輸できなかった', -1, 'bad');
+        }
+      } else if (st.who === 'end') {
+        title = '手番のおわり';
+        var isoLost = [], isoGot = {}, fallGot = {};
+        st.ev.forEach(function (e) { if (e.k === 'fall') fallGot[e.n] = { at: e.at, msg: e.msg, ats: [] }; });
+        st.ev.forEach(function (e) {
+          if (e.k === 'fall') return;
+          else if (e.k === 'flip' && e.why === 'fall' && e.s === 0) { var f = fallGot[prev.own[e.at]]; if (f) f.ats.push(e.at); }
+          else if (e.k === 'flip' && e.why === 'iso') { if (e.from === 0) isoLost.push(e.at); else if (e.s === 0) (isoGot[e.from] = isoGot[e.from] || []).push(e.at); }
+          else if (e.k === 'starve' && e.s === 0 && e.str > 0) L(pl(e.at) + 'の' + NAME[e.type] + '軍団は補給切れで兵力-' + K.starve + '(残り' + e.str + ')', e.at, 'bad', '補給切れ');
+          else if (e.k === 'die' && e.why === 'starve') e.s === 0 ? L('補給が切れた' + NAME[e.type] + '軍団が力尽きた…', e.at, 'crit', '全滅') : L('補給の切れた' + nm(e.s) + 'の' + NAME[e.type] + 'が力尽きた', e.at, 'big', '撃破');
+          else if (e.k === 'die' && e.why === 'pocket') e.s === 0 ? L('孤立した' + NAME[e.type] + '軍団が降伏した…', e.at, 'crit', '降伏') : L('孤立した' + nm(e.s) + 'の' + NAME[e.type] + 'が降伏した!', e.at, 'big', '降伏');
+          else if (e.k === 'depot') L('補給基地が完成した(' + pl(e.at) + ')', e.at, 'good', '完成');
+          else if (e.k === 'obj') L(e.msg, -1, e.ok ? 'good' : 'bad');
+        });
+        Object.keys(fallGot).forEach(function (n) { var f = fallGot[n]; L(f.msg, f.at, 'big', '崩壊', f.ats.length ? f.ats : [f.at]); });
+        if (isoLost.length) L('孤立していた' + many(isoLost) + 'を取られた', isoLost[0], 'bad', '取られた', isoLost);
+        Object.keys(isoGot).forEach(function (n) { var a = isoGot[n]; L('孤立させた' + nm(+n) + 'の' + many(a) + 'が自国のものに', a[0], 'good', '取った', a); });
+        var newMine = [], newTheirs = [];
+        for (i = 0; i < NH; i++) if (st.snap.iso[i] === 1) {
+          if (st.snap.own[i] === 0) newMine.push(i);
+          else if (st.snap.own[i] > 0 && NB[i].some(function (n) { return st.snap.own[n] === 0; })) newTheirs.push(i);
+        }
+        if (newMine.length) L('自国の' + many(newMine) + 'が孤立した(' + (K.isoTurns - 1) + '手番のうちにつなぎ直さないと取られる)', newMine[0], 'bad', '孤立', newMine);
+        if (newTheirs.length) L('敵の' + many(newTheirs) + 'を孤立させた(' + (K.isoTurns - 1) + '手番でこちらのものに)', newTheirs[0], 'good', '包囲', newTheirs);
+      } else {
+        var n0 = st.who, neutral = [];
+        title = nm(n0) + 'の動き';
+        st.ev.forEach(function (e) {
+          if (e.k === 'fight') {
+            var w = pl(e.to), mine = e.dType && e.dS === 0 ? NAME[e.dType] + '軍団' : '';
+            if (e.took) {
+              if (e.out === 'pocket') L(w + 'の' + mine + 'が退路を断たれ全滅…(' + nm(n0) + 'に取られた)', e.to, 'crit', '全滅');
+              else if (e.out === 'kill') L(w + 'の' + mine + 'が撃破され、' + nm(n0) + 'に取られた', e.to, 'crit', '撃破された');
+              else if (mine) L(w + 'を' + nm(n0) + 'に取られた(' + mine + 'は退いた)', e.to, 'bad', '取られた');
+              else L(w + 'を' + nm(n0) + 'に取られた', e.to, 'bad', '取られた');
+            } else if (e.res === 'win' && mine) {
+              if (e.out === 'pocket') L(w + 'の' + mine + 'が退路を断たれ全滅…', e.to, 'crit', '全滅');
+              else if (e.out === 'kill') L(w + 'の' + mine + 'が撃破された', e.to, 'crit', '撃破された');
+              else L(w + 'の' + mine + 'が押し下げられた(攻めた敵も力尽きた)', e.to, 'bad', '押された');
+            } else L(nm(n0) + 'の攻撃を' + w + 'で守りきった', e.to, 'good', '守りきった');
+          } else if (e.k === 'flip' && e.s === n0 && e.from === -1) neutral.push(e.at);
+          else if (e.k === 'objfail') L(e.msg, e.at, 'bad');
+        });
+        if (neutral.length) L(nm(n0) + 'がどこの国でもない' + many(neutral) + 'を取った', neutral[0], 'info', '', neutral);
+      }
+      if (st.who === 0 || st.who === 'end') st.ev.forEach(function (e) { if (e.k === 'objfail') L(e.msg, e.at, 'bad'); });
+      out.lines += lines.length;
+      out.steps.push({ who: st.who, k: st.k, title: title, lines: lines, ev: st.ev, snap: st.snap, prev: prev });
+      prev = st.snap;
+    }
+    return out;
   }
 
   // ---- 敵の頭 ----
@@ -658,7 +790,8 @@ var FY = (function () {
     create: create, advance: advance, addOrder: addOrder, cancelOrder: cancelOrder, canOrder: canOrder, pendingCost: pendingCost, chooseObjective: chooseObjective,
     moves: moves, odds: odds, label: label, supplyMap: supplyMap, factorOf: factorOf, unitAt: unitAt, unitsOf: unitsOf, season: season, year: year, winter: winter, toWinter: toWinter,
     front: front, garrison: garrison, garStr: garStr, towns: towns, hexes: hexes, landCount: landCount, income: income, terrDef: terrDef, passable: passable, adj: adj, hexDist: hexDist,
-    intentText: intentText, place: place, score: score, playerAI: playerAI, simulate: simulate, accrue: accrue, nextAccrue: nextAccrue, cutValue: cutValue
+    intentText: intentText, place: place, score: score, playerAI: playerAI, simulate: simulate, accrue: accrue, nextAccrue: nextAccrue, cutValue: cutValue,
+    retreats: retreats, report: report, snap: snap
   };
 })();
 if (typeof module !== 'undefined') module.exports = FY;

@@ -87,6 +87,79 @@ async function noSideScroll(page) {
     const now = S.units.find(x => x.id === u.id);
     assert.ok(!now || now.str <= before - FY.K.starve + FY.K.regen, `兵力 ${before} → ${now && now.str}`);
   });
+  await test('手番の知らせ: 取った・取られたマスは、どれもその手番の知らせのどこかで説明される', () => {
+    let changed = 0, lines = 0;
+    for (let g = 0; g < 8; g++) {
+      const S = FY.create({ seed: 4242 + g * 7919 });
+      for (let t = 0; t < 120 && !S.done; t++) {
+        FY.playerAI(S, 'smart');
+        const rec = []; FY.advance(S, rec);
+        const R = FY.report(S, rec), cov = new Set();
+        R.steps.forEach(st => st.lines.forEach(l => { lines++; assert.ok(l.t && ['good', 'bad', 'crit', 'big', 'info'].includes(l.tone), '知らせの形: ' + JSON.stringify(l)); l.ats.forEach(a => cov.add(a)); }));
+        for (const h of R.gained.concat(R.lost)) { changed++; assert.ok(cov.has(h), `${S.turn}手番: ${FY.place(S, h)} の変化が知らせにない`); }
+        // 取られたマスの知らせは「わるい」「痛手」のどちらか
+        for (const h of R.lost) assert.ok(R.steps.some(st => st.lines.some(l => l.ats.includes(h) && (l.tone === 'bad' || l.tone === 'crit'))), '取られたマスがよい知らせになっている');
+      }
+    }
+    assert.ok(changed > 300 && lines > 500, `調べた数が少ない(${changed}マス・${lines}行)`);
+  });
+  await test('再生の区切り: 自分の命令ごと → 敵の国ごと → 手番のおわり の順で、最後の地図は手番のあとと同じ', () => {
+    const S = FY.create({ seed: 99 });
+    for (let t = 0; t < 30 && !S.done; t++) {
+      FY.playerAI(S, 'smart');
+      const n = S.orders.length, rec = []; FY.advance(S, rec);
+      const who = rec.map(r => r.who);
+      assert.strictEqual(who[0], 'start'); assert.strictEqual(who[who.length - 1], 'end');
+      assert.deepStrictEqual(who.slice(1, 1 + n), new Array(n).fill(0));
+      const nat = who.slice(1 + n, -1); assert.deepStrictEqual(nat, nat.slice().sort());
+      assert.deepStrictEqual(rec[rec.length - 1].snap.own, S.own);
+    }
+  });
+  await test('「1つも失わない」目標は、マスを取られたその手番に失敗が知らされる', () => {
+    let seen = 0;
+    for (let g = 0; g < 30 && seen < 3; g++) {
+      const S = FY.create({ seed: 31 + g * 101 });
+      FY.chooseObjective(S, 'hold');
+      for (let t = 0; t < 8 && !S.done; t++) {
+        const before = S.st.lostHexes, rec = [];
+        FY.advance(S, rec);
+        if (S.st.lostHexes > before) {
+          const R = FY.report(S, rec);
+          assert.ok(R.steps.some(st => st.lines.some(l => /失敗/.test(l.t))), '失敗の知らせがない');
+          seen++; break;
+        }
+        if (S.seasonStart) break;
+      }
+    }
+    assert.ok(seen >= 1, '取られる場面が作れなかった');
+  });
+  await test('細かい不具合: 軍団は3つで始まる / 最初の季節に3国のねらいが同じマスにならない / 冬の説明が数字と合う', () => {
+    for (let g = 0; g < 200; g++) {
+      const S = FY.create({ seed: 101 + g * 7919 });
+      assert.strictEqual(FY.unitsOf(S, 0).length, 3, '種 ' + (101 + g * 7919) + ' で軍団が ' + FY.unitsOf(S, 0).length);
+      assert.ok(new Set(S.intents.map(i => i.shown)).size > 1, '3国のねらいが同じマス');
+    }
+    assert.ok(FY.SEASONS[3].desc.includes('-' + Math.round((1 - FY.K.winterAtk) * 100) + '%'), '冬の説明: ' + FY.SEASONS[3].desc);
+  });
+  await test('退路: 退路のない敵の軍団に勝つと全滅、退路があれば退く', () => {
+    let pocket = 0, push = 0;
+    for (let g = 0; g < 20; g++) {
+      const S = FY.create({ seed: 7 + g * 313 });
+      for (let t = 0; t < 60 && !S.done; t++) {
+        // 攻める前に退路の数を記録して、結果と見くらべる
+        FY.playerAI(S, 'smart');
+        const plan = S.orders.filter(o => o.k === 'move').map(o => { const d = FY.unitAt(S, o.to); return d && d.s > 0 ? { to: o.to, id: d.id } : null; }).filter(Boolean);
+        const rt = {}; plan.forEach(p => { rt[p.id] = FY.retreats(S, FY.unitAt(S, p.to)).length; });
+        const rec = []; FY.advance(S, rec);
+        rec.forEach(r => r.ev.forEach(e => {
+          if (e.k !== 'fight' || e.s !== 0 || !e.dId || e.res !== 'win' || rt[e.dId] === undefined) return;
+          if (e.out === 'pocket') pocket++;
+          if (e.out === 'push') { push++; assert.ok(rt[e.dId] > 0, '退路0なのに退いた'); }
+        }));
+      }
+    }
+    assert.ok(pocket > 0 && push > 0, `包囲${pocket} 退いた${push}`);
+  });
   await test('手番は3時間に1つ、最大8までたまる(試遊モードでないとき)', () => {
     const t0 = 1e12, S = FY.create({ seed: 5, now: t0, trial: false });
     S.store = 0;
@@ -135,21 +208,49 @@ async function noSideScroll(page) {
       if (await page.$('[data-act="confirm"]')) await page.click('[data-act="confirm"]');
       assert.strictEqual(await page.evaluate(() => window.__fuyu.S.orders.length), 1, '命令が入っていない');
       await page.click('#btnGo');
-      await page.waitForTimeout(1300);
+      // 命令1から順に再生され、上に出来事が出る
+      await page.waitForSelector('#cap:not(.hidden)');
+      assert.ok(/命令1/.test(await page.textContent('#cap')), '再生の見出しがない');
+      await page.waitForFunction(() => !window.__fuyu.replaying, null, { timeout: 15000 });
       const t = await page.evaluate(() => window.__fuyu.S.turn);
       assert.strictEqual(t, 1);
+      // 手番の報告 → くわしく → 地図で見る
+      await page.waitForSelector('#card.rep:not(.hidden)');
+      await page.click('#card [data-act="replog"]');
+      await page.waitForSelector('#sheetWrap:not(.hidden) .log .ll');
+      const go = await page.$('.log [data-act="goto"]');
+      if (go) { await go.click(); await page.waitForSelector('#sheetWrap.hidden', { state: 'attached' }); } else await page.click('.sheet [data-act="close"]');
       await page.reload();
       await page.waitForFunction(() => window.__fuyu && window.__fuyu.S);
       assert.strictEqual(await page.evaluate(() => window.__fuyu.S.turn), 1, '開きなおすと続きにならない');
-      // 冬まで進めても壊れない
-      await page.evaluate(() => {
-        const w = window.__fuyu;
-        for (let k = 0; k < 40 && !w.S.done && !w.FY.winter(w.S); k++) { if (w.S.seasonStart) w.FY.chooseObjective(w.S, w.S.objOpts[0]); w.FY.playerAI(w.S, 'smart'); w.FY.advance(w.S); }
-        w.render();
+      // 冬まで画面ごと進めても壊れない。地図の札は重ならず、大事な札(再生・命令・軍団の見こみ)は消えない
+      const st = await page.evaluate(() => {
+        const w = window.__fuyu, out = { overlaps: 0, hi: [] };
+        for (let k = 0; k < 40 && !w.S.done && !w.FY.winter(w.S); k++) {
+          if (w.S.seasonStart) w.FY.chooseObjective(w.S, w.S.objOpts[0]);
+          w.autoTurn('smart'); w.advance();
+          const a = w.tags(); out.overlaps += a.overlaps; if (a.droppedHi) out.hi.push(a.drops.join('/'));
+          w.skip();
+          const b = w.tags(); out.overlaps += b.overlaps; if (b.droppedHi) out.hi.push(b.drops.join('/'));
+        }
+        document.getElementById('modalWrap').classList.add('hidden');
+        out.done = w.S.done || w.FY.winter(w.S);
+        return out;
       });
-      await page.waitForTimeout(200);
-      const win = await page.evaluate(() => window.__fuyu.S.done || window.__fuyu.FY.winter(window.__fuyu.S));
-      assert.ok(win);
+      assert.ok(st.done);
+      // 軍団を選んだとき・攻める前の確認のときも、見こみの札(優勢・互角・不利)は必ず出る
+      const sel = await page.evaluate(() => {
+        const w = window.__fuyu, F = w.FY, out = { overlaps: 0, hi: [] };
+        for (const u of F.unitsOf(w.S, 0)) {
+          w.tap(u.at); let a = w.tags(); out.overlaps += a.overlaps; if (a.droppedHi) out.hi.push(a.drops.join('/'));
+          for (const k of Object.keys(F.moves(w.S, u))) { const to = +k; if (w.S.own[to] === 0 && !F.unitAt(w.S, to)) continue; w.tap(to); a = w.tags(); out.overlaps += a.overlaps; if (a.droppedHi) out.hi.push(a.drops.join('/')); w.tap(u.at); }
+          w.tap(-1);
+        }
+        return out;
+      });
+      st.overlaps += sel.overlaps; st.hi = st.hi.concat(sel.hi);
+      assert.strictEqual(st.overlaps, 0, '地図の札が重なった');
+      assert.deepStrictEqual(st.hi, [], '大事な札が出せなかった');
     }));
   }
 
