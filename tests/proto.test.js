@@ -96,7 +96,7 @@ async function noSideScroll(page) {
     assert.strictEqual(S.store, FY.K.maxStore);
   });
 
-  for (const dev of ['iPhone 13', 'iPhone SE']) {
+  for (const dev of ['iPhone 16 Pro Max', 'iPhone 13', 'iPhone SE']) {
     console.log(`[朱線] 画面 ${dev}`);
     await test('遊び方 → 地図 → 出撃 → 戦って結果が出る / 星が残る', () => withPage(dev, 'shusen', async page => {
       await page.waitForSelector('#modalWrap:not(.hidden)');

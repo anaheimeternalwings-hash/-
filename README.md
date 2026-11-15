@@ -344,7 +344,7 @@ python3 -I proto/build.py shusen      # proto/shusen/ の page.html・style.css�
 python3 -I proto/build.py fuyu
 node proto/shusen/sim.js              # 企画書の「作る前の合格表」を自動プレイで測る(N=… NL=… で回数)
 node proto/fuyu/sim.js                # 同上(OV='{"win":1.3}' でルールの数値を試しに変えられる)
-node tests/proto.test.js              # ルールの手ざわり + iPhone SE / 13 の画面で操作テスト
+node tests/proto.test.js              # ルールの手ざわり + iPhone 16 Pro Max / 13 / SE の画面で操作テスト
 ```
 
 自動プレイで測った結果(合格表のうち、まだ届いていないものも書いておきます):
