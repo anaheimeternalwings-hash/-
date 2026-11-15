@@ -6,7 +6,8 @@
   "scripts": {
     "test": "node tests/balance.test.js && node tests/ui.test.js",
     "test:balance": "node tests/balance.test.js",
-    "test:ui": "node tests/ui.test.js"
+    "test:ui": "node tests/ui.test.js",
+    "test:proto": "node tests/proto.test.js"
   },
   "devDependencies": {
     "playwright": "1.63.0"

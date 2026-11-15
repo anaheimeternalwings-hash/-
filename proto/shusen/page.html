@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="朱線">
+<meta name="theme-color" content="#0b0d0e">
+<meta name="format-detection" content="telephone=no">
+<title>朱線(試作)</title>
+<style>
+/*__CSS__*/
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 戦区の地図 -->
+  <section id="map" class="view">
+    <header class="mhead">
+      <div class="logo"><b>朱線</b><small>SHUSEN ・ 試作</small></div>
+      <div class="mstars" id="mStars">★0/30</div>
+      <button class="ibtn" data-act="snd" id="sndBtn" aria-label="音">音</button>
+      <button class="ibtn" data-act="help" aria-label="遊び方">?</button>
+    </header>
+    <div class="mtitle">第1戦区 霧の峠</div>
+    <div class="mpath" id="mPath"></div>
+    <div class="mfoot">試作版: 戦場10個・指揮官3人。データはこの試作の中だけに保存されます</div>
+  </section>
+
+  <!-- 戦闘 -->
+  <section id="battle" class="view hidden">
+    <div class="bhud">
+      <div class="ecmd"><div class="face" id="eFace"></div><div class="et"><b id="eName">亡霊</b><small id="eTrait">突っこんでくる</small></div></div>
+      <div class="clock" id="clock">1:30</div>
+      <button class="ibtn" data-act="pause" aria-label="一時停止">Ⅱ</button>
+    </div>
+    <div class="score"><span class="sp" id="scP">15</span><div class="sbar"><i id="sbP"></i><i id="sbE"></i></div><span class="se" id="scE">15</span></div>
+    <div class="board" id="boardWrap"><canvas id="cv"></canvas><div class="tip hidden" id="tip"></div></div>
+    <div class="panel">
+      <div class="qrow">
+        <div class="queue" id="queue"></div>
+        <div class="next"><small>次</small><div id="nextList"></div></div>
+      </div>
+      <div class="arr"><i id="arrBar"></i></div>
+      <div class="prow">
+        <button class="skill" id="skillBtn" data-act="skill"><span class="face" id="sFace"></span><span class="st"><b id="sName">一斉砲撃</b><small id="sDesc">1回だけ</small></span></button>
+        <div class="howto">列をタップ: 送る<br>列を下にはじく: 後退</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="sheetWrap" class="hidden"><div class="backdrop" data-act="close"></div><div class="sheet" id="sheet"></div></div>
+<div id="modalWrap" class="hidden"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+
+<script id="logic">
+/*__LOGIC__*/
+</script>
+<script id="ui">
+(function () {
+  'use strict';
+/*__AUDIO__*/
+  var ART_DATA = /*__ART__*/;
+/*__UI__*/
+})();
+</script>
+</body>
+</html>
