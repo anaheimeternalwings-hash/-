@@ -1286,6 +1286,8 @@ if (typeof module !== 'undefined') module.exports = FY;
     X0 = (CW - R3 * HS * (FY.W + 0.5)) / 2; Y0 = 4;
     dirty = true;
   }
+  // 描いた大きさと画面の上の大きさがずれると、タップした場所がずれる。毎こまと、タップのたびに確かめる
+  function fitCheck() { if (Math.abs(cv.clientWidth - CW) > 1 || Math.abs(cv.clientHeight - CH) > 1) resize(); }
   function hx(i) { var c = i % FY.W, r = (i / FY.W) | 0; return X0 + R3 * HS * (c + 0.5 + 0.5 * (r & 1)); }
   function hy(i) { var r = (i / FY.W) | 0; return Y0 + HS * (1 + 1.5 * r); }
   function hexPath(x, y, s) { cx.beginPath(); for (var k = 0; k < 6; k++) { var a = Math.PI / 6 + k * Math.PI / 3; if (k) cx.lineTo(x + s * Math.cos(a), y + s * Math.sin(a)); else cx.moveTo(x + s * Math.cos(a), y + s * Math.sin(a)); } cx.closePath(); }
@@ -1954,7 +1956,7 @@ if (typeof module !== 'undefined') module.exports = FY;
   });
   $('cap').addEventListener('click', function () { if (RP) finishReplay(); });
   var down = null;
-  cv.addEventListener('pointerdown', function (e) { var r = cv.getBoundingClientRect(); down = { x: e.clientX - r.left, y: e.clientY - r.top }; });
+  cv.addEventListener('pointerdown', function (e) { fitCheck(); var r = cv.getBoundingClientRect(); down = { x: e.clientX - r.left, y: e.clientY - r.top }; });
   cv.addEventListener('pointerup', function (e) {
     if (!down) return;
     var r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
@@ -1963,6 +1965,7 @@ if (typeof module !== 'undefined') module.exports = FY;
   });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   window.addEventListener('resize', function () { resize(); });
+  if (window.ResizeObserver) new ResizeObserver(function () { resize(); }).observe($('mapWrap'));
   document.addEventListener('visibilitychange', function () { if (!document.hidden && S) { var a = FY.accrue(S, Date.now()); if (a) { toast('手番が' + a + 'つたまった'); save(); } render(); } });
 
   // ---- 毎こま ----
@@ -1972,23 +1975,24 @@ if (typeof module !== 'undefined') module.exports = FY;
     if (RP) { RP.t += dt; dirty = true; if (RP.t >= RP.dur) nextStep(); }
     if (SUMV) { SUMV.t += dt; dirty = true; if (SUMV.t > 2.2) SUMV = null; }
     if (FL) { FL.t += dt; dirty = true; if (FL.t > 2.4) FL = null; }
+    fitCheck();
     if (dirty && S) { dirty = false; draw(); }
     raf = requestAnimationFrame(frame);
   }
 
   // ---- 起動 ----
-  resize();
   S = load();
   if (!S) { newCampaign(true); help(); }
   else { var a0 = FY.accrue(S, Date.now()); if (a0) toast('手番が' + a0 + 'つたまった'); }
   render();
+  resize();
   if (S.seasonStart && $('modalWrap').classList.contains('hidden')) seasonModal();
   else if (S.done) endModal();
   SND.bgm('menu');
   setInterval(function () { if (S && !S.trial) { if (FY.accrue(S, Date.now())) { save(); render(); } } }, 60000);
   raf = requestAnimationFrame(frame);
   window.__fuyu = { FY: FY, get S() { return S; }, snd: SND, advance: advance, tap: tapHex, render: render, hexXY: function (i) { return [hx(i), hy(i)]; },
-    get replaying() { return !!RP; }, skip: finishReplay, tags: function () { draw(); return TSTAT; },
+    get replaying() { return !!RP; }, skip: finishReplay, size: function () { return { CW: CW, CH: CH, cssW: cv.clientWidth, cssH: cv.clientHeight }; }, tags: function () { draw(); return TSTAT; },
     autoTurn: function (kind) { FY.playerAI(S, kind || 'smart'); render(); } };
 })();
 </script>

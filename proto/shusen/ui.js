@@ -138,8 +138,10 @@
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
   }
   function tipQ(list) { list.forEach(function (t) { B.tipQ.push(t); }); }
+  function fitCheck() { if (B && (Math.abs(cv.clientWidth - CW) > 1 || Math.abs(cv.clientHeight - CH) > 1)) resize(); }
   function frame(ts) {
     if (!B) return;
+    fitCheck();
     var dt = lastTs ? Math.min(0.1, (ts - lastTs) / 1000) : 0.016;
     lastTs = ts;
     if (!B.paused) {
@@ -392,7 +394,7 @@
 
   // ---- 操作 ----
   var down = null;
-  cv.addEventListener('pointerdown', function (e) { if (!B) return; var r = cv.getBoundingClientRect(); down = { x: e.clientX - r.left, y: e.clientY - r.top, id: e.pointerId }; });
+  cv.addEventListener('pointerdown', function (e) { if (!B) return; fitCheck(); var r = cv.getBoundingClientRect(); down = { x: e.clientX - r.left, y: e.clientY - r.top, id: e.pointerId }; });
   cv.addEventListener('pointerup', function (e) {
     if (!B || !down || B.S.done) { down = null; return; }
     var r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, dx = x - down.x, dy = y - down.y, l = laneAt(down.x);
@@ -486,6 +488,7 @@
   });
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
   window.addEventListener('resize', function () { if (B) resize(); });
+  if (window.ResizeObserver) new ResizeObserver(function () { if (B) resize(); }).observe($('boardWrap'));
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && B && !B.S.done) { P.battle = { n: B.n, S: strip(B.S) }; save(); if (!B.paused) pause(false); }
   });
@@ -497,6 +500,6 @@
   if (P.battle && P.battle.S && !P.battle.S.done) { selN = P.battle.n; startBattle(P.battle.n, P.battle); }
   else if (!P.seen) { P.seen = 1; save(); help(); }
   // テスト・確認用
-  window.__shusen = { SH: SH, get P() { return P; }, get B() { return B; }, snd: SND,
+  window.__shusen = { SH: SH, get P() { return P; }, get B() { return B; }, snd: SND, size: function () { return { CW: CW, CH: CH, cssW: cv.clientWidth, cssH: cv.clientHeight }; },
     play: function (sec) { if (!B) return; var end = B.S.t + sec; while (!B.S.done && B.S.t < end) { SH.step(B.S, 0.05); events(); } },
     auto: function (kind) { if (B) B.S.ai[0] = kind || 'affinity'; } };

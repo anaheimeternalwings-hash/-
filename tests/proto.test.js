@@ -178,6 +178,8 @@ async function noSideScroll(page) {
       await page.click('.node.cur');
       await page.click('[data-act="go"]');
       await page.waitForFunction(() => window.__shusen.B && !window.__shusen.B.paused);
+      const z = await page.evaluate(() => window.__shusen.size());
+      assert.ok(Math.abs(z.CW - z.cssW) <= 1 && Math.abs(z.CH - z.cssH) <= 1, '盤の大きさがずれている ' + JSON.stringify(z));
       // 列をタップして部隊を送る
       const box = await page.locator('#cv').boundingBox();
       await page.waitForTimeout(2600);
@@ -195,6 +197,13 @@ async function noSideScroll(page) {
       await page.waitForSelector('#modalWrap:not(.hidden) .season');
       await page.click('[data-act="obj"]');
       await noSideScroll(page);
+      // 描いた地図と画面の上の地図の大きさが合っている(下の欄の高さが変わっても、すぐ合わせなおす)
+      const fit = async () => { const z = await page.evaluate(() => window.__fuyu.size()); assert.ok(Math.abs(z.CW - z.cssW) <= 1 && Math.abs(z.CH - z.cssH) <= 1, '地図の大きさがずれている ' + JSON.stringify(z)); };
+      await fit();
+      await page.evaluate(() => { document.getElementById('orders').style.minHeight = '120px'; });
+      await page.waitForTimeout(150); await fit();
+      await page.evaluate(() => { document.getElementById('orders').style.minHeight = ''; });
+      await page.waitForTimeout(150); await fit();
       // 自軍の戦車をタップ → 光るマスをタップ → 命令する
       const pick = await page.evaluate(() => {
         const w = window.__fuyu, S = w.S, u = S.units.find(x => x.s === 0 && x.type === 'tank');
